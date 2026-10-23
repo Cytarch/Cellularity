@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <string name="simulation_hour_abbreviation">h</string>
+
+    <string-array name="simulation_cell_type_names">
+            <item >Fagocito</item>
+            <item >Flagelocito</item>
+            <item >Fotocito</item>
+            <item >Devorocito</item>
+            <item >Lipocito</item>
+            <item >Queratinocito</item>
+            <item >Boyacito</item>
+            <item >Adhecito</item>
+            <item >Virocito</item>
+            <item >Nitrocito</item>
+            <item >Estereocito</item>
+            <item >Sensacito</item>
+            <item >Miocito</item>
+            <item >Neurocito</item>
+            <item >Secrocito</item>
+            <item >Stemocito</item>
+            <item >Gameto</item>
+            <item >Ciliocito</item>
+        </string-array>
+
+</resources>

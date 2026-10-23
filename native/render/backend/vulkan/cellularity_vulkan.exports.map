@@ -1,0 +1,8 @@
+CELLULARITY_VULKAN_1 {
+    global:
+        cellularity_vulkan_get_surface_api_v1;
+        Java_com_cytarch_cellularity_platform_render_vulkan_NativeVulkanBackendLoader_nativeBackendApiV1Address;
+        Java_com_cytarch_cellularity_platform_render_vulkan_NativeVulkanCapabilityBridge_nativeProbe;
+    local:
+        *;
+};

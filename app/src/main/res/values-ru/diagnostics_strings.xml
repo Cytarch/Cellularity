@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <string name="diagnostics_export_chooser_title">Экспорт диагностики</string>
+    <string name="recovery_diagnostics_export_failed_message">Не удалось экспортировать диагностику.</string>
+    <string name="recovery_title">Работа Cellularity завершилась некорректно</string>
+    <plurals name="recovery_report_count">
+        <item quantity="one">Доступен %d новый диагностический отчёт.</item>
+        <item quantity="few">Доступно %d новых диагностических отчёта.</item>
+        <item quantity="many">Доступно %d новых диагностических отчётов.</item>
+        <item quantity="other">Доступно %d новых диагностических отчётов.</item>
+    </plurals>
+    <string name="recovery_latest_report_format">Последний отчёт: %s</string>
+    <string name="recovery_description">Перед повторным запуском приложения можно экспортировать диагностическую информацию.</string>
+    <string name="recovery_privacy_notice">Экспорт содержит версию приложения, сведения об устройстве и ABI, данные потока и трассировку стека. Отчёты остаются приватными, пока вы явно не экспортируете их.</string>
+    <string name="recovery_export_diagnostics_action">Экспортировать диагностику</string>
+    <string name="recovery_continue_to_app_action">Продолжить запуск Cellularity</string>
+    <string name="recovery_acknowledge_failed_message">Не удалось отметить отчёт как просмотренный. Этот запуск всё равно можно продолжить.</string>
+
+</resources>

@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <string name="cell_property_true_value">Verdadero</string>
+
+    <string name="cell_property_false_value">Falso</string>
+
+    <string name="cell_property_signal_substance_prefix">S</string>
+
+    <string name="cell_property_signal_substance_unit">μmol/L</string>
+
+    <string name="cell_property_muscle_contraction">Contracción muscular</string>
+
+    <string name="cell_property_muscle_bending">Flexión muscular</string>
+
+    <string name="cell_property_muscle_lifting">Elevación muscular</string>
+
+    <string name="cell_property_secretion_hcn">HCN</string>
+
+    <string name="cell_property_secretion_nutrient_smell">Olor a nutrientes</string>
+
+    <string name="cell_property_secretion_coated_nutrient_smell">Olor a nutrientes recubiertos</string>
+
+    <string name="cell_property_secretion_lipase">Lipasa</string>
+
+    <string name="cell_property_secretion_protease">Proteasa</string>
+
+    <string name="cell_property_secretion_light_sense_activator">Activador del sensor de luz</string>
+
+    <string name="cell_property_secretion_wall_sense_activator">Activador del sensor de pared</string>
+
+    <string name="cell_property_sense_cell">Célula</string>
+
+    <string name="cell_property_sense_wall">Pared</string>
+
+    <string name="cell_property_sense_light">Luz</string>
+
+    <string name="cell_property_sense_nutrient">Nutriente</string>
+
+    <string name="cell_property_sense_coated_nutrient">Nutriente recubierto</string>
+
+    <string name="cell_property_sense_velocity">Velocidad</string>
+
+</resources>

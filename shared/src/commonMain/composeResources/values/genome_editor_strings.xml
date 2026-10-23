@@ -1,0 +1,152 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <string name="genome_editor_secretion_label">Secretion</string>
+
+    <string name="genome_editor_sense_type_label">Sense type</string>
+
+    <string name="genome_editor_compatible_mode_label">Compatible mode</string>
+
+    <string name="genome_editor_mode_after_fertilization_label">Mode after fertilization</string>
+
+    <string name="genome_editor_load_dialog_title">Load</string>
+    <string name="genome_editor_gene_mode_prefix">M</string>
+    <string-array name="genome_editor_cell_type_abbreviations">
+        <item>Pg</item>
+        <item>Fl</item>
+        <item>Pt</item>
+        <item>Dv</item>
+        <item>Lp</item>
+        <item>Kt</item>
+        <item>Bu</item>
+        <item>Gl</item>
+        <item>Vr</item>
+        <item>Ni</item>
+        <item>St</item>
+        <item>Sn</item>
+        <item>My</item>
+        <item>Nr</item>
+        <item>Sc</item>
+        <item>Sm</item>
+        <item>Gm</item>
+        <item>Cl</item>
+    </string-array>
+    <string name="genome_editor_genome_loaded_message">Loaded new genome</string>
+    <string name="genome_editor_load_from_microscope_action">Load from microscope</string>
+    <string name="genome_editor_save_action">Save</string>
+    <string name="genome_editor_load_action">Load</string>
+    <string name="genome_editor_produce_adhesin_label">Produce adhesin</string>
+    <string name="genome_editor_divide_label">Divide</string>
+    <string name="genome_editor_prioritize_survival_label">Prioritize survival</string>
+    <string name="genome_editor_cell_type_label">Cell type:</string>
+    <string name="genome_editor_initial_gene_label">Initial gene</string>
+    <string name="genome_editor_child_1_gene_label">Child 1:</string>
+    <string name="genome_editor_keep_adhesin_connections_label">Keep adhesin connections</string>
+    <string name="genome_editor_mirror_label">Mirror</string>
+    <string name="genome_editor_child_2_gene_label">Child 2:</string>
+    <string name="genome_editor_split_mass_label">Split mass:</string>
+    <string name="genome_editor_split_ratio_label">Split ratio:</string>
+    <string name="genome_editor_mass_flow_priority_label">Mass flow priority:</string>
+    <string name="genome_editor_snap_values_label">Snap values</string>
+    <string name="genome_editor_split_angle_label">Split angle:</string>
+    <string name="genome_editor_child_1_angle_label">Child 1 angle:</string>
+    <string name="genome_editor_child_2_angle_label">Child 2 angle:</string>
+    <string name="genome_editor_adhesin_stiffness_label">Adhesin stiffness:</string>
+    <string name="genome_editor_density_label">Density</string>
+    <string name="genome_editor_swim_force_label">Swim force</string>
+    <string name="genome_editor_virus_source_gene_label">Virus source gene</string>
+    <string name="genome_editor_virus_target_gene_label">Virus target gene</string>
+    <string name="genome_editor_stem_path_2_signal_label">Path 2 signal</string>
+    <string name="genome_editor_stem_path_2_mode_label">Differentiation path 2 mode</string>
+    <string name="genome_editor_stem_path_1_signal_label">Path 1 signal</string>
+    <string name="genome_editor_stem_path_1_mode_label">Differentiation path 1 mode</string>
+    <string name="genome_editor_output_channel_label">Output channel</string>
+    <string name="genome_editor_output_amount_label">Output amount</string>
+    <string name="genome_editor_sense_red_label">Red</string>
+    <string name="genome_editor_sense_green_label">Green</string>
+    <string name="genome_editor_sense_blue_label">Blue</string>
+    <string name="genome_editor_sense_color_threshold_label">Color threshold</string>
+    <string name="genome_editor_oscillator_preset_action">Oscillator preset…</string>
+    <string name="genome_editor_save_dialog_title">Name your genome</string>
+    <string name="genome_editor_save_dialog_description">Saving your genome lets you reuse it in another challenge or send it to a friend.</string>
+    <string name="genome_editor_save_dialog_action">Save</string>
+    <string name="genome_editor_cell_state_dependence_dialog_title">Cell state dependence</string>
+    <string name="genome_editor_value_dialog_linear_formula">a × input + b</string>
+    <string name="genome_editor_value_dialog_heaviside_formula"><![CDATA[a, if input < c\nb, if input ≥ c]]></string>
+    <string name="genome_editor_value_dialog_sine_formula">a × sin(input × x - b)</string>
+    <string name="genome_editor_value_dialog_value_label">Value</string>
+    <string name="genome_editor_value_dialog_variable_a_label">a</string>
+    <string name="genome_editor_value_dialog_variable_b_label">b</string>
+    <string name="genome_editor_value_dialog_variable_c_label">c</string>
+    <string name="genome_editor_value_dialog_fixed_value_label">Fixed value:</string>
+    <string name="genome_editor_value_dialog_use_cell_state_label">Use cell state:</string>
+    <string name="genome_editor_value_dialog_input_label">Input:</string>
+    <string name="genome_editor_value_dialog_value_equals_label">Value =</string>
+    <string name="genome_editor_oscillator_preset_title">Oscillator preset</string>
+    <string name="genome_editor_oscillator_preset_description">This preset configures four output channels so that the concentrations of two signal substances oscillate.</string>
+    <string name="genome_editor_oscillator_preset_adhesin_connections_label">Adhesin connections</string>
+    <string name="genome_editor_oscillator_preset_channel_pair_label">Channel pair</string>
+    <string name="genome_editor_oscillator_preset_period_label">Period</string>
+    <string name="genome_editor_load_default_genome_action">Load default genome</string>
+    <string name="genome_editor_value_dependency_nitrogen_reserve"><![CDATA[NH<sub><small>3</small></sub> reserve [0–1]]]></string>
+    <string name="genome_editor_value_dependency_adhesin_connection_number">Adhesin connection #</string>
+    <string name="genome_editor_value_dependency_cell_mass">Cell mass</string>
+    <string name="genome_editor_value_dependency_cell_age">Cell age</string>
+    <string name="genome_editor_cytoskeleton_label">Cytoskeleton</string>
+    <string name="genome_editor_adhesin_length_label">Adhesin length</string>
+    <string name="genome_editor_maximum_adhesin_connections_label">Maximum adhesin connections</string>
+    <string name="genome_editor_telomeres_after_fertilization_label">Telomeres after fertilization</string>
+    <string name="genome_editor_ciliocyte_left_movement_speed_label">Left movement speed</string>
+    <string name="genome_editor_ciliocyte_right_movement_speed_label">Right movement speed</string>
+    <plurals name="genome_editor_validation_issue_count">
+        <item quantity="one">Genome contains %1$d invalid value. Preview and save use the last valid state.</item>
+        <item quantity="other">Genome contains %1$d invalid values. Preview and save use the last valid state.</item>
+    </plurals>
+    <string name="genome_editor_no_specific_settings_message">No specific settings</string>
+    <string name="genome_editor_no_specific_settings_for_cell_type_message">No specific settings for this cell type</string>
+    <string name="genome_editor_no_signal_settings_for_cell_type_message">No signal settings for this cell type</string>
+    <string name="genome_editor_preview_settings_title">Preview settings</string>
+    <string name="genome_editor_preview_grid_option">Grid</string>
+    <string name="genome_editor_preview_tree_option">Tree</string>
+    <string name="genome_editor_preview_ghost_option">Ghost</string>
+    <string name="genome_editor_preview_summary_format">Development after %1$s %2$s · Cell count: %3$d / %4$d</string>
+    <string name="genome_editor_tab_general">General</string>
+    <string name="genome_editor_tab_splitting">Splitting</string>
+    <string name="genome_editor_tab_specific">Specific</string>
+    <string name="genome_editor_mode_title_format">%1$s%2$d</string>
+    <string name="genome_editor_load_default_to_mode_action_format">Load default to %1$s%2$d</string>
+    <string name="genome_editor_copy_mode_action_format">Copy %1$s%2$d to %1$s%3$d</string>
+    <string name="genome_editor_add_gene_action">Add gene</string>
+    <string name="genome_editor_duplicate_gene_action_format">Duplicate %1$s%2$d</string>
+    <string name="genome_editor_move_gene_before_action">Move one position earlier</string>
+    <string name="genome_editor_move_gene_after_action">Move one position later</string>
+    <string name="genome_editor_delete_gene_full_action">Delete gene</string>
+    <string name="genome_editor_delete_gene_dialog_title">Delete gene</string>
+    <string name="genome_editor_delete_gene_replacement_label">Redirect references to:</string>
+    <string name="genome_editor_color_label">Color:</string>
+    <string name="genome_editor_color_dialog_title">Color</string>
+    <string name="genome_editor_color_red_label">Red</string>
+    <string name="genome_editor_color_green_label">Green</string>
+    <string name="genome_editor_color_blue_label">Blue</string>
+    <string name="genome_editor_unknown_formula_message">Unknown formula</string>
+    <string name="genome_editor_numbered_label_format">%1$s %2$d</string>
+    <string name="genome_editor_oscillator_channel_pair_format">Oscillate channels %1$d and %2$d</string>
+    <plurals name="genome_editor_adhesin_connection_count">
+        <item quantity="one">%1$d adhesin connection</item>
+        <item quantity="other">%1$d adhesin connections</item>
+    </plurals>
+    <string name="genome_editor_label_with_unit_format">%1$s (%2$s)</string>
+    <string name="genome_editor_value_with_unit_format">%1$s %2$s</string>
+    <string name="genome_editor_signal_name_format">%1$s%2$d</string>
+    <string name="genome_editor_signed_signal_name_format">%1$s%2$s%3$d</string>
+    <string name="genome_editor_gene_with_type_format">%1$s%2$d %3$s</string>
+
+    <!-- Mathematical operators are language-independent UI tokens. -->
+
+    <string name="genome_editor_infinity_symbol" translatable="false">∞</string>
+    <string name="genome_editor_variable_x_symbol" translatable="false">x</string>
+    <string name="genome_editor_decrease_symbol" translatable="false">−</string>
+    <string name="genome_editor_increase_symbol" translatable="false">+</string>
+    <string name="genome_editor_hex_label" translatable="false">HEX</string>
+
+</resources>

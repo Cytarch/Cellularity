@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <string name="common_ok_action">OK</string>
+
+    <string name="common_invalid_number_message">Enter a number</string>
+
+    <string name="common_discard_action">Discard</string>
+
+    <string name="common_cancel_action">Cancel</string>
+
+    <string name="common_start_action">Start</string>
+
+    <string name="common_cancel_button_label">Cancel</string>
+
+    <string name="common_back_action">Back</string>
+
+    <string name="common_edit_action">Edit</string>
+
+    <string name="common_export_action">Export</string>
+
+    <string name="common_reset_action">Reset</string>
+
+    <string name="common_search_action">Search</string>
+
+    <string name="common_edit_value_precisely_action">Edit value precisely</string>
+
+</resources>

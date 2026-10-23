@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <string name="play_discard_substrate_dialog_title">Discard current substrate?</string>
+
+    <string name="play_discard_substrate_dialog_message">Leaving experimental species in the open is against lab policy!</string>
+
+    <string name="play_sterilize_substrate_dialog_title">Sterilize current substrate?</string>
+
+    <string name="play_sterilize_substrate_dialog_message">Killing too many cells might result in another chat with the ethics committee…</string>
+
+    <string name="play_temperature_menu_title">Substrate temperature</string>
+
+    <string name="play_temperature_freeze_action">Freeze</string>
+
+    <string name="play_temperature_observe_action">Observe</string>
+
+    <string name="play_temperature_incubate_action">Incubate</string>
+
+    <string name="play_temperature_incubate_without_rendering_action">Incubate without rendering</string>
+
+    <string name="play_temperature_slow_observe_action">Observe slowly</string>
+
+    <string name="play_sample_label_dialog_title">Label your sample</string>
+
+    <string name="play_sample_age_label">Substrate age:</string>
+
+    <string name="play_sample_cell_count_label">Number of cells:</string>
+
+    <string name="play_sample_nutrient_amount_label">Amount of nutrients:</string>
+
+    <string name="play_sample_gene_pool_label">Gene pool</string>
+
+    <string name="play_tool_cell_synthesizer">Cell synthesizer</string>
+
+    <string name="play_tool_optical_tweezers">Optical tweezers</string>
+
+    <string name="play_tool_cell_boost">Cell boost</string>
+
+    <string name="play_tool_cell_removal">Cell removal</string>
+
+    <string name="play_tool_cell_diagnostics">Cell diagnostics</string>
+
+    <string name="play_reload_substrate_dialog_title">Reload current substrate?</string>
+
+    <string name="play_tool_selection_title">Select tool</string>
+
+    <string name="play_reload_plate_action">Reload plate</string>
+
+    <string name="play_sterilize_plate_action">Sterilize plate</string>
+
+    <string name="play_select_action_prompt">Select action</string>
+
+    <string name="play_back_content_description">Back</string>
+
+    <string name="play_tab_substrate">Substrate</string>
+
+    <string name="play_tab_microscope">Microscope</string>
+
+    <string name="play_tab_genome_editor">Genome editor</string>
+
+    <string name="play_save_plate_menu_action">Save plate…</string>
+
+    <string name="play_plate_options_content_description">Plate options</string>
+
+</resources>

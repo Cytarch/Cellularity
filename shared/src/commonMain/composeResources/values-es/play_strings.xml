@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <string name="play_discard_substrate_dialog_title">¿Descartar el sustrato actual?</string>
+
+    <string name="play_discard_substrate_dialog_message">¡Dejar especies experimentales sueltas va en contra de nuestra política de laboratorio!</string>
+
+    <string name="play_sterilize_substrate_dialog_title">¿Esterilizar el sustrato actual?</string>
+
+    <string name="play_sterilize_substrate_dialog_message">Matar demasiadas células puede resultar en otra charla con el comité de ética…</string>
+
+    <string name="play_temperature_menu_title">Temperatura del sustrato</string>
+
+    <string name="play_temperature_freeze_action">Congelar</string>
+
+    <string name="play_temperature_observe_action">Observar</string>
+
+    <string name="play_temperature_incubate_action">Incubar</string>
+
+    <string name="play_temperature_incubate_without_rendering_action">Incubar sin renderizado</string>
+
+    <string name="play_temperature_slow_observe_action">Observar lentamente</string>
+
+    <string name="play_sample_label_dialog_title">Etiquetar muestra</string>
+
+    <string name="play_sample_age_label">Edad del sustrato:</string>
+
+    <string name="play_sample_cell_count_label">Cantidad de células:</string>
+
+    <string name="play_sample_nutrient_amount_label">Cantidad de nutrientes:</string>
+
+    <string name="play_sample_gene_pool_label">Acervo genético</string>
+
+    <string name="play_tool_cell_synthesizer">Sintetizador de células</string>
+
+    <string name="play_tool_optical_tweezers">Pinzas ópticas</string>
+
+    <string name="play_tool_cell_boost">Estímulo celular</string>
+
+    <string name="play_tool_cell_removal">Eliminación celular</string>
+
+    <string name="play_tool_cell_diagnostics">Diagnóstico celular</string>
+
+    <string name="play_reload_substrate_dialog_title">¿Recargar el sustrato actual?</string>
+
+    <string name="play_tool_selection_title">Seleccionar herramienta</string>
+
+    <string name="play_reload_plate_action">Recargar placa</string>
+
+    <string name="play_sterilize_plate_action">Esterilizar placa</string>
+
+    <string name="play_select_action_prompt">Seleccionar acción</string>
+
+    <string name="play_back_content_description">Atrás</string>
+
+    <string name="play_tab_substrate">Sustrato</string>
+
+    <string name="play_tab_microscope">Microscopio</string>
+
+    <string name="play_tab_genome_editor">Editor de genoma</string>
+
+    <string name="play_save_plate_menu_action">Guardar placa…</string>
+
+    <string name="play_plate_options_content_description">Opciones de la placa</string>
+
+</resources>

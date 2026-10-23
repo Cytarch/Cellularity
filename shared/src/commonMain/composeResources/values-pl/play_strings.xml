@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <string name="play_discard_substrate_dialog_title">Odrzucić bieżący substrat?</string>
+
+    <string name="play_discard_substrate_dialog_message">Pozostawianie gatunków eksperymentalnych bez zabezpieczenia narusza zasady laboratorium!</string>
+
+    <string name="play_sterilize_substrate_dialog_title">Wysterylizować bieżący substrat?</string>
+
+    <string name="play_sterilize_substrate_dialog_message">Zabijanie zbyt wielu komórek naraz może skutkować kolejną pogawędką z komitetem do spraw bioetyki…</string>
+
+    <string name="play_temperature_menu_title">Temperatura substratu</string>
+
+    <string name="play_temperature_freeze_action">Zamrożenie</string>
+
+    <string name="play_temperature_observe_action">Obserwacja</string>
+
+    <string name="play_temperature_incubate_action">Inkubacja</string>
+
+    <string name="play_temperature_incubate_without_rendering_action">Inkubacja bez renderowania</string>
+
+    <string name="play_temperature_slow_observe_action">Spowolniona obserwacja</string>
+
+    <string name="play_sample_label_dialog_title">Nadaj etykietę próbce</string>
+
+    <string name="play_sample_age_label">Wiek substratu:</string>
+
+    <string name="play_sample_cell_count_label">Liczba komórek:</string>
+
+    <string name="play_sample_nutrient_amount_label">Ilość składników odżywczych:</string>
+
+    <string name="play_sample_gene_pool_label">Pula genowa</string>
+
+    <string name="play_tool_cell_synthesizer">Syntezator komórek</string>
+
+    <string name="play_tool_optical_tweezers">Pęseta optyczna</string>
+
+    <string name="play_tool_cell_boost">Wzmocnienie komórki</string>
+
+    <string name="play_tool_cell_removal">Usuwanie komórek</string>
+
+    <string name="play_tool_cell_diagnostics">Diagnostyka komórkowa</string>
+
+    <string name="play_reload_substrate_dialog_title">Ponownie wczytać bieżący substrat?</string>
+
+    <string name="play_tool_selection_title">Wybierz narzędzie</string>
+
+    <string name="play_reload_plate_action">Wczytaj szalkę ponownie</string>
+
+    <string name="play_sterilize_plate_action">Wysterylizuj szalkę</string>
+
+    <string name="play_select_action_prompt">Wybierz działanie</string>
+
+    <string name="play_back_content_description">Wstecz</string>
+
+    <string name="play_tab_substrate">Substrat</string>
+
+    <string name="play_tab_microscope">Mikroskop</string>
+
+    <string name="play_tab_genome_editor">Edytor genomu</string>
+
+    <string name="play_save_plate_menu_action">Zapisz szalkę…</string>
+
+    <string name="play_plate_options_content_description">Opcje szalki</string>
+
+</resources>

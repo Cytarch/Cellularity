@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <string name="about_version_label">버전</string>
+
+    <string name="about_version_format">%1$s %2$s</string>
+
+    <string name="about_version_unknown">알 수 없음</string>
+
+</resources>

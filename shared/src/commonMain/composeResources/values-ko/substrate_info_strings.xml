@@ -1,0 +1,122 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <string name="substrate_contaminate_with_random_cells_action">무작위 세포로 오염</string>
+
+    <string name="substrate_nitrates">질산염</string>
+
+    <string name="substrate_kill_cells_at_edge">가장자리의 세포 사멸</string>
+
+    <string name="substrate_radiation_level">방사선 조사 단계:</string>
+
+    <string name="substrate_viscosity">기질 점도:</string>
+
+    <string name="substrate_nutrient_rate">영양분 생성률:</string>
+
+    <string name="substrate_nutrient_chunk_size">영양분 입자 크기:</string>
+
+    <string name="substrate_salinity">염도:</string>
+
+    <string name="substrate_light_amount">광량:</string>
+
+    <string name="substrate_light_range">빛의 범위:</string>
+
+    <string name="substrate_light_direction_change">광원 각도 변경:</string>
+
+    <string name="substrate_gravity">중력:</string>
+
+    <string name="substrate_density">밀도:</string>
+
+    <string name="substrate_density_gradient">밀도 변화도:</string>
+
+    <string name="substrate_dynamic_friction">동적 마찰:</string>
+
+    <string name="substrate_static_friction">정적 마찰:</string>
+
+    <string name="substrate_point_mutations_only">점 돌연변이만</string>
+
+    <string name="substrate_cell_aging">세포 노화</string>
+
+    <string name="substrate_nutrient_lumpiness">영양분 뭉침 정도</string>
+
+    <string name="substrate_nutrient_lump_size">영양분 덩어리 크기</string>
+
+    <string name="substrate_nutrient_coating">영양분 코팅</string>
+
+    <string name="substrate_mobile_nutrients">움직이는 영양분</string>
+
+    <string name="substrate_environment_loading_message">환경 불러오는 중…</string>
+
+    <string name="substrate_edit_pending_message">변경 사항 적용 중…</string>
+
+    <string name="substrate_edit_revision_conflict_message">환경이 변경되었습니다. 다시 시도하세요</string>
+
+    <string name="substrate_edit_invalid_value_message">값이 허용 범위를 벗어났습니다</string>
+
+    <string name="substrate_edit_empty_gene_pool_message">최소 하나의 세포 유형을 활성화해야 합니다</string>
+
+    <string name="substrate_edit_rejected_message">변경 사항이 거부되었습니다</string>
+
+    <string name="substrate_edit_failed_message">변경 사항을 적용하지 못했습니다</string>
+
+    <string name="substrate_mutation_only_after_split">분열 후에만 돌연변이 적용</string>
+
+    <string name="substrate_section_mechanics">역학</string>
+
+    <string name="substrate_section_evolution">진화</string>
+
+    <string name="substrate_section_stats">통계</string>
+
+    <string name="substrate_section_sources">공급원</string>
+
+    <string name="substrate_stats_summary_format">기질 나이: %1$s %2$s.\n세포 수: %3$d\n영양분 양: %4$s</string>
+
+    <string name="substrate_time_value_format">%1$s %2$s</string>
+
+    <string name="substrate_test_multicellular_coefficient">다세포 테스트 계수</string>
+
+    <string name="substrate_test_mutation_coefficient">돌연변이 테스트 계수</string>
+
+    <string name="substrate_test_nutrient_decay">영양분 분해 테스트</string>
+
+    <string name="substrate_test_idle_metabolism_scale">휴면 대사 배율</string>
+
+    <string name="substrate_test_flagellocyte_cost_scale">편모세포 비용 배율</string>
+
+    <string name="substrate_test_phagocyte_eating_speed_scale">섭식세포 섭취 속도 배율</string>
+
+    <string name="substrate_gene_pool_heading_format">%1$s:</string>
+
+    <string name="substrate_field_summary_format">%1$s, 강도 %2$s</string>
+
+    <string name="substrate_field_gravity">중력장</string>
+
+    <string name="substrate_field_density">밀도장</string>
+
+    <string name="substrate_field_salinity">염도장</string>
+
+    <string name="substrate_field_nutrient_coating">영양분 코팅장</string>
+
+    <string name="substrate_field_component_base">기본값</string>
+
+    <string name="substrate_field_component_strength">강도</string>
+
+    <string name="substrate_field_component_angle">각도</string>
+
+    <string name="substrate_field_component_offset">오프셋</string>
+
+    <string name="substrate_field_component_softness">완만함</string>
+
+    <string name="substrate_field_mode_constant">일정</string>
+
+    <string name="substrate_field_mode_linear_directional">선형 방향</string>
+
+    <string name="substrate_field_mode_radial">방사형</string>
+
+    <string name="substrate_field_mode_directional">방향</string>
+
+    <string name="substrate_field_mode_radial_inward">안쪽 방사형</string>
+
+    <string name="substrate_field_mode_radial_outward">바깥쪽 방사형</string>
+
+</resources>

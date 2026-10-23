@@ -1,0 +1,120 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <string name="settings_general_section_title">General</string>
+
+    <string name="settings_keep_screen_awake">Mantener la pantalla encendida</string>
+
+    <string name="settings_confirm_before_sterilize_or_reload">Preguntar antes de esterilizar o recargar</string>
+
+    <string name="settings_keep_screen_awake_description">Esto evita que el dispositivo entre en reposo durante simulaciones largas. ¡Recuerda conectar el cargador!</string>
+
+    <string name="settings_language">Idioma</string>
+
+    <string name="settings_genome_preview_maximum_cell_count">Máximo de células en la vista previa del genoma</string>
+
+    <string name="settings_incubation_target_updates_per_second">UPS objetivo de incubación</string>
+
+    <string name="settings_performance_hud">Panel de rendimiento</string>
+
+    <string name="settings_performance_hud_description">Mostrar FPS, UPS y tiempos de las etapas de simulación sobre el microscopio</string>
+
+    <string name="settings_allowed_range_prompt">Introduce un valor entre %1$s y %2$s</string>
+
+    <string name="settings_theme">Tema</string>
+
+    <string name="settings_theme_editor_title">Editor de temas</string>
+
+    <string name="settings_theme_import_action">Importar tema (.cltheme)</string>
+
+    <string name="settings_theme_share_action">Compartir tema (.cltheme)</string>
+
+    <string name="settings_theme_name">Nombre</string>
+
+    <string name="settings_theme_primary">Primario</string>
+
+    <string name="settings_theme_secondary">Secundario</string>
+
+    <string name="settings_theme_primary_container">Contenedor primario</string>
+
+    <string name="settings_theme_background">Fondo</string>
+
+    <string name="settings_theme_surface_variant">Variante de superficie</string>
+
+    <string name="settings_theme_text">Texto</string>
+
+    <string name="settings_theme_text_field_text">Texto de entrada</string>
+
+    <string name="settings_theme_components">Componentes</string>
+
+    <string name="settings_theme_card_corner_radius">Radio de las esquinas de las tarjetas</string>
+
+    <string name="settings_theme_card_elevation">Elevación de tarjetas</string>
+
+    <string name="settings_theme_item_spacing">Espacio entre elementos</string>
+
+    <string name="settings_theme_content_padding">Espaciado interior del contenido</string>
+
+    <string name="settings_theme_list_padding">Espaciado interior de la lista</string>
+
+    <string name="settings_theme_icon_button_size">Tamaño de botones de icono</string>
+
+    <string name="settings_theme_slider_thumb_size">Tamaño del mando deslizante</string>
+
+    <string name="settings_theme_slider_track_height">Altura de la pista deslizante</string>
+
+    <string name="settings_theme_swatch_size">Tamaño de muestras de color</string>
+
+    <string name="settings_theme_default">Predeterminado</string>
+
+    <string name="settings_crash_reports">Informes de fallos</string>
+
+    <string name="settings_no_crash_reports_message">No hay informes de fallos</string>
+
+    <string name="settings_crash_reports_privacy_description">Los informes se guardan únicamente en el almacenamiento privado de la aplicación hasta que decidas exportarlos.</string>
+
+    <string name="settings_crash_report_details_format">%1$s\n%2$s</string>
+
+    <string name="settings_export_diagnostics_action">Exportar diagnóstico</string>
+
+    <plurals name="settings_stored_crash_report_count">
+            <item quantity="one">%1$d informe guardado</item>
+            <item quantity="many">%1$d informes guardados</item>
+            <item quantity="other">%1$d informes guardados</item>
+        </plurals>
+
+    <string name="settings_export_diagnostics_title">¿Exportar el diagnóstico?</string>
+
+    <string name="settings_export_diagnostics_disclosure">El archivo de texto exportado puede contener:\n• hora del informe, nombre del paquete y versión de la aplicación\n• versión de Android, modelo del dispositivo y ABI\n• identificadores del dispositivo gráfico, detalles del controlador y resultados de Vulkan\n• hilo donde ocurrió el fallo\n• traza de Java/Kotlin o detalles de la señal nativa\n\nSolo recibirá el archivo la aplicación que elijas en la siguiente pantalla.</string>
+
+    <string name="settings_theme_import_failed_message">No se pudo importar el tema</string>
+    <string name="settings_theme_share_failed_message">No se pudo compartir el tema</string>
+    <string name="settings_avoid_camera_cutout">Evitar el recorte de la cámara</string>
+    <string name="settings_avoid_camera_cutout_summary">Añade espacio alrededor del recorte de la cámara en el modo de pantalla completa de Android</string>
+
+    <string name="settings_experimental_section_title">Funciones experimentales / para desarrolladores</string>
+    <string name="settings_render_backend">Backend de renderizado</string>
+    <string name="settings_render_backend_open_gl_es">OpenGL ES (estable)</string>
+    <string name="settings_render_backend_auto">Automático (experimental)</string>
+    <string name="settings_render_backend_vulkan">Vulkan (experimental)</string>
+    <string name="settings_render_backend_vulkan_unavailable_title">No se pudo iniciar Vulkan</string>
+    <string name="settings_render_backend_vulkan_unavailable_message">El renderizador Vulkan no está disponible:\n%1$s</string>
+    <string name="settings_render_backend_use_gles_action">Usar OpenGL ES</string>
+    <string name="settings_vulkan_capability_title">Compatibilidad con Vulkan</string>
+    <string name="settings_vulkan_capability_run">Toca para comprobar la compatibilidad del dispositivo</string>
+    <string name="settings_vulkan_capability_checking">Comprobando la compatibilidad del dispositivo…</string>
+    <string name="settings_vulkan_capability_supported">Compatible: %1$s (Vulkan %2$s)</string>
+    <string name="settings_vulkan_capability_unsupported">No compatible con este dispositivo</string>
+    <string name="settings_vulkan_capability_failed">No se pudo completar la comprobación</string>
+    <string name="settings_vulkan_capability_retry_action">Reintentar</string>
+    <string name="settings_vulkan_clear_frame_title">Prueba de renderizado del mundo Vulkan</string>
+    <string name="settings_vulkan_clear_frame_summary">Abrir la prueba aislada de renderizado del mundo del microscopio Vulkan</string>
+    <string name="settings_vulkan_clear_frame_unavailable">Disponible tras comprobar correctamente Vulkan</string>
+    <string name="settings_vulkan_clear_frame_starting">Iniciando Vulkan…</string>
+    <string name="settings_vulkan_clear_frame_waiting">Esperando la superficie de Android…</string>
+    <string name="settings_vulkan_clear_frame_presenting">Fotogramas presentados: %1$d · recreaciones de swapchain: %2$d</string>
+    <string name="settings_vulkan_clear_frame_paused">El renderizado Vulkan está en pausa</string>
+    <string name="settings_vulkan_clear_frame_surface_lost">Se perdió la superficie; reconectando…</string>
+    <string name="settings_vulkan_clear_frame_failed">Falló el renderizado Vulkan</string>
+
+</resources>

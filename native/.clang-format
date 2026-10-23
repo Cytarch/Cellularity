@@ -1,0 +1,85 @@
+---
+Language: Cpp
+BasedOnStyle: LLVM
+Standard: c++17
+
+# Keep statement wrapping under the author's control. In particular, do not
+# split long calls, expressions, declarations, or generated lookup-table rows.
+ColumnLimit: 0
+AlignAfterOpenBracket: false
+AlignOperands: DontAlign
+BinPackArguments: true
+BinPackParameters: BinPack
+ExperimentalAutoDetectBinPacking: false
+BreakBeforeBinaryOperators: NonAssignment
+BreakBeforeTernaryOperators: true
+BreakBeforeCloseBracketBracedList: true
+BreakStringLiterals: false
+ReflowComments: Never
+
+# Use one predictable indentation style throughout first-party native code.
+IndentWidth: 4
+ContinuationIndentWidth: 8
+BracedInitializerIndentWidth: 8
+ConstructorInitializerIndentWidth: 8
+TabWidth: 4
+UseTab: Never
+AccessModifierOffset: -4
+IndentAccessModifiers: false
+NamespaceIndentation: None
+IndentCaseLabels: true
+IndentCaseBlocks: false
+IndentPPDirectives: None
+
+# Match the project's existing brace style while avoiding dense executable
+# one-liners that are harder for people and code-review tools to scan.
+BreakBeforeBraces: Attach
+AllowShortBlocksOnASingleLine: Never
+AllowShortCaseLabelsOnASingleLine: false
+AllowShortEnumsOnASingleLine: false
+AllowShortFunctionsOnASingleLine: Empty
+AllowShortIfStatementsOnASingleLine: Never
+AllowShortLambdasOnASingleLine: Empty
+AllowShortLoopsOnASingleLine: false
+AllowShortNamespacesOnASingleLine: false
+
+# Keep pointer/reference spelling and constructor layout deterministic without
+# introducing line breaks solely because a declaration is long.
+DerivePointerAlignment: false
+PointerAlignment: Left
+ReferenceAlignment: Pointer
+QualifierAlignment: Leave
+BreakConstructorInitializers: BeforeColon
+PackConstructorInitializers: BinPack
+
+# Preserve intentional include groups, sorting only inside each group.
+IncludeBlocks: Preserve
+SortIncludes:
+  Enabled: true
+  IgnoreCase: false
+  IgnoreExtension: false
+
+# Normalize structural whitespace, but leave prose and manual statement layout
+# intact.
+MaxEmptyLinesToKeep: 1
+SeparateDefinitionBlocks: Always
+CompactNamespaces: false
+FixNamespaceComments: true
+ShortNamespaceLines: 0
+KeepEmptyLines:
+  AtEndOfFile: false
+  AtStartOfBlock: true
+  AtStartOfFile: false
+AlignTrailingComments:
+  Kind: Never
+SpacesBeforeTrailingComments: 1
+LineEnding: LF
+InsertNewlineAtEOF: true
+
+# Formatting must not make semantic edits.
+InsertBraces: false
+RemoveBracesLLVM: false
+RemoveParentheses: Leave
+RemoveSemicolon: false
+EnumTrailingComma: Leave
+...

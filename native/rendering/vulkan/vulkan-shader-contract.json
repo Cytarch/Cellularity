@@ -1,0 +1,147 @@
+{
+  "schemaVersion": 1,
+  "targetEnvironment": "vulkan1.0",
+  "assetDirectory": "vulkan/shaders",
+  "programs": [
+    {
+      "name": "arrow", "entryPoint": "main", "pushConstantBytes": 0,
+      "descriptorSets": [{"set": 0, "bindings": [{"binding": 0, "type": "uniform_buffer_dynamic", "count": 1, "byteRange": 96, "stages": ["vertex"]}]}],
+      "stages": {"vertex": "arrow.vert", "fragment": "arrow.frag"}
+    },
+    {
+      "name": "background", "entryPoint": "main", "pushConstantBytes": 0,
+      "descriptorSets": [{"set": 0, "bindings": [{"binding": 0, "type": "uniform_buffer_dynamic", "count": 1, "byteRange": 144, "stages": ["vertex", "fragment"]}]}],
+      "stages": {"vertex": "background.vert", "fragment": "background.frag"}
+    },
+    {
+      "name": "buoyocyte", "entryPoint": "main", "pushConstantBytes": 0,
+      "descriptorSets": [{"set": 0, "bindings": [{"binding": 0, "type": "uniform_buffer_dynamic", "count": 1, "byteRange": 96, "stages": ["vertex"]}, {"binding": 1, "type": "combined_image_sampler", "count": 1, "stages": ["fragment"]}]}],
+      "stages": {"vertex": "buoyocyte.vert", "fragment": "buoyocyte.frag"}
+    },
+    {
+      "name": "ciliocyte_outline", "entryPoint": "main", "pushConstantBytes": 0,
+      "descriptorSets": [{"set": 0, "bindings": [{"binding": 0, "type": "uniform_buffer_dynamic", "count": 1, "byteRange": 96, "stages": ["vertex"]}]}],
+      "stages": {"vertex": "ciliocyte_outline.vert", "fragment": "ciliocyte_outline.frag"}
+    },
+    {
+      "name": "dead", "entryPoint": "main", "pushConstantBytes": 0,
+      "descriptorSets": [{"set": 0, "bindings": [{"binding": 0, "type": "uniform_buffer_dynamic", "count": 1, "byteRange": 96, "stages": ["vertex"]}, {"binding": 2, "type": "combined_image_sampler", "count": 1, "stages": ["fragment"]}]}],
+      "stages": {"vertex": "dead.vert", "fragment": "dead.frag"}
+    },
+    {
+      "name": "density_field", "entryPoint": "main", "pushConstantBytes": 0,
+      "descriptorSets": [{"set": 0, "bindings": [{"binding": 0, "type": "uniform_buffer_dynamic", "count": 1, "byteRange": 144, "stages": ["vertex", "fragment"]}]}],
+      "stages": {"vertex": "density_field.vert", "fragment": "density_field.frag"}
+    },
+    {
+      "name": "devorocyte_outline", "entryPoint": "main", "pushConstantBytes": 0,
+      "descriptorSets": [{"set": 0, "bindings": [{"binding": 0, "type": "uniform_buffer_dynamic", "count": 1, "byteRange": 96, "stages": ["vertex"]}]}],
+      "stages": {"vertex": "devorocyte_outline.vert", "fragment": "devorocyte_outline.frag"}
+    },
+    {
+      "name": "flagellocyte_outline", "entryPoint": "main", "pushConstantBytes": 0,
+      "descriptorSets": [{"set": 0, "bindings": [{"binding": 0, "type": "uniform_buffer_dynamic", "count": 1, "byteRange": 96, "stages": ["vertex"]}]}],
+      "stages": {"vertex": "flagellocyte_outline.vert", "fragment": "flagellocyte_outline.frag"}
+    },
+    {
+      "name": "food", "entryPoint": "main", "pushConstantBytes": 0,
+      "descriptorSets": [{"set": 0, "bindings": [{"binding": 0, "type": "uniform_buffer_dynamic", "count": 1, "byteRange": 96, "stages": ["vertex"]}]}],
+      "stages": {"vertex": "food.vert", "fragment": "food.frag"}
+    },
+    {
+      "name": "gamete", "entryPoint": "main", "pushConstantBytes": 0,
+      "descriptorSets": [{"set": 0, "bindings": [{"binding": 0, "type": "uniform_buffer_dynamic", "count": 1, "byteRange": 96, "stages": ["vertex"]}, {"binding": 1, "type": "combined_image_sampler", "count": 1, "stages": ["fragment"]}]}],
+      "stages": {"vertex": "gamete.vert", "fragment": "gamete.frag"}
+    },
+    {
+      "name": "genome_grid", "entryPoint": "main", "pushConstantBytes": 0,
+      "descriptorSets": [{"set": 0, "bindings": [{"binding": 0, "type": "uniform_buffer_dynamic", "count": 1, "byteRange": 96, "stages": ["vertex"]}]}],
+      "stages": {"vertex": "genome_grid.vert", "fragment": "genome_grid.frag"}
+    },
+    {
+      "name": "genome_tree", "entryPoint": "main", "pushConstantBytes": 0,
+      "descriptorSets": [{"set": 0, "bindings": [{"binding": 0, "type": "uniform_buffer_dynamic", "count": 1, "byteRange": 96, "stages": ["vertex"]}]}],
+      "stages": {"vertex": "genome_tree.vert", "fragment": "genome_tree.frag"}
+    },
+    {
+      "name": "glueocyte_outline", "entryPoint": "main", "pushConstantBytes": 0,
+      "descriptorSets": [{"set": 0, "bindings": [{"binding": 0, "type": "uniform_buffer_dynamic", "count": 1, "byteRange": 96, "stages": ["vertex"]}]}],
+      "stages": {"vertex": "glueocyte_outline.vert", "fragment": "glueocyte_outline.frag"}
+    },
+    {
+      "name": "keratinocyte", "entryPoint": "main", "pushConstantBytes": 0,
+      "descriptorSets": [{"set": 0, "bindings": [{"binding": 0, "type": "uniform_buffer_dynamic", "count": 1, "byteRange": 96, "stages": ["vertex"]}, {"binding": 1, "type": "combined_image_sampler", "count": 1, "stages": ["fragment"]}]}],
+      "stages": {"vertex": "keratinocyte.vert", "fragment": "keratinocyte.frag"}
+    },
+    {
+      "name": "link", "entryPoint": "main", "pushConstantBytes": 0,
+      "descriptorSets": [{"set": 0, "bindings": [{"binding": 0, "type": "uniform_buffer_dynamic", "count": 1, "byteRange": 96, "stages": ["vertex"]}]}],
+      "stages": {"vertex": "link.vert", "fragment": "link.frag"}
+    },
+    {
+      "name": "lipocyte", "entryPoint": "main", "pushConstantBytes": 0,
+      "descriptorSets": [{"set": 0, "bindings": [{"binding": 0, "type": "uniform_buffer_dynamic", "count": 1, "byteRange": 96, "stages": ["vertex"]}, {"binding": 1, "type": "combined_image_sampler", "count": 1, "stages": ["fragment"]}]}],
+      "stages": {"vertex": "lipocyte.vert", "fragment": "lipocyte.frag"}
+    },
+    {
+      "name": "marker", "entryPoint": "main", "pushConstantBytes": 0,
+      "descriptorSets": [{"set": 0, "bindings": [{"binding": 0, "type": "uniform_buffer_dynamic", "count": 1, "byteRange": 96, "stages": ["vertex"]}]}],
+      "stages": {"vertex": "marker.vert", "fragment": "marker.frag"}
+    },
+    {
+      "name": "myocyte", "entryPoint": "main", "pushConstantBytes": 0,
+      "descriptorSets": [{"set": 0, "bindings": [{"binding": 0, "type": "uniform_buffer_dynamic", "count": 1, "byteRange": 96, "stages": ["vertex"]}, {"binding": 1, "type": "combined_image_sampler", "count": 1, "stages": ["fragment"]}]}],
+      "stages": {"vertex": "myocyte.vert", "fragment": "myocyte.frag"}
+    },
+    {
+      "name": "neurocyte", "entryPoint": "main", "pushConstantBytes": 0,
+      "descriptorSets": [{"set": 0, "bindings": [{"binding": 0, "type": "uniform_buffer_dynamic", "count": 1, "byteRange": 96, "stages": ["vertex"]}, {"binding": 1, "type": "combined_image_sampler", "count": 1, "stages": ["fragment"]}]}],
+      "stages": {"vertex": "neurocyte.vert", "fragment": "neurocyte.frag"}
+    },
+    {
+      "name": "nitrocyte_outline", "entryPoint": "main", "pushConstantBytes": 0,
+      "descriptorSets": [{"set": 0, "bindings": [{"binding": 0, "type": "uniform_buffer_dynamic", "count": 1, "byteRange": 96, "stages": ["vertex"]}]}],
+      "stages": {"vertex": "nitrocyte_outline.vert", "fragment": "nitrocyte_outline.frag"}
+    },
+    {
+      "name": "phagocyte", "entryPoint": "main", "pushConstantBytes": 0,
+      "descriptorSets": [{"set": 0, "bindings": [{"binding": 0, "type": "uniform_buffer_dynamic", "count": 1, "byteRange": 96, "stages": ["vertex"]}, {"binding": 1, "type": "combined_image_sampler", "count": 1, "stages": ["fragment"]}]}],
+      "stages": {"vertex": "phagocyte.vert", "fragment": "phagocyte.frag"}
+    },
+    {
+      "name": "photocyte", "entryPoint": "main", "pushConstantBytes": 0,
+      "descriptorSets": [{"set": 0, "bindings": [{"binding": 0, "type": "uniform_buffer_dynamic", "count": 1, "byteRange": 96, "stages": ["vertex"]}, {"binding": 1, "type": "combined_image_sampler", "count": 1, "stages": ["fragment"]}]}],
+      "stages": {"vertex": "photocyte.vert", "fragment": "photocyte.frag"}
+    },
+    {
+      "name": "pixel_text", "entryPoint": "main", "pushConstantBytes": 0,
+      "descriptorSets": [{"set": 0, "bindings": [{"binding": 0, "type": "uniform_buffer_dynamic", "count": 1, "byteRange": 96, "stages": ["vertex"]}, {"binding": 3, "type": "combined_image_sampler", "count": 1, "stages": ["fragment"]}]}],
+      "stages": {"vertex": "pixel_text.vert", "fragment": "pixel_text.frag"}
+    },
+    {
+      "name": "secrocyte", "entryPoint": "main", "pushConstantBytes": 0,
+      "descriptorSets": [{"set": 0, "bindings": [{"binding": 0, "type": "uniform_buffer_dynamic", "count": 1, "byteRange": 96, "stages": ["vertex"]}, {"binding": 1, "type": "combined_image_sampler", "count": 1, "stages": ["fragment"]}]}],
+      "stages": {"vertex": "secrocyte.vert", "fragment": "secrocyte.frag"}
+    },
+    {
+      "name": "senseocyte_outline", "entryPoint": "main", "pushConstantBytes": 0,
+      "descriptorSets": [{"set": 0, "bindings": [{"binding": 0, "type": "uniform_buffer_dynamic", "count": 1, "byteRange": 96, "stages": ["vertex"]}]}],
+      "stages": {"vertex": "senseocyte_outline.vert", "fragment": "senseocyte_outline.frag"}
+    },
+    {
+      "name": "stemocyte", "entryPoint": "main", "pushConstantBytes": 0,
+      "descriptorSets": [{"set": 0, "bindings": [{"binding": 0, "type": "uniform_buffer_dynamic", "count": 1, "byteRange": 96, "stages": ["vertex"]}, {"binding": 1, "type": "combined_image_sampler", "count": 1, "stages": ["fragment"]}]}],
+      "stages": {"vertex": "stemocyte.vert", "fragment": "stemocyte.frag"}
+    },
+    {
+      "name": "stereocyte_outline", "entryPoint": "main", "pushConstantBytes": 0,
+      "descriptorSets": [{"set": 0, "bindings": [{"binding": 0, "type": "uniform_buffer_dynamic", "count": 1, "byteRange": 96, "stages": ["vertex"]}]}],
+      "stages": {"vertex": "stereocyte_outline.vert", "fragment": "stereocyte_outline.frag"}
+    },
+    {
+      "name": "virocyte_outline", "entryPoint": "main", "pushConstantBytes": 0,
+      "descriptorSets": [{"set": 0, "bindings": [{"binding": 0, "type": "uniform_buffer_dynamic", "count": 1, "byteRange": 96, "stages": ["vertex"]}]}],
+      "stages": {"vertex": "virocyte_outline.vert", "fragment": "virocyte_outline.frag"}
+    }
+  ]
+}

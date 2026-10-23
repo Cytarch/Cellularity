@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <string name="sharing_substrate_email_subject">Cellularity의 냉동 샘플</string>
+    <string name="sharing_substrate_email_body">새로운 발견입니다!\n\n주의: 이 샘플에는 살아 있는 생물이 포함되어 있으므로 적절한 장비로 열어야 합니다.</string>
+    <string name="sharing_email_chooser_title">이메일 보내기…</string>
+    <string name="sharing_message_with_app_name_format">%1$s\n\n%2$s</string>
+
+</resources>

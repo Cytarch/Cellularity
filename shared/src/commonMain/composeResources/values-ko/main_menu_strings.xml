@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <string name="main_menu_tab_experiments">실험</string>
+
+    <string name="main_menu_tab_gene_bank">유전자 은행</string>
+
+    <string name="main_menu_tab_settings">설정</string>
+
+    <string name="main_menu_tab_about">정보</string>
+
+</resources>

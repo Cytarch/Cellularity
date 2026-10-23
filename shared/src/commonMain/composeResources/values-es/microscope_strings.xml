@@ -1,0 +1,130 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <string name="microscope_select_cell_prompt">Seleccionar célula…</string>
+
+    <string name="microscope_cell_age_format">Edad: %.2f h</string>
+
+    <string name="microscope_cell_mass_format">Masa: %.2f ng</string>
+
+    <string name="microscope_cell_diameter_format">Diámetro: %.1f μm</string>
+
+    <string name="microscope_cell_nitrogen_reserve_format">Reserva de nitrógeno: %.0f%%</string>
+
+    <string name="microscope_cell_speed_format">&lt;br&gt;Velocidad: %.0f μm/h</string>
+
+    <string name="microscope_cell_toxins_format">Toxinas: %.2f</string>
+
+    <string name="microscope_cell_injury_format">Daño: %.0f%%</string>
+
+    <string name="microscope_cell_lift_format">Elevación: %.2f</string>
+
+    <string name="microscope_cell_active_mode_label">Modo activo:</string>
+
+    <string name="microscope_cell_type_label">Tipo:</string>
+
+    <string name="microscope_cell_mirrored_label">Espejada:</string>
+
+    <string name="microscope_cell_tag_label">Etiqueta:</string>
+
+    <string name="microscope_cell_mutations_label">Mutaciones:</string>
+
+    <string name="microscope_cell_telomeres_label">Telómeros:</string>
+
+    <string name="microscope_cell_density_label">Densidad:</string>
+
+    <string name="microscope_cell_lipids_format">Lípidos (equivalente en masa): %.2f ng&lt;br&gt;</string>
+
+    <string name="microscope_cell_tag_user">Célula del usuario</string>
+
+    <string name="microscope_cell_tag_challenge">Célula de desafío</string>
+
+    <string name="microscope_cell_tag_contamination">Célula de contaminación</string>
+
+    <string name="microscope_cell_tag_infected_user">Célula infectada del usuario</string>
+
+    <string name="microscope_cell_tag_infected_challenge">Célula de desafío infectada</string>
+
+    <string name="microscope_cell_tag_infected_contamination">Célula infectada de contaminación</string>
+
+    <string name="microscope_cell_tag_hybrid">Célula híbrida</string>
+
+    <string name="microscope_unit_nanogram">ng</string>
+
+    <string name="microscope_unit_micrometre">μm</string>
+
+    <string name="microscope_unit_density_delta">kg/m³</string>
+
+    <string name="microscope_diagnosis_title">Diagnóstico</string>
+
+    <string name="microscope_plate_options_content_description">Opciones de la placa</string>
+
+    <string name="microscope_section_cell">Célula</string>
+
+    <string name="microscope_section_growth">Crecimiento</string>
+
+    <string name="microscope_section_genome">Genoma</string>
+
+    <string name="microscope_section_signals">Señales</string>
+
+    <string name="microscope_split_label">División</string>
+
+    <string name="microscope_no_split_value">Sin división</string>
+
+    <string name="microscope_split_progress_label">Progreso de división</string>
+
+    <string name="microscope_swim_force_label">Fuerza de natación</string>
+
+    <string name="microscope_sense_output_label">Salida del sensor</string>
+
+    <string name="microscope_sense_amplitude_label">Amplitud del sensor</string>
+
+    <string name="microscope_sense_rgb_label">RGB del sensor</string>
+
+    <string name="microscope_sense_threshold_label">Umbral del sensor</string>
+
+    <string name="microscope_stem_threshold_1_label">Umbral de célula madre 1</string>
+
+    <string name="microscope_stem_threshold_2_label">Umbral de célula madre 2</string>
+
+    <string name="microscope_virus_source_gene_label">Gen de origen del virus</string>
+
+    <string name="microscope_virus_target_gene_label">Gen de destino del virus</string>
+
+    <string name="microscope_output_label">Salida</string>
+
+    <string name="microscope_value_with_unit_format">%1$s %2$s</string>
+
+    <string name="microscope_rate_with_unit_format">%1$s %2$s/%3$s</string>
+
+    <string name="microscope_percent_value_format">%1$s%</string>
+
+    <string name="microscope_mode_title_format">%1$s · %2$s</string>
+
+    <string name="microscope_labeled_value_format">%1$s: %2$s</string>
+
+    <string name="microscope_density_value_format">%1$s %2$s %3$s</string>
+
+    <string name="microscope_scaled_force_value_format">%1$s ×10⁻²¹ N</string>
+
+    <string name="microscope_rgb_value_format">%1$s / %2$s / %3$s</string>
+
+    <string name="microscope_numbered_label_format">%1$s %2$s</string>
+
+    <string name="microscope_output_rate_format">%1$s %2$s %3$s/%4$s</string>
+
+    <string name="microscope_gene_name_format">M%1$s</string>
+
+    <string name="microscope_signal_name_format">%1$s%2$s</string>
+
+    <string name="microscope_signed_signal_name_format">%1$s%2$s%3$s</string>
+
+    <string name="microscope_zoom_value_format">%1$s×</string>
+
+    <string name="microscope_scientific_zoom_value_format">%1$s·10%2$s×</string>
+
+    <string name="microscope_no_cell_selected_message">No hay ninguna célula seleccionada en el microscopio.</string>
+
+    <string name="microscope_render_preparation_failed_message">El renderizado del microscopio se ha pausado porque no se pudo preparar un fotograma. Los datos de la simulación se conservan.</string>
+
+</resources>

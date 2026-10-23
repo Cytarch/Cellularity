@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <string name="file_collection_newer_version_message">Ten plik utworzono w nowszej wersji Cellularity. Zaktualizuj aplikację.</string>
+
+    <string name="file_collection_invalid_name_message">Nieprawidłowa nazwa pliku.</string>
+
+    <string name="file_collection_substrate_name_already_exists_message">Substrat o tej nazwie już istnieje.</string>
+
+    <string name="file_collection_genome_name_already_exists_message">Genom o tej nazwie już istnieje.</string>
+
+    <string name="file_collection_file_too_large_message">Ten plik jest zbyt duży.</string>
+
+    <string name="file_collection_operation_failed_message">Nie udało się wykonać operacji na pliku.</string>
+
+    <string name="file_collection_no_share_target_message">Brak zgodnej aplikacji.</string>
+
+    <string name="file_collection_share_content_description">Udostępnij: %1$s</string>
+
+    <string name="file_collection_rename_content_description">Zmień nazwę: %1$s</string>
+
+    <string name="file_collection_delete_content_description">Usuń: %1$s</string>
+
+    <string name="file_collection_more_actions_content_description">Więcej działań dla %1$s</string>
+
+    <string name="file_collection_share_action">Udostępnij</string>
+    <string name="file_collection_rename_action">Zmień nazwę</string>
+    <string name="file_collection_delete_action">Usuń</string>
+    <string name="file_collection_clear_search_content_description">Wyczyść wyszukiwanie</string>
+    <string name="file_collection_clear_search_action">Wyczyść wyszukiwanie</string>
+    <string name="file_collection_switch_to_grid_view_content_description">Przełącz na widok siatki</string>
+    <string name="file_collection_switch_to_list_view_content_description">Przełącz na widok listy</string>
+    <string name="file_collection_sort_ascending">Rosnąco</string>
+    <string name="file_collection_sort_descending">Malejąco</string>
+
+    <string name="file_operation_saved_message">Zapisano</string>
+        <string name="file_operation_invalid_name_message">Nieprawidłowa nazwa. Wprowadź niepustą nazwę bez ukośników.</string>
+        <string name="file_operation_newer_version_message">Ten plik utworzono w nowszej wersji Cellularity. Zaktualizuj aplikację.</string>
+        <string name="file_operation_load_failed_message">Nie udało się wczytać tego pliku.</string>
+        <string name="file_operation_save_failed_message">Nie udało się zapisać tego pliku.</string>
+        <string name="file_operation_size_limit_exceeded_message">Plik przekracza limit bezpieczeństwa 2 GiB.</string>
+
+</resources>

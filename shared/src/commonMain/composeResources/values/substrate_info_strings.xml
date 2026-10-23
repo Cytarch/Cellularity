@@ -1,0 +1,122 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <string name="substrate_contaminate_with_random_cells_action">Contaminate with random cells</string>
+
+    <string name="substrate_section_mechanics">Mechanics</string>
+
+    <string name="substrate_section_evolution">Evolution</string>
+
+    <string name="substrate_section_stats">Stats</string>
+
+    <string name="substrate_environment_loading_message">Loading environment…</string>
+
+    <string name="substrate_edit_pending_message">Applying change…</string>
+
+    <string name="substrate_edit_revision_conflict_message">The environment changed; try again</string>
+
+    <string name="substrate_edit_invalid_value_message">Value is outside the allowed range</string>
+
+    <string name="substrate_edit_empty_gene_pool_message">At least one cell type must remain enabled</string>
+
+    <string name="substrate_edit_rejected_message">Change rejected</string>
+
+    <string name="substrate_edit_failed_message">Could not apply change</string>
+
+    <string name="substrate_nitrates">Nitrates</string>
+
+    <string name="substrate_kill_cells_at_edge">Kill cells at edge</string>
+
+    <string name="substrate_radiation_level">Radiation level:</string>
+
+    <string name="substrate_viscosity">Substrate viscosity:</string>
+
+    <string name="substrate_nutrient_rate">Nutrient rate:</string>
+
+    <string name="substrate_nutrient_chunk_size">Nutrient chunk size:</string>
+
+    <string name="substrate_salinity">Salinity:</string>
+
+    <string name="substrate_light_amount">Light amount:</string>
+
+    <string name="substrate_light_range">Light range:</string>
+
+    <string name="substrate_light_direction_change">Light direction change:</string>
+
+    <string name="substrate_gravity">Gravity:</string>
+
+    <string name="substrate_density">Density:</string>
+
+    <string name="substrate_density_gradient">Density gradient:</string>
+
+    <string name="substrate_dynamic_friction">Dynamic friction:</string>
+
+    <string name="substrate_static_friction">Static friction:</string>
+
+    <string name="substrate_point_mutations_only">Only point mutations</string>
+
+    <string name="substrate_mutation_only_after_split">Apply mutations only after split</string>
+
+    <string name="substrate_cell_aging">Cell aging</string>
+
+    <string name="substrate_nutrient_lumpiness">Nutrient lumpiness</string>
+
+    <string name="substrate_nutrient_lump_size">Nutrient lump size</string>
+
+    <string name="substrate_nutrient_coating">Nutrient coating</string>
+
+    <string name="substrate_mobile_nutrients">Mobile nutrients</string>
+
+    <string name="substrate_section_sources">Sources</string>
+
+    <string name="substrate_stats_summary_format">Substrate age: %1$s %2$s.\nNumber of cells: %3$d\nAmount of nutrients: %4$s</string>
+
+    <string name="substrate_time_value_format">%1$s %2$s</string>
+
+    <string name="substrate_test_multicellular_coefficient">Multicellular test coefficient</string>
+
+    <string name="substrate_test_mutation_coefficient">Mutation test coefficient</string>
+
+    <string name="substrate_test_nutrient_decay">Nutrient decay test</string>
+
+    <string name="substrate_test_idle_metabolism_scale">Idle metabolism scale</string>
+
+    <string name="substrate_test_flagellocyte_cost_scale">Flagellocyte cost scale</string>
+
+    <string name="substrate_test_phagocyte_eating_speed_scale">Phagocyte eating speed scale</string>
+
+    <string name="substrate_gene_pool_heading_format">%1$s:</string>
+
+    <string name="substrate_field_summary_format">%1$s, strength %2$s</string>
+
+    <string name="substrate_field_gravity">Gravity field</string>
+
+    <string name="substrate_field_density">Density field</string>
+
+    <string name="substrate_field_salinity">Salinity field</string>
+
+    <string name="substrate_field_nutrient_coating">Nutrient coating field</string>
+
+    <string name="substrate_field_component_base">Base</string>
+
+    <string name="substrate_field_component_strength">Strength</string>
+
+    <string name="substrate_field_component_angle">Angle</string>
+
+    <string name="substrate_field_component_offset">Offset</string>
+
+    <string name="substrate_field_component_softness">Softness</string>
+
+    <string name="substrate_field_mode_constant">Constant</string>
+
+    <string name="substrate_field_mode_linear_directional">Linear directional</string>
+
+    <string name="substrate_field_mode_radial">Radial</string>
+
+    <string name="substrate_field_mode_directional">Directional</string>
+
+    <string name="substrate_field_mode_radial_inward">Radial inward</string>
+
+    <string name="substrate_field_mode_radial_outward">Radial outward</string>
+
+</resources>

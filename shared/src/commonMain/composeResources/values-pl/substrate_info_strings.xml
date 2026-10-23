@@ -1,0 +1,122 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <string name="substrate_contaminate_with_random_cells_action">Skaź losowymi komórkami</string>
+
+    <string name="substrate_nitrates">Azotany</string>
+
+    <string name="substrate_kill_cells_at_edge">Zabijaj komórki na krawędzi</string>
+
+    <string name="substrate_radiation_level">Natężenie promieniowania:</string>
+
+    <string name="substrate_viscosity">Lepkość substratu:</string>
+
+    <string name="substrate_nutrient_rate">Tempo pojawiania się składników odżywczych:</string>
+
+    <string name="substrate_nutrient_chunk_size">Wielkość porcji składników odżywczych:</string>
+
+    <string name="substrate_salinity">Zasolenie:</string>
+
+    <string name="substrate_light_amount">Natężenie światła:</string>
+
+    <string name="substrate_light_range">Zasięg światła:</string>
+
+    <string name="substrate_light_direction_change">Zmiana kierunku światła:</string>
+
+    <string name="substrate_gravity">Grawitacja:</string>
+
+    <string name="substrate_density">Gęstość:</string>
+
+    <string name="substrate_density_gradient">Gradient gęstości:</string>
+
+    <string name="substrate_dynamic_friction">Tarcie dynamiczne:</string>
+
+    <string name="substrate_static_friction">Tarcie statyczne:</string>
+
+    <string name="substrate_point_mutations_only">Tylko mutacje punktowe</string>
+
+    <string name="substrate_cell_aging">Starzenie się komórek</string>
+
+    <string name="substrate_nutrient_lumpiness">Zbrylanie składników odżywczych</string>
+
+    <string name="substrate_nutrient_lump_size">Wielkość skupisk składników odżywczych</string>
+
+    <string name="substrate_nutrient_coating">Powłoka składników odżywczych</string>
+
+    <string name="substrate_mobile_nutrients">Ruchome składniki odżywcze</string>
+
+    <string name="substrate_environment_loading_message">Wczytywanie środowiska…</string>
+
+    <string name="substrate_edit_pending_message">Stosowanie zmiany…</string>
+
+    <string name="substrate_edit_revision_conflict_message">Środowisko uległo zmianie; spróbuj ponownie</string>
+
+    <string name="substrate_edit_invalid_value_message">Wartość jest poza dozwolonym zakresem</string>
+
+    <string name="substrate_edit_empty_gene_pool_message">Co najmniej jeden typ komórki musi pozostać włączony</string>
+
+    <string name="substrate_edit_rejected_message">Zmiana została odrzucona</string>
+
+    <string name="substrate_edit_failed_message">Nie udało się zastosować zmiany</string>
+
+    <string name="substrate_mutation_only_after_split">Stosuj mutacje tylko po podziale</string>
+
+    <string name="substrate_section_mechanics">Mechanika</string>
+
+    <string name="substrate_section_evolution">Ewolucja</string>
+
+    <string name="substrate_section_stats">Statystyki</string>
+
+    <string name="substrate_section_sources">Źródła</string>
+
+    <string name="substrate_stats_summary_format">Wiek substratu: %1$s %2$s.\nLiczba komórek: %3$d\nIlość składników odżywczych: %4$s</string>
+
+    <string name="substrate_time_value_format">%1$s %2$s</string>
+
+    <string name="substrate_test_multicellular_coefficient">Współczynnik testu wielokomórkowości</string>
+
+    <string name="substrate_test_mutation_coefficient">Współczynnik testu mutacji</string>
+
+    <string name="substrate_test_nutrient_decay">Test rozpadu składników odżywczych</string>
+
+    <string name="substrate_test_idle_metabolism_scale">Skala metabolizmu spoczynkowego</string>
+
+    <string name="substrate_test_flagellocyte_cost_scale">Skala kosztu flagellocytu</string>
+
+    <string name="substrate_test_phagocyte_eating_speed_scale">Skala szybkości odżywiania fagocytu</string>
+
+    <string name="substrate_gene_pool_heading_format">%1$s:</string>
+
+    <string name="substrate_field_summary_format">%1$s, siła %2$s</string>
+
+    <string name="substrate_field_gravity">Pole grawitacyjne</string>
+
+    <string name="substrate_field_density">Pole gęstości</string>
+
+    <string name="substrate_field_salinity">Pole zasolenia</string>
+
+    <string name="substrate_field_nutrient_coating">Pole powłoki składników odżywczych</string>
+
+    <string name="substrate_field_component_base">Wartość bazowa</string>
+
+    <string name="substrate_field_component_strength">Siła</string>
+
+    <string name="substrate_field_component_angle">Kąt</string>
+
+    <string name="substrate_field_component_offset">Przesunięcie</string>
+
+    <string name="substrate_field_component_softness">Łagodność</string>
+
+    <string name="substrate_field_mode_constant">Stałe</string>
+
+    <string name="substrate_field_mode_linear_directional">Liniowe kierunkowe</string>
+
+    <string name="substrate_field_mode_radial">Promieniowe</string>
+
+    <string name="substrate_field_mode_directional">Kierunkowe</string>
+
+    <string name="substrate_field_mode_radial_inward">Promieniowe do wewnątrz</string>
+
+    <string name="substrate_field_mode_radial_outward">Promieniowe na zewnątrz</string>
+
+</resources>

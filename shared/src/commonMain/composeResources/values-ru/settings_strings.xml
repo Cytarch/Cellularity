@@ -1,0 +1,121 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <string name="settings_general_section_title">Общие</string>
+
+    <string name="settings_keep_screen_awake">Не выключать экран</string>
+
+    <string name="settings_confirm_before_sterilize_or_reload">Спрашивать перед стерилизацией или перезагрузкой</string>
+
+    <string name="settings_keep_screen_awake_description">Устройство не будет переходить в спящий режим во время долгих симуляций. Не забудьте подключить зарядное устройство!</string>
+
+    <string name="settings_language">Язык</string>
+
+    <string name="settings_genome_preview_maximum_cell_count">Максимум клеток в предпросмотре генома</string>
+
+    <string name="settings_incubation_target_updates_per_second">Целевая частота инкубации (UPS)</string>
+
+    <string name="settings_performance_hud">Монитор производительности</string>
+
+    <string name="settings_performance_hud_description">Показывать FPS, UPS и время этапов симуляции поверх микроскопа</string>
+
+    <string name="settings_allowed_range_prompt">Введите значение от %1$s до %2$s</string>
+
+    <string name="settings_theme">Тема</string>
+
+    <string name="settings_theme_editor_title">Редактор темы</string>
+
+    <string name="settings_theme_import_action">Импортировать тему (.cltheme)</string>
+
+    <string name="settings_theme_share_action">Поделиться темой (.cltheme)</string>
+
+    <string name="settings_theme_name">Название</string>
+
+    <string name="settings_theme_primary">Основной цвет</string>
+
+    <string name="settings_theme_secondary">Дополнительный цвет</string>
+
+    <string name="settings_theme_primary_container">Основной контейнер</string>
+
+    <string name="settings_theme_background">Фон</string>
+
+    <string name="settings_theme_surface_variant">Вариант поверхности</string>
+
+    <string name="settings_theme_text">Текст</string>
+
+    <string name="settings_theme_text_field_text">Вводимый текст</string>
+
+    <string name="settings_theme_components">Компоненты</string>
+
+    <string name="settings_theme_card_corner_radius">Радиус скругления карточек</string>
+
+    <string name="settings_theme_card_elevation">Высота карточек над фоном</string>
+
+    <string name="settings_theme_item_spacing">Интервал между элементами</string>
+
+    <string name="settings_theme_content_padding">Внутренний отступ содержимого</string>
+
+    <string name="settings_theme_list_padding">Внутренний отступ списка</string>
+
+    <string name="settings_theme_icon_button_size">Размер кнопок со значками</string>
+
+    <string name="settings_theme_slider_thumb_size">Размер ручки ползунка</string>
+
+    <string name="settings_theme_slider_track_height">Высота дорожки ползунка</string>
+
+    <string name="settings_theme_swatch_size">Размер образца цвета</string>
+
+    <string name="settings_theme_default">По умолчанию</string>
+
+    <string name="settings_crash_reports">Отчёты о сбоях</string>
+
+    <string name="settings_no_crash_reports_message">Нет отчётов о сбоях</string>
+
+    <string name="settings_crash_reports_privacy_description">Отчёты хранятся только в закрытом хранилище приложения, пока вы сами их не экспортируете.</string>
+
+    <string name="settings_crash_report_details_format">%1$s\n%2$s</string>
+
+    <string name="settings_export_diagnostics_action">Экспортировать диагностику</string>
+
+    <plurals name="settings_stored_crash_report_count">
+            <item quantity="one">%1$d сохранённый отчёт</item>
+            <item quantity="few">%1$d сохранённых отчёта</item>
+            <item quantity="many">%1$d сохранённых отчётов</item>
+            <item quantity="other">%1$d сохранённых отчётов</item>
+        </plurals>
+
+    <string name="settings_export_diagnostics_title">Экспортировать диагностику?</string>
+
+    <string name="settings_export_diagnostics_disclosure">Экспортируемый текстовый файл может содержать:\n• время отчёта, имя пакета и версию приложения\n• версию Android, модель устройства и ABI\n• идентификаторы графического устройства, сведения о драйвере и результат проверки Vulkan\n• поток, в котором произошёл сбой\n• стек вызовов Java/Kotlin или сведения о нативном сигнале\n\nФайл получит только приложение, которое вы выберете на следующем экране.</string>
+
+    <string name="settings_theme_import_failed_message">Не удалось импортировать тему</string>
+    <string name="settings_theme_share_failed_message">Не удалось поделиться темой</string>
+    <string name="settings_avoid_camera_cutout">Учитывать вырез камеры</string>
+    <string name="settings_avoid_camera_cutout_summary">Добавляет отступ вокруг выреза камеры в полноэкранном режиме Android</string>
+
+    <string name="settings_experimental_section_title">Экспериментальные функции / для разработчиков</string>
+    <string name="settings_render_backend">Графический backend</string>
+    <string name="settings_render_backend_open_gl_es">OpenGL ES (стабильный)</string>
+    <string name="settings_render_backend_auto">Авто (экспериментальный)</string>
+    <string name="settings_render_backend_vulkan">Vulkan (экспериментальный)</string>
+    <string name="settings_render_backend_vulkan_unavailable_title">Не удалось запустить Vulkan</string>
+    <string name="settings_render_backend_vulkan_unavailable_message">Рендеринг через Vulkan недоступен:\n%1$s</string>
+    <string name="settings_render_backend_use_gles_action">Использовать OpenGL ES</string>
+    <string name="settings_vulkan_capability_title">Поддержка Vulkan</string>
+    <string name="settings_vulkan_capability_run">Нажмите, чтобы проверить поддержку устройства</string>
+    <string name="settings_vulkan_capability_checking">Проверка поддержки устройства…</string>
+    <string name="settings_vulkan_capability_supported">Поддерживается: %1$s (Vulkan %2$s)</string>
+    <string name="settings_vulkan_capability_unsupported">Не поддерживается на этом устройстве</string>
+    <string name="settings_vulkan_capability_failed">Не удалось завершить проверку</string>
+    <string name="settings_vulkan_capability_retry_action">Повторить</string>
+    <string name="settings_vulkan_clear_frame_title">Тест рендеринга мира Vulkan</string>
+    <string name="settings_vulkan_clear_frame_summary">Открыть изолированный тест рендеринга мира микроскопа Vulkan</string>
+    <string name="settings_vulkan_clear_frame_unavailable">Станет доступно после успешной проверки Vulkan</string>
+    <string name="settings_vulkan_clear_frame_starting">Запуск Vulkan…</string>
+    <string name="settings_vulkan_clear_frame_waiting">Ожидание поверхности Android…</string>
+    <string name="settings_vulkan_clear_frame_presenting">Показано кадров: %1$d · пересозданий swapchain: %2$d</string>
+    <string name="settings_vulkan_clear_frame_paused">Рендеринг Vulkan приостановлен</string>
+    <string name="settings_vulkan_clear_frame_surface_lost">Поверхность потеряна; переподключение…</string>
+    <string name="settings_vulkan_clear_frame_failed">Ошибка рендеринга Vulkan</string>
+
+</resources>

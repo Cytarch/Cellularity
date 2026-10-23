@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+: "${CELLULARITY_NATIVE_TSAN_BUILD_DIR:=/tmp/cellularity_native_tsan_build}"
+
+export CELLULARITY_NATIVE_BUILD_DIR="${CELLULARITY_NATIVE_TSAN_BUILD_DIR}"
+export CELLULARITY_NATIVE_BUILD_TYPE=Debug
+export CELLULARITY_NATIVE_PROFILE=OFF
+export CELLULARITY_NATIVE_SANITIZERS=OFF
+export CELLULARITY_NATIVE_THREAD_SANITIZER=ON
+export CELLULARITY_NATIVE_WARNINGS_AS_ERRORS=ON
+export CELLULARITY_NATIVE_IPO=OFF
+
+export TSAN_OPTIONS="halt_on_error=1:second_deadlock_stack=1"
+
+"${SCRIPT_DIR}/test.sh"

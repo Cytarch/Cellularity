@@ -1,0 +1,340 @@
+import groovy.io.FileType
+import groovy.json.JsonSlurper
+import javax.inject.Inject
+import org.gradle.api.DefaultTask
+import org.gradle.api.GradleException
+import org.gradle.api.file.DirectoryProperty
+import org.gradle.api.file.FileSystemOperations
+import org.gradle.api.file.RegularFileProperty
+import org.gradle.api.provider.Property
+import org.gradle.api.tasks.CacheableTask
+import org.gradle.api.tasks.Input
+import org.gradle.api.tasks.InputDirectory
+import org.gradle.api.tasks.InputFile
+import org.gradle.api.tasks.OutputDirectory
+import org.gradle.api.tasks.PathSensitive
+import org.gradle.api.tasks.PathSensitivity
+import org.gradle.api.tasks.TaskAction
+import org.gradle.process.ExecOperations
+
+@CacheableTask
+abstract class CompileVulkanShadersTask extends DefaultTask {
+    @InputFile
+    @PathSensitive(PathSensitivity.RELATIVE)
+    abstract RegularFileProperty getContractFile()
+
+    @InputDirectory
+    @PathSensitive(PathSensitivity.RELATIVE)
+    abstract DirectoryProperty getSourceDirectory()
+
+    @InputFile
+    @PathSensitive(PathSensitivity.NONE)
+    abstract RegularFileProperty getGlslcExecutable()
+
+    @InputFile
+    @PathSensitive(PathSensitivity.NONE)
+    abstract RegularFileProperty getSpirvValidatorExecutable()
+
+    @Input
+    abstract Property<String> getTargetEnvironment()
+
+    @OutputDirectory
+    abstract DirectoryProperty getOutputDirectory()
+
+    @Inject
+    abstract ExecOperations getExecOperations()
+
+    @Inject
+    abstract FileSystemOperations getFileSystemOperations()
+
+    @TaskAction
+    void compileShaders() {
+        File contractPath = contractFile.get().asFile
+        File sourceRoot = sourceDirectory.get().asFile
+        File outputRoot = outputDirectory.get().asFile
+        File glslc = glslcExecutable.get().asFile
+        File spirvValidator = spirvValidatorExecutable.get().asFile
+
+        for (File tool : [glslc, spirvValidator]) {
+            if (!tool.isFile() || !tool.canExecute()) {
+                throw new GradleException("Required NDK shader tool is unavailable: ${tool}")
+            }
+        }
+
+        Map contract
+        try {
+            contract = (Map) new JsonSlurper().parse(contractPath)
+        } catch (Exception error) {
+            throw new GradleException("Vulkan shader contract is invalid: ${contractPath}", error)
+        }
+        if (contract.schemaVersion != 1) {
+            throw new GradleException("Vulkan shader contract schemaVersion must be 1")
+        }
+        String requestedTargetEnvironment = targetEnvironment.get()
+        if (contract.targetEnvironment != requestedTargetEnvironment) {
+            throw new GradleException(
+                "Vulkan shader contract targets ${contract.targetEnvironment}; " +
+                    "expected ${requestedTargetEnvironment}"
+            )
+        }
+        String assetDirectory = requireSafeRelativePath(
+            contract.assetDirectory,
+            "assetDirectory"
+        )
+        if (!(contract.programs instanceof List) || contract.programs.isEmpty()) {
+            throw new GradleException("Vulkan shader contract programs must be a non-empty array")
+        }
+
+        List<Map> programs = contract.programs.collect { value ->
+            if (!(value instanceof Map)) {
+                throw new GradleException("Every Vulkan shader program must be an object")
+            }
+            return (Map) value
+        }
+        List<String> names = programs.collect { program -> program.name as String }
+        if (names.any { name -> name == null || !(name ==~ /[a-z][a-z0-9_]*/) }) {
+            throw new GradleException("Vulkan shader program names must use lower_snake_case")
+        }
+        if (names != names.toSorted() || names.toSet().size() != names.size()) {
+            throw new GradleException("Vulkan shader programs must be sorted and unique")
+        }
+
+        Map<String, String> stageExtensions = [vertex: "vert", fragment: "frag"]
+        Set<String> expectedSources = [] as Set
+        Map<File, String> compileOutputs = [:]
+        programs.each { program ->
+            if (program.entryPoint != "main") {
+                throw new GradleException(
+                    "Vulkan shader program ${program.name} must use the main entry point"
+                )
+            }
+            if (!(program.pushConstantBytes instanceof Integer)
+                || program.pushConstantBytes < 0
+                || program.pushConstantBytes > 128
+                || program.pushConstantBytes % 4 != 0) {
+                throw new GradleException(
+                    "Vulkan shader program ${program.name} has invalid pushConstantBytes"
+                )
+            }
+            if (!(program.descriptorSets instanceof List)) {
+                throw new GradleException(
+                    "Vulkan shader program ${program.name} descriptorSets must be an array"
+                )
+            }
+            List<Integer> descriptorSetIndices = []
+            program.descriptorSets.eachWithIndex { descriptorSet, setPosition ->
+                if (!(descriptorSet instanceof Map)
+                    || descriptorSet.keySet() as Set != (["set", "bindings"] as Set)) {
+                    throw new GradleException(
+                        "Vulkan shader program ${program.name} descriptorSets[${setPosition}] " +
+                            "must define set and bindings"
+                    )
+                }
+                if (!(descriptorSet.set instanceof Integer) || descriptorSet.set < 0) {
+                    throw new GradleException(
+                        "Vulkan shader program ${program.name} has an invalid descriptor set index"
+                    )
+                }
+                descriptorSetIndices.add((Integer) descriptorSet.set)
+                if (!(descriptorSet.bindings instanceof List)
+                    || descriptorSet.bindings.isEmpty()) {
+                    throw new GradleException(
+                        "Vulkan shader program ${program.name} descriptor set " +
+                            "${descriptorSet.set} must contain bindings"
+                    )
+                }
+                List<Integer> bindingIndices = []
+                descriptorSet.bindings.eachWithIndex { binding, bindingPosition ->
+                    Set requiredBindingFields = ["binding", "type", "count", "stages"] as Set
+                    Set allowedBindingFields = requiredBindingFields + "byteRange"
+                    if (!(binding instanceof Map)
+                        || !(binding.keySet() as Set).containsAll(requiredBindingFields)
+                        || !allowedBindingFields.containsAll(binding.keySet() as Set)) {
+                        throw new GradleException(
+                            "Vulkan shader program ${program.name} descriptor binding " +
+                                "${bindingPosition} has an invalid shape"
+                        )
+                    }
+                    Set<String> bufferTypes = [
+                        "uniform_buffer",
+                        "uniform_buffer_dynamic",
+                        "storage_buffer",
+                        "storage_buffer_dynamic"
+                    ] as Set
+                    Set<String> descriptorTypes = bufferTypes + "combined_image_sampler"
+                    boolean byteRangeValid = binding.type in bufferTypes
+                        ? binding.byteRange instanceof Integer
+                            && binding.byteRange > 0
+                            && binding.byteRange % 4 == 0
+                        : !binding.containsKey("byteRange")
+                    if (!(binding.binding instanceof Integer) || binding.binding < 0
+                        || !(binding.type in descriptorTypes)
+                        || !(binding.count instanceof Integer) || binding.count < 1
+                        || !byteRangeValid
+                        || !(binding.stages instanceof List)
+                        || binding.stages.isEmpty()
+                        || binding.stages.any { stage ->
+                            !(stage in stageExtensions.keySet())
+                        }
+                        || binding.stages.toSet().size() != binding.stages.size()) {
+                        throw new GradleException(
+                            "Vulkan shader program ${program.name} descriptor binding " +
+                                "${bindingPosition} is invalid"
+                        )
+                    }
+                    bindingIndices.add((Integer) binding.binding)
+                }
+                if (bindingIndices != bindingIndices.toSorted()
+                    || bindingIndices.toSet().size() != bindingIndices.size()) {
+                    throw new GradleException(
+                        "Vulkan shader program ${program.name} descriptor bindings " +
+                            "must be sorted and unique"
+                    )
+                }
+            }
+            if (descriptorSetIndices != descriptorSetIndices.toSorted()
+                || descriptorSetIndices.toSet().size() != descriptorSetIndices.size()) {
+                throw new GradleException(
+                    "Vulkan shader program ${program.name} descriptor sets " +
+                        "must be sorted and unique"
+                )
+            }
+            if (!(program.stages instanceof Map)
+                || program.stages.keySet() as Set != stageExtensions.keySet()) {
+                throw new GradleException(
+                    "Vulkan shader program ${program.name} must define vertex and fragment stages"
+                )
+            }
+            stageExtensions.each { stage, extension ->
+                String relativeSource = CompileVulkanShadersTask.requireSafeRelativePath(
+                    program.stages[stage],
+                    "${program.name}.${stage}"
+                )
+                if (!relativeSource.endsWith(".${extension}")) {
+                    throw new GradleException(
+                        "Vulkan ${stage} shader must use .${extension}: ${relativeSource}"
+                    )
+                }
+                File source = new File(sourceRoot, relativeSource)
+                if (!source.isFile()) {
+                    throw new GradleException("Vulkan shader source is missing: ${source}")
+                }
+                if (!expectedSources.add(relativeSource)) {
+                    throw new GradleException("Duplicate Vulkan shader source: ${relativeSource}")
+                }
+                String outputRelative = "${assetDirectory}/${relativeSource}.spv"
+                compileOutputs[source] = outputRelative
+            }
+        }
+
+        Set<String> actualSources = [] as Set
+        sourceRoot.eachFileRecurse(FileType.FILES) { file ->
+            actualSources.add(sourceRoot.toPath().relativize(file.toPath()).toString().replace('\\', '/'))
+        }
+        if (actualSources != expectedSources) {
+            throw new GradleException(
+                "Vulkan shader source inventory differs from its contract: " +
+                    "missing=${expectedSources - actualSources}, " +
+                    "unexpected=${actualSources - expectedSources}"
+            )
+        }
+
+        fileSystemOperations.delete { specification ->
+            specification.delete(outputRoot)
+        }
+        outputRoot.mkdirs()
+        compileOutputs.each { source, outputRelative ->
+            File output = new File(outputRoot, outputRelative)
+            output.parentFile.mkdirs()
+            execOperations.exec {
+                executable glslc
+                args "--target-env=${requestedTargetEnvironment}", "-O", "-Werror",
+                    source, "-o", output
+            }
+            execOperations.exec {
+                executable spirvValidator
+                args "--target-env", requestedTargetEnvironment, output
+            }
+            if (!output.isFile() || output.length() == 0L) {
+                throw new GradleException("Vulkan shader output is missing: ${output}")
+            }
+        }
+
+        Set<String> expectedOutputs = compileOutputs.values() as Set
+        Set<String> actualOutputs = [] as Set
+        outputRoot.eachFileRecurse(FileType.FILES) { file ->
+            actualOutputs.add(outputRoot.toPath().relativize(file.toPath()).toString().replace('\\', '/'))
+        }
+        if (actualOutputs != expectedOutputs) {
+            throw new GradleException(
+                "Generated Vulkan shader inventory is stale: " +
+                    "missing=${expectedOutputs - actualOutputs}, " +
+                    "unexpected=${actualOutputs - expectedOutputs}"
+            )
+        }
+    }
+
+    static String requireSafeRelativePath(Object value, String field) {
+        if (!(value instanceof String) || value.isBlank()) {
+            throw new GradleException("Vulkan shader contract ${field} must be a path")
+        }
+        String path = value.replace('\\', '/')
+        if (path.startsWith('/') || path.split('/').contains('..') || path.contains('//')) {
+            throw new GradleException("Unsafe Vulkan shader contract path in ${field}: ${value}")
+        }
+        return path
+    }
+}
+
+String hostTag
+String executableSuffix
+String osName = System.getProperty("os.name", "").toLowerCase(Locale.ROOT)
+if (osName.contains("linux")) {
+    hostTag = "linux-x86_64"
+    executableSuffix = ""
+} else if (osName.contains("mac") || osName.contains("darwin")) {
+    hostTag = "darwin-x86_64"
+    executableSuffix = ""
+} else if (osName.contains("windows")) {
+    hostTag = "windows-x86_64"
+    executableSuffix = ".exe"
+} else {
+    throw new GradleException("Unsupported Vulkan shader tool host: ${osName}")
+}
+
+def ndkDirectory = androidComponents.sdkComponents.ndkDirectory
+def shaderSourceDirectory = rootProject.layout.projectDirectory.dir(
+    "native/rendering/vulkan/shaders"
+)
+def shaderContract = rootProject.layout.projectDirectory.file(
+    "native/rendering/vulkan/vulkan-shader-contract.json"
+)
+
+androidComponents.onVariants(androidComponents.selector().all()) { variant ->
+    String variantName = variant.name
+    String taskSuffix = variantName.substring(0, 1).toUpperCase(Locale.ROOT) +
+        variantName.substring(1)
+    def compileTask = tasks.register(
+        "compile${taskSuffix}VulkanShaders",
+        CompileVulkanShadersTask
+    ) {
+        group = "build"
+        description = "Compiles and validates Vulkan shaders for ${variantName}."
+        contractFile.set(shaderContract)
+        sourceDirectory.set(shaderSourceDirectory)
+        glslcExecutable.set(ndkDirectory.map { directory ->
+            directory.file("shader-tools/${hostTag}/glslc${executableSuffix}")
+        })
+        spirvValidatorExecutable.set(ndkDirectory.map { directory ->
+            directory.file("shader-tools/${hostTag}/spirv-val${executableSuffix}")
+        })
+        targetEnvironment.set("vulkan1.0")
+        outputDirectory.set(
+            layout.buildDirectory.dir("generated/vulkanShaders/${variantName}/assets")
+        )
+    }
+    variant.sources.assets.addGeneratedSourceDirectory(
+        compileTask,
+        { task -> task.outputDirectory }
+    )
+}

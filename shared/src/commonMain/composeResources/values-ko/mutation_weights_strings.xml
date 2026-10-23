@@ -1,0 +1,126 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <string name="mutation_weights_title">돌연변이 가중치</string>
+
+    <string name="mutation_weights_summary_format">%1$d개 활성화, 총 가중치 %2$s</string>
+
+    <string name="mutation_weights_editor_summary_format">%1$d개 활성화, 합계 %2$s</string>
+
+    <string name="mutation_weight_details_format">가중치 %1$s, %2$s%</string>
+
+    <string name="mutation_weight_numbered_label_format">%1$s %2$d</string>
+
+    <string name="mutation_weight_parametric_label_format">%1$s — %2$s</string>
+
+    <string name="mutation_weight_cell_color_hue">세포 색조</string>
+
+    <string name="mutation_weight_cell_color_saturation">세포 채도</string>
+
+    <string name="mutation_weight_cell_color_value">세포 명도</string>
+
+    <string name="mutation_weight_split_angle">분열 각도</string>
+
+    <string name="mutation_weight_child_1_angle">자식 1 각도</string>
+
+    <string name="mutation_weight_child_2_angle">자식 2 각도</string>
+
+    <string name="mutation_weight_mass_flow_priority">질량 흐름 우선도</string>
+
+    <string name="mutation_weight_split_mass">분열 질량</string>
+
+    <string name="mutation_weight_split_ratio">분열 비율</string>
+
+    <string name="mutation_weight_adhesin_stiffness">어드헤신 강성</string>
+
+    <string name="mutation_weight_child_1_gene">자식 1 유전자</string>
+
+    <string name="mutation_weight_child_2_gene">자식 2 유전자</string>
+
+    <string name="mutation_weight_produce_adhesin">어드헤신 생성</string>
+
+    <string name="mutation_weight_child_1_keep_adhesin_connections">자식 1이 어드헤신 연결 유지</string>
+
+    <string name="mutation_weight_child_2_keep_adhesin_connections">자식 2가 어드헤신 연결 유지</string>
+
+    <string name="mutation_weight_prioritize_survival">생존 우선</string>
+
+    <string name="mutation_weight_child_1_mirror">자식 1 반전</string>
+
+    <string name="mutation_weight_child_2_mirror">자식 2 반전</string>
+
+    <string name="mutation_weight_cell_type">세포 유형</string>
+
+    <string name="mutation_weight_parametric_swim_force">유영력</string>
+
+    <string name="mutation_weight_parametric_cell_density">세포 밀도</string>
+
+    <string name="mutation_weight_parametric_myocyte_bending">근육세포 굴곡</string>
+
+    <string name="mutation_weight_parametric_myocyte_contraction">근육세포 수축</string>
+
+    <string name="mutation_weight_parametric_myocyte_lifting">근육세포 양력</string>
+
+    <string name="mutation_weight_parametric_stem_threshold_1">줄기세포 임계값 1</string>
+
+    <string name="mutation_weight_parametric_stem_threshold_2">줄기세포 임계값 2</string>
+
+    <string name="mutation_weight_parametric_signal_output">신호 출력</string>
+
+    <string name="mutation_weight_parametric_variable_a">변수 A</string>
+
+    <string name="mutation_weight_parametric_variable_b">변수 B</string>
+
+    <string name="mutation_weight_parametric_variable_c">변수 C</string>
+
+    <string name="mutation_weight_parametric_signal_channel">신호 채널</string>
+
+    <string name="mutation_weight_parametric_formula_type">수식 유형</string>
+
+    <string name="mutation_weight_virus_source_gene">바이러스 원본 유전자</string>
+
+    <string name="mutation_weight_virus_target_gene">바이러스 대상 유전자</string>
+
+    <string name="mutation_weight_sense_output_channel">감지 출력 채널</string>
+
+    <string name="mutation_weight_sense_type">감지 유형</string>
+
+    <string name="mutation_weight_secretion_type">분비 유형</string>
+
+    <string name="mutation_weight_signal_output_channel">신호 출력 채널</string>
+
+    <string name="mutation_weight_maximum_adhesin_connections">최대 어드헤신 연결 수</string>
+
+    <string name="mutation_weight_telomeres_after_fertilization">수정 후 텔로미어</string>
+
+    <string name="mutation_weight_sense_amplitude">감지 진폭</string>
+
+    <string name="mutation_weight_sense_color_hue">감지 색조</string>
+
+    <string name="mutation_weight_sense_color_saturation">감지 채도</string>
+
+    <string name="mutation_weight_sense_color_value">감지 명도</string>
+
+    <string name="mutation_weight_sense_threshold">감지 임계값</string>
+
+    <string name="mutation_weight_adhesin_length">어드헤신 길이</string>
+
+    <string name="mutation_weight_cytoskeleton">세포골격</string>
+
+    <string name="mutation_weight_duplicate_child_gene">자식 유전자 복제</string>
+
+    <string name="mutation_weight_insert_linked_child_gene">연결된 자식 유전자 삽입</string>
+
+    <string name="mutation_weight_split_child_edge">자식 연결 분할</string>
+
+    <string name="mutation_weight_bypass_child_gene">자식 유전자 우회</string>
+
+    <string name="mutation_weight_local_edge_retarget">로컬 연결 대상 변경</string>
+
+    <string name="mutation_weight_clone_parent_gene">부모 유전자 복제</string>
+
+    <string name="mutation_weight_add_gene">유전자 추가</string>
+
+    <string name="mutation_weight_delete_gene">유전자 삭제</string>
+
+</resources>

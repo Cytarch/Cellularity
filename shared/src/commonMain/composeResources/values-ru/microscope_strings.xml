@@ -1,0 +1,130 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <string name="microscope_select_cell_prompt">Выбрать клетку…</string>
+
+    <string name="microscope_cell_age_format">Возраст: %.2f ч</string>
+
+    <string name="microscope_cell_mass_format">Масса: %.2f нг</string>
+
+    <string name="microscope_cell_diameter_format">Диаметр: %.1f μм</string>
+
+    <string name="microscope_cell_nitrogen_reserve_format">Запас азота: %.0f%%</string>
+
+    <string name="microscope_cell_speed_format">&lt;br&gt;Скорость: %.0f мкм/ч</string>
+
+    <string name="microscope_cell_toxins_format">Токсины: %.2f</string>
+
+    <string name="microscope_cell_injury_format">Повреждение: %.0f%%</string>
+
+    <string name="microscope_cell_lift_format">Подъёмная сила: %.2f</string>
+
+    <string name="microscope_cell_active_mode_label">Активный режим:</string>
+
+    <string name="microscope_cell_type_label">Тип:</string>
+
+    <string name="microscope_cell_mirrored_label">Отражение:</string>
+
+    <string name="microscope_cell_tag_label">Метка:</string>
+
+    <string name="microscope_cell_mutations_label">Мутации:</string>
+
+    <string name="microscope_cell_telomeres_label">Теломеры:</string>
+
+    <string name="microscope_cell_density_label">Плотность:</string>
+
+    <string name="microscope_cell_lipids_format">Липиды (эквивалент массы): %.2f нг&lt;br&gt;</string>
+
+    <string name="microscope_cell_tag_user">Пользовательская клетка</string>
+
+    <string name="microscope_cell_tag_challenge">Клетка испытания</string>
+
+    <string name="microscope_cell_tag_contamination">Клетка-загрязнитель</string>
+
+    <string name="microscope_cell_tag_infected_user">Заражённая пользовательская клетка</string>
+
+    <string name="microscope_cell_tag_infected_challenge">Заражённая клетка испытания</string>
+
+    <string name="microscope_cell_tag_infected_contamination">Заражённая клетка-загрязнитель</string>
+
+    <string name="microscope_cell_tag_hybrid">Гибридная клетка</string>
+
+    <string name="microscope_unit_nanogram">нг</string>
+
+    <string name="microscope_unit_micrometre">мкм</string>
+
+    <string name="microscope_unit_density_delta">кг/м³</string>
+
+    <string name="microscope_diagnosis_title">Диагностика</string>
+
+    <string name="microscope_plate_options_content_description">Действия с чашей</string>
+
+    <string name="microscope_section_cell">Клетка</string>
+
+    <string name="microscope_section_growth">Рост</string>
+
+    <string name="microscope_section_genome">Геном</string>
+
+    <string name="microscope_section_signals">Сигналы</string>
+
+    <string name="microscope_split_label">Деление</string>
+
+    <string name="microscope_no_split_value">Без деления</string>
+
+    <string name="microscope_split_progress_label">Ход деления</string>
+
+    <string name="microscope_swim_force_label">Сила плавания</string>
+
+    <string name="microscope_sense_output_label">Выход сенсора</string>
+
+    <string name="microscope_sense_amplitude_label">Амплитуда сенсора</string>
+
+    <string name="microscope_sense_rgb_label">RGB сенсора</string>
+
+    <string name="microscope_sense_threshold_label">Порог сенсора</string>
+
+    <string name="microscope_stem_threshold_1_label">Порог стволовой клетки 1</string>
+
+    <string name="microscope_stem_threshold_2_label">Порог стволовой клетки 2</string>
+
+    <string name="microscope_virus_source_gene_label">Исходный ген вируса</string>
+
+    <string name="microscope_virus_target_gene_label">Целевой ген вируса</string>
+
+    <string name="microscope_output_label">Выход</string>
+
+    <string name="microscope_value_with_unit_format">%1$s %2$s</string>
+
+    <string name="microscope_rate_with_unit_format">%1$s %2$s/%3$s</string>
+
+    <string name="microscope_percent_value_format">%1$s%</string>
+
+    <string name="microscope_mode_title_format">%1$s · %2$s</string>
+
+    <string name="microscope_labeled_value_format">%1$s: %2$s</string>
+
+    <string name="microscope_density_value_format">%1$s %2$s %3$s</string>
+
+    <string name="microscope_scaled_force_value_format">%1$s ×10⁻²¹ N</string>
+
+    <string name="microscope_rgb_value_format">%1$s / %2$s / %3$s</string>
+
+    <string name="microscope_numbered_label_format">%1$s %2$s</string>
+
+    <string name="microscope_output_rate_format">%1$s %2$s %3$s/%4$s</string>
+
+    <string name="microscope_gene_name_format">M%1$s</string>
+
+    <string name="microscope_signal_name_format">%1$s%2$s</string>
+
+    <string name="microscope_signed_signal_name_format">%1$s%2$s%3$s</string>
+
+    <string name="microscope_zoom_value_format">%1$s×</string>
+
+    <string name="microscope_scientific_zoom_value_format">%1$s·10%2$s×</string>
+
+    <string name="microscope_no_cell_selected_message">В микроскопе не выбрана клетка.</string>
+
+    <string name="microscope_render_preparation_failed_message">Отрисовка микроскопа приостановлена: не удалось подготовить кадр. Данные симуляции сохранены.</string>
+
+</resources>

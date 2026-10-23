@@ -1,0 +1,146 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <string name="genome_editor_secretion_label">Secreción</string>
+
+    <string name="genome_editor_sense_type_label">Tipo de sensor</string>
+
+    <string name="genome_editor_compatible_mode_label">Modo compatible</string>
+
+    <string name="genome_editor_mode_after_fertilization_label">Modo después de la fertilización</string>
+
+    <string name="genome_editor_load_dialog_title">Cargar</string>
+    <string name="genome_editor_gene_mode_prefix">M</string>
+    <string-array name="genome_editor_cell_type_abbreviations">
+        <item >Fg</item>
+        <item >Fl</item>
+        <item >Ft</item>
+        <item >Dv</item>
+        <item >Lp</item>
+        <item >Kt</item>
+        <item >Bo</item>
+        <item >Ad</item>
+        <item >Vr</item>
+        <item >Ni</item>
+        <item >Es</item>
+        <item >Sn</item>
+        <item >Mi</item>
+        <item >Ne</item>
+        <item >Sc</item>
+        <item >St</item>
+        <item >Ga</item>
+        <item >Ci</item>
+    </string-array>
+    <string name="genome_editor_genome_loaded_message">Nuevo genoma cargado</string>
+    <string name="genome_editor_load_from_microscope_action">Cargar del microscopio</string>
+    <string name="genome_editor_save_action">Guardar</string>
+    <string name="genome_editor_load_action">Cargar</string>
+    <string name="genome_editor_produce_adhesin_label">Producir adhesina</string>
+    <string name="genome_editor_divide_label">Dividirse</string>
+    <string name="genome_editor_prioritize_survival_label">Priorizar supervivencia</string>
+    <string name="genome_editor_cell_type_label">Tipo de célula:</string>
+    <string name="genome_editor_initial_gene_label">Gen inicial</string>
+    <string name="genome_editor_child_1_gene_label">Hija 1:</string>
+    <string name="genome_editor_keep_adhesin_connections_label">Conservar conexiones de adhesina</string>
+    <string name="genome_editor_mirror_label">Reflejar</string>
+    <string name="genome_editor_child_2_gene_label">Hija 2:</string>
+    <string name="genome_editor_split_mass_label">Masa de división:</string>
+    <string name="genome_editor_split_ratio_label">Proporción de división:</string>
+    <string name="genome_editor_mass_flow_priority_label">Prioridad del flujo de masa:</string>
+    <string name="genome_editor_snap_values_label">Ajustar valores</string>
+    <string name="genome_editor_split_angle_label">Ángulo de división:</string>
+    <string name="genome_editor_child_1_angle_label">Ángulo de hija 1:</string>
+    <string name="genome_editor_child_2_angle_label">Ángulo de hija 2:</string>
+    <string name="genome_editor_adhesin_stiffness_label">Rigidez de la adhesina:</string>
+    <string name="genome_editor_density_label">Densidad</string>
+    <string name="genome_editor_swim_force_label">Fuerza de natación</string>
+    <string name="genome_editor_virus_source_gene_label">Gen de origen del virus</string>
+    <string name="genome_editor_virus_target_gene_label">Gen de destino del virus</string>
+    <string name="genome_editor_stem_path_2_signal_label">Señal de la vía 2</string>
+    <string name="genome_editor_stem_path_2_mode_label">Modo de diferenciación de la vía 2</string>
+    <string name="genome_editor_stem_path_1_signal_label">Señal de la vía 1</string>
+    <string name="genome_editor_stem_path_1_mode_label">Modo de diferenciación de la vía 1</string>
+    <string name="genome_editor_output_channel_label">Canal de salida</string>
+    <string name="genome_editor_output_amount_label">Cantidad de salida</string>
+    <string name="genome_editor_sense_red_label">Rojo</string>
+    <string name="genome_editor_sense_green_label">Verde</string>
+    <string name="genome_editor_sense_blue_label">Azul</string>
+    <string name="genome_editor_sense_color_threshold_label">Umbral del color</string>
+    <string name="genome_editor_oscillator_preset_action">Preajuste del oscilador…</string>
+    <string name="genome_editor_save_dialog_title">Nombrar tu genoma</string>
+    <string name="genome_editor_save_dialog_description">Guardar tu genoma te permite reutilizarlo en otro desafío o enviarlo a un amigo.</string>
+    <string name="genome_editor_save_dialog_action">Guardar</string>
+    <string name="genome_editor_cell_state_dependence_dialog_title">Dependencia del estado celular</string>
+    <string name="genome_editor_value_dialog_linear_formula">a × entrada + b</string>
+    <string name="genome_editor_value_dialog_heaviside_formula"><![CDATA[a, si entrada < c\nb, si entrada ≥ c]]></string>
+    <string name="genome_editor_value_dialog_value_label">Valor</string>
+    <string name="genome_editor_value_dialog_variable_a_label">a</string>
+    <string name="genome_editor_value_dialog_variable_b_label">b</string>
+    <string name="genome_editor_value_dialog_variable_c_label">c</string>
+    <string name="genome_editor_value_dialog_fixed_value_label">Valor fijo:</string>
+    <string name="genome_editor_value_dialog_use_cell_state_label">Usar estado celular:</string>
+    <string name="genome_editor_value_dialog_input_label">Entrada:</string>
+    <string name="genome_editor_value_dialog_value_equals_label">Valor =</string>
+    <string name="genome_editor_oscillator_preset_title">Preajuste del oscilador</string>
+    <string name="genome_editor_oscillator_preset_description">Este preajuste configura cuatro canales de salida para que oscilen las concentraciones de dos sustancias señalizadoras.</string>
+    <string name="genome_editor_oscillator_preset_adhesin_connections_label">Conexiones de adhesina</string>
+    <string name="genome_editor_oscillator_preset_channel_pair_label">Par de canales</string>
+    <string name="genome_editor_oscillator_preset_period_label">Período</string>
+    <string name="genome_editor_load_default_genome_action">Cargar genoma por defecto</string>
+    <string name="genome_editor_value_dependency_nitrogen_reserve"><![CDATA[Reserva de NH<sub><small>3</small></sub> [0–1]]]></string>
+    <string name="genome_editor_value_dependency_adhesin_connection_number">Conexión de adhesina #</string>
+    <string name="genome_editor_value_dependency_cell_mass">Masa celular</string>
+    <string name="genome_editor_value_dependency_cell_age">Edad celular</string>
+    <string name="genome_editor_cytoskeleton_label">Citoesqueleto</string>
+    <string name="genome_editor_adhesin_length_label">Longitud de la adhesina</string>
+    <string name="genome_editor_maximum_adhesin_connections_label">Número máximo de conexiones de adhesina</string>
+    <string name="genome_editor_telomeres_after_fertilization_label">Telómeros después de la fertilización</string>
+    <string name="genome_editor_ciliocyte_left_movement_speed_label">Velocidad de movimiento a la izquierda</string>
+    <string name="genome_editor_ciliocyte_right_movement_speed_label">Velocidad de movimiento a la derecha</string>
+    <string name="genome_editor_value_dialog_sine_formula">a × sen(entrada × x - b)</string>
+    <plurals name="genome_editor_validation_issue_count">
+        <item quantity="one">El genoma contiene %1$d valor no válido. La vista previa y el guardado usan el último estado válido.</item>
+        <item quantity="many">El genoma contiene %1$d valores no válidos. La vista previa y el guardado usan el último estado válido.</item>
+        <item quantity="other">El genoma contiene %1$d valores no válidos. La vista previa y el guardado usan el último estado válido.</item>
+    </plurals>
+    <string name="genome_editor_no_specific_settings_message">No hay ajustes específicos</string>
+    <string name="genome_editor_no_specific_settings_for_cell_type_message">No hay ajustes específicos para este tipo de célula</string>
+    <string name="genome_editor_no_signal_settings_for_cell_type_message">No hay ajustes de señales para este tipo de célula</string>
+    <string name="genome_editor_preview_settings_title">Ajustes de vista previa</string>
+    <string name="genome_editor_preview_grid_option">Cuadrícula</string>
+    <string name="genome_editor_preview_tree_option">Árbol</string>
+    <string name="genome_editor_preview_ghost_option">Fantasma</string>
+    <string name="genome_editor_preview_summary_format">Desarrollo tras %1$s %2$s · Número de células: %3$d / %4$d</string>
+    <string name="genome_editor_tab_general">General</string>
+    <string name="genome_editor_tab_splitting">División</string>
+    <string name="genome_editor_tab_specific">Específico</string>
+    <string name="genome_editor_mode_title_format">%1$s%2$d</string>
+    <string name="genome_editor_load_default_to_mode_action_format">Cargar valores predeterminados en %1$s%2$d</string>
+    <string name="genome_editor_copy_mode_action_format">Copiar %1$s%2$d a %1$s%3$d</string>
+    <string name="genome_editor_add_gene_action">Añadir gen</string>
+    <string name="genome_editor_duplicate_gene_action_format">Duplicar %1$s%2$d</string>
+    <string name="genome_editor_move_gene_before_action">Mover una posición antes</string>
+    <string name="genome_editor_move_gene_after_action">Mover una posición después</string>
+    <string name="genome_editor_delete_gene_full_action">Eliminar gen</string>
+    <string name="genome_editor_delete_gene_dialog_title">Eliminar gen</string>
+    <string name="genome_editor_delete_gene_replacement_label">Redirigir referencias a:</string>
+    <string name="genome_editor_color_label">Color:</string>
+    <string name="genome_editor_color_dialog_title">Color</string>
+    <string name="genome_editor_color_red_label">Rojo</string>
+    <string name="genome_editor_color_green_label">Verde</string>
+    <string name="genome_editor_color_blue_label">Azul</string>
+    <string name="genome_editor_unknown_formula_message">Fórmula desconocida</string>
+    <string name="genome_editor_numbered_label_format">%1$s %2$d</string>
+    <string name="genome_editor_oscillator_channel_pair_format">Oscilar los canales %1$d y %2$d</string>
+    <plurals name="genome_editor_adhesin_connection_count">
+        <item quantity="one">%1$d conexión de adhesina</item>
+        <item quantity="many">%1$d conexiones de adhesina</item>
+        <item quantity="other">%1$d conexiones de adhesina</item>
+    </plurals>
+    <string name="genome_editor_label_with_unit_format">%1$s (%2$s)</string>
+    <string name="genome_editor_value_with_unit_format">%1$s %2$s</string>
+    <string name="genome_editor_signal_name_format">%1$s%2$d</string>
+    <string name="genome_editor_signed_signal_name_format">%1$s%2$s%3$d</string>
+    <string name="genome_editor_gene_with_type_format">%1$s%2$d %3$s</string>
+
+</resources>

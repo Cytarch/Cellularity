@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <string name="gene_bank_rename_genome_dialog_title">Renombrar tu genoma</string>
+
+    <string name="gene_bank_read_error_message">No se pudo leer este genoma.</string>
+
+    <string name="gene_bank_search_placeholder">Buscar genomas</string>
+    <string name="gene_bank_sort_name">Nombre</string>
+    <string name="gene_bank_sort_gene_count">Genes</string>
+    <string name="gene_bank_sort_unique_gene_count">Genes únicos</string>
+    <string name="gene_bank_sort_initial_gene">Gen inicial</string>
+    <string name="gene_bank_sort_cell_type_count">Tipos de célula</string>
+    <string name="gene_bank_no_search_results">No se encontraron genomas</string>
+    <string name="gene_bank_empty_state">Aún no hay genomas guardados</string>
+    <string name="gene_bank_newer_version_short_status">Se requiere una versión más reciente</string>
+    <string name="gene_bank_card_genes_label">Genes</string>
+    <string name="gene_bank_card_unique_genes_label">Únicos</string>
+    <string name="gene_bank_card_initial_gene_label">Inicial</string>
+    <string name="gene_bank_card_cell_types_label">Tipos de célula</string>
+    <string name="gene_bank_delete_dialog_title">¿Eliminar genoma?</string>
+    <string name="gene_bank_delete_dialog_message">«%1$s» se eliminará permanentemente.</string>
+
+    <string name="gene_bank_import_name_already_exists_message">Ya existe un genoma con este nombre. Cámbialo antes de importar.</string>
+
+</resources>

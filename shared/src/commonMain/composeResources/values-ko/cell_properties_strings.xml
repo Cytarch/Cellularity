@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <string name="cell_property_true_value">예</string>
+
+    <string name="cell_property_false_value">아니요</string>
+
+    <string name="cell_property_signal_substance_prefix">S</string>
+
+    <string name="cell_property_signal_substance_unit">μmol/L</string>
+
+    <string name="cell_property_muscle_contraction">근육 수축</string>
+
+    <string name="cell_property_muscle_bending">근육 굴곡</string>
+
+    <string name="cell_property_muscle_lifting">근육 양력</string>
+
+    <string name="cell_property_secretion_hcn">HCN(청산)</string>
+
+    <string name="cell_property_secretion_nutrient_smell">영양분 냄새</string>
+
+    <string name="cell_property_secretion_coated_nutrient_smell">코팅된 영양분 냄새</string>
+
+    <string name="cell_property_secretion_lipase">리파아제</string>
+
+    <string name="cell_property_secretion_protease">프로테아제</string>
+
+    <string name="cell_property_secretion_light_sense_activator">빛 감지 활성제</string>
+
+    <string name="cell_property_secretion_wall_sense_activator">벽 감지 활성제</string>
+
+    <string name="cell_property_sense_cell">세포</string>
+
+    <string name="cell_property_sense_wall">벽</string>
+
+    <string name="cell_property_sense_light">빛</string>
+
+    <string name="cell_property_sense_nutrient">영양분</string>
+
+    <string name="cell_property_sense_coated_nutrient">코팅된 영양분</string>
+
+    <string name="cell_property_sense_velocity">속도</string>
+
+</resources>

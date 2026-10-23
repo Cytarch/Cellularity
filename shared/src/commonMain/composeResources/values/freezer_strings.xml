@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="freezer_dish_shape_label">Dish shape</string>
+    <string name="freezer_dish_shape_circle">Circle</string>
+    <string name="freezer_dish_shape_ring">Ring</string>
+    <string name="freezer_inner_diameter_label">Hole diameter [mm]:</string>
+    <string name="freezer_ring_dimensions_hint">The hole diameter and ring width must both exceed %1$s mm.</string>
+
+    <string name="freezer_new_plate_action">New plate</string>
+
+    <string name="freezer_relabel_sample_action">Relabel your sample</string>
+
+    <string name="freezer_advanced_settings_title">Advanced settings</string>
+
+    <string name="freezer_new_plate_summary">Start with default settings</string>
+
+    <string name="freezer_search_placeholder">Search experiments</string>
+    <string name="freezer_sort_name">Name</string>
+    <string name="freezer_sort_created">Created</string>
+    <string name="freezer_sort_age">Age</string>
+    <string name="freezer_sort_cell_count">Cells</string>
+    <string name="freezer_sort_maximum_cell_count">Cell limit</string>
+    <string name="freezer_sort_food_count">Food</string>
+    <string name="freezer_sort_maximum_food_count">Food limit</string>
+    <string name="freezer_sort_food_mass">Food mass</string>
+    <string name="freezer_sort_dish_size">Dish size</string>
+    <string name="freezer_no_search_results">No experiments found</string>
+    <string name="freezer_newer_version_short_status">Newer app version required</string>
+    <string name="freezer_delete_dialog_title">Delete experiment?</string>
+    <string name="freezer_delete_dialog_message">“%1$s” will be permanently deleted.</string>
+
+    <string name="freezer_card_cells_label">Cells</string>
+    <string name="freezer_card_food_label">Food</string>
+    <string name="freezer_card_mass_label">Mass</string>
+    <string name="freezer_card_dish_label">Dish</string>
+    <string name="freezer_card_dish_diameter_format">Ø %1$s mm</string>
+    <string name="freezer_card_created_content_description">Created %1$s</string>
+    <string name="freezer_card_age_content_description">Age %1$s</string>
+    <string name="freezer_card_dish_content_description">Dish diameter %1$s</string>
+
+    <string name="freezer_read_error_message">Could not read this substrate.</string>
+
+    <string name="freezer_memory_estimate_format">≈ %1$d MB</string>
+
+    <string name="freezer_advanced_settings_warning">These settings are intended for advanced use. Incorrect values may make Cellularity crash or run extremely slowly.</string>
+
+    <string name="freezer_advanced_settings_maximum_cell_count_label">Maximum cell count:</string>
+
+    <string name="freezer_advanced_settings_maximum_nutrient_count_label">Maximum nutrient count:</string>
+
+    <string name="freezer_advanced_settings_petri_dish_diameter_label">Petri dish diameter [mm]:</string>
+
+    <string name="freezer_import_name_already_exists_message">Label already in freezer. Choose a different name.</string>
+    <string name="freezer_save_name_already_exists_message">Label already in freezer. Choose a different name.</string>
+
+</resources>

@@ -1,0 +1,130 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <string name="microscope_select_cell_prompt">세포를 선택하세요…</string>
+
+    <string name="microscope_cell_age_format">나이: %.2f h</string>
+
+    <string name="microscope_cell_mass_format">질량: %.2f ng</string>
+
+    <string name="microscope_cell_diameter_format">지름: %.1f μm</string>
+
+    <string name="microscope_cell_nitrogen_reserve_format">질소 비축량: %.0f%%</string>
+
+    <string name="microscope_cell_speed_format">&lt;br&gt;속도: %.0f μm/h</string>
+
+    <string name="microscope_cell_toxins_format">독소: %.2f</string>
+
+    <string name="microscope_cell_injury_format">부상: %.0f%%</string>
+
+    <string name="microscope_cell_lift_format">양력: %.2f</string>
+
+    <string name="microscope_cell_active_mode_label">활성 모드:</string>
+
+    <string name="microscope_cell_type_label">유형:</string>
+
+    <string name="microscope_cell_mirrored_label">반전:</string>
+
+    <string name="microscope_cell_tag_label">태그:</string>
+
+    <string name="microscope_cell_mutations_label">돌연변이:</string>
+
+    <string name="microscope_cell_telomeres_label">텔로미어:</string>
+
+    <string name="microscope_cell_density_label">세포 밀도:</string>
+
+    <string name="microscope_cell_lipids_format">지질 (질량 당량): %.2f ng&lt;br&gt;</string>
+
+    <string name="microscope_cell_tag_user">사용자 세포</string>
+
+    <string name="microscope_cell_tag_challenge">도전 세포</string>
+
+    <string name="microscope_cell_tag_contamination">오염 세포</string>
+
+    <string name="microscope_cell_tag_infected_user">감염된 사용자 세포</string>
+
+    <string name="microscope_cell_tag_infected_challenge">감염된 도전 세포</string>
+
+    <string name="microscope_cell_tag_infected_contamination">감염된 오염 세포</string>
+
+    <string name="microscope_cell_tag_hybrid">잡종 세포</string>
+
+    <string name="microscope_unit_nanogram">ng</string>
+
+    <string name="microscope_unit_micrometre">μm</string>
+
+    <string name="microscope_unit_density_delta">kg/m³</string>
+
+    <string name="microscope_diagnosis_title">진단</string>
+
+    <string name="microscope_plate_options_content_description">배양 접시 옵션</string>
+
+    <string name="microscope_section_cell">세포</string>
+
+    <string name="microscope_section_growth">성장</string>
+
+    <string name="microscope_section_genome">유전체</string>
+
+    <string name="microscope_section_signals">신호</string>
+
+    <string name="microscope_split_label">분열</string>
+
+    <string name="microscope_no_split_value">분열 안 함</string>
+
+    <string name="microscope_split_progress_label">분열 진행도</string>
+
+    <string name="microscope_swim_force_label">유영력</string>
+
+    <string name="microscope_sense_output_label">감지 출력</string>
+
+    <string name="microscope_sense_amplitude_label">감지 진폭</string>
+
+    <string name="microscope_sense_rgb_label">감지 RGB</string>
+
+    <string name="microscope_sense_threshold_label">감지 임계값</string>
+
+    <string name="microscope_stem_threshold_1_label">줄기세포 임계값 1</string>
+
+    <string name="microscope_stem_threshold_2_label">줄기세포 임계값 2</string>
+
+    <string name="microscope_virus_source_gene_label">바이러스 원본 유전자</string>
+
+    <string name="microscope_virus_target_gene_label">바이러스 대상 유전자</string>
+
+    <string name="microscope_output_label">출력</string>
+
+    <string name="microscope_value_with_unit_format">%1$s %2$s</string>
+
+    <string name="microscope_rate_with_unit_format">%1$s %2$s/%3$s</string>
+
+    <string name="microscope_percent_value_format">%1$s%</string>
+
+    <string name="microscope_mode_title_format">%1$s · %2$s</string>
+
+    <string name="microscope_labeled_value_format">%1$s: %2$s</string>
+
+    <string name="microscope_density_value_format">%1$s %2$s %3$s</string>
+
+    <string name="microscope_scaled_force_value_format">%1$s ×10⁻²¹ N</string>
+
+    <string name="microscope_rgb_value_format">%1$s / %2$s / %3$s</string>
+
+    <string name="microscope_numbered_label_format">%1$s %2$s</string>
+
+    <string name="microscope_output_rate_format">%1$s %2$s %3$s/%4$s</string>
+
+    <string name="microscope_gene_name_format">M%1$s</string>
+
+    <string name="microscope_signal_name_format">%1$s%2$s</string>
+
+    <string name="microscope_signed_signal_name_format">%1$s%2$s%3$s</string>
+
+    <string name="microscope_zoom_value_format">%1$s×</string>
+
+    <string name="microscope_scientific_zoom_value_format">%1$s·10%2$s×</string>
+
+    <string name="microscope_no_cell_selected_message">현미경에서 선택된 세포가 없습니다.</string>
+
+    <string name="microscope_render_preparation_failed_message">프레임을 준비할 수 없어 현미경 렌더링이 일시 중지되었습니다. 시뮬레이션 데이터는 보존됩니다.</string>
+
+</resources>

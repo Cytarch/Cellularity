@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <string name="sharing_substrate_email_subject">Muestra congelada de Cellularity</string>
+    <string name="sharing_substrate_email_body">"¡Nuevos descubrimientos!\n\nNota: Esta muestra contiene organismos vivos y debe abrirse con el equipo apropiado."</string>
+    <string name="sharing_email_chooser_title">Enviar correo electrónico…</string>
+    <string name="sharing_message_with_app_name_format">%1$s\n\n%2$s</string>
+
+</resources>

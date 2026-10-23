@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <item name="microscope_view" type="id" />
+    <item name="fragment_scope" type="id" />
+    <item name="delete_button" type="id" />
+    <item name="share_button" type="id" />
+    <item name="rename_button" type="id" />
+    <item name="freeze_button" type="id" />
+    <item name="observe_button" type="id" />
+    <item name="incubate_button" type="id" />
+    <item name="slow_button" type="id" />
+    <item name="ge_tv" type="id" />
+    <item name="ge_b" type="id" />
+    <item name="scope_text_view_1" type="id" />
+    <item name="scope_text_view_2" type="id" />
+    <item name="scope_text_view_3" type="id" />
+</resources>

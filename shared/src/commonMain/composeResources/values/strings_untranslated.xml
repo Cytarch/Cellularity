@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <string-array name="settings_language_names" translatable="false">
+        <item>English</item>
+        <item>Español</item>
+        <item>한국어</item>
+        <item>Polski</item>
+        <item>Português</item>
+        <item>Русский</item>
+    </string-array>
+
+    <string name="settings_dimension_unit_dp" translatable="false">dp</string>
+
+</resources>

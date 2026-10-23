@@ -1,0 +1,126 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <string name="mutation_weights_title">Веса мутаций</string>
+
+    <string name="mutation_weights_summary_format">Включено: %1$d, общий вес: %2$s</string>
+
+    <string name="mutation_weights_editor_summary_format">Включено: %1$d, всего: %2$s</string>
+
+    <string name="mutation_weight_details_format">вес %1$s, %2$s%</string>
+
+    <string name="mutation_weight_numbered_label_format">%1$s %2$d</string>
+
+    <string name="mutation_weight_parametric_label_format">%1$s — %2$s</string>
+
+    <string name="mutation_weight_cell_color_hue">Тон цвета клетки</string>
+
+    <string name="mutation_weight_cell_color_saturation">Насыщенность цвета клетки</string>
+
+    <string name="mutation_weight_cell_color_value">Яркость цвета клетки</string>
+
+    <string name="mutation_weight_split_angle">Угол деления</string>
+
+    <string name="mutation_weight_child_1_angle">Угол потомка 1</string>
+
+    <string name="mutation_weight_child_2_angle">Угол потомка 2</string>
+
+    <string name="mutation_weight_mass_flow_priority">Приоритет потока массы</string>
+
+    <string name="mutation_weight_split_mass">Масса деления</string>
+
+    <string name="mutation_weight_split_ratio">Пропорция деления</string>
+
+    <string name="mutation_weight_adhesin_stiffness">Жёсткость адгезина</string>
+
+    <string name="mutation_weight_child_1_gene">Ген потомка 1</string>
+
+    <string name="mutation_weight_child_2_gene">Ген потомка 2</string>
+
+    <string name="mutation_weight_produce_adhesin">Производить адгезин</string>
+
+    <string name="mutation_weight_child_1_keep_adhesin_connections">Потомок 1 сохраняет адгезиновые соединения</string>
+
+    <string name="mutation_weight_child_2_keep_adhesin_connections">Потомок 2 сохраняет адгезиновые соединения</string>
+
+    <string name="mutation_weight_prioritize_survival">Приоритет выживания</string>
+
+    <string name="mutation_weight_child_1_mirror">Отразить потомка 1</string>
+
+    <string name="mutation_weight_child_2_mirror">Отразить потомка 2</string>
+
+    <string name="mutation_weight_cell_type">Тип клетки</string>
+
+    <string name="mutation_weight_parametric_swim_force">Сила плавания</string>
+
+    <string name="mutation_weight_parametric_cell_density">Плотность клетки</string>
+
+    <string name="mutation_weight_parametric_myocyte_bending">Сгибание миоцита</string>
+
+    <string name="mutation_weight_parametric_myocyte_contraction">Сокращение миоцита</string>
+
+    <string name="mutation_weight_parametric_myocyte_lifting">Подъёмная сила миоцита</string>
+
+    <string name="mutation_weight_parametric_stem_threshold_1">Порог стволовой клетки 1</string>
+
+    <string name="mutation_weight_parametric_stem_threshold_2">Порог стволовой клетки 2</string>
+
+    <string name="mutation_weight_parametric_signal_output">Выход сигнала</string>
+
+    <string name="mutation_weight_parametric_variable_a">Переменная A</string>
+
+    <string name="mutation_weight_parametric_variable_b">Переменная B</string>
+
+    <string name="mutation_weight_parametric_variable_c">Переменная C</string>
+
+    <string name="mutation_weight_parametric_signal_channel">Канал сигнала</string>
+
+    <string name="mutation_weight_parametric_formula_type">Тип формулы</string>
+
+    <string name="mutation_weight_virus_source_gene">Исходный ген вируса</string>
+
+    <string name="mutation_weight_virus_target_gene">Целевой ген вируса</string>
+
+    <string name="mutation_weight_sense_output_channel">Выходной канал сенсора</string>
+
+    <string name="mutation_weight_sense_type">Тип сенсора</string>
+
+    <string name="mutation_weight_secretion_type">Тип секреции</string>
+
+    <string name="mutation_weight_signal_output_channel">Выходной канал сигнала</string>
+
+    <string name="mutation_weight_maximum_adhesin_connections">Максимальное количество адгезиновых соединений</string>
+
+    <string name="mutation_weight_telomeres_after_fertilization">Теломеры после оплодотворения</string>
+
+    <string name="mutation_weight_sense_amplitude">Амплитуда сенсора</string>
+
+    <string name="mutation_weight_sense_color_hue">Тон распознаваемого цвета</string>
+
+    <string name="mutation_weight_sense_color_saturation">Насыщенность распознаваемого цвета</string>
+
+    <string name="mutation_weight_sense_color_value">Яркость распознаваемого цвета</string>
+
+    <string name="mutation_weight_sense_threshold">Порог сенсора</string>
+
+    <string name="mutation_weight_adhesin_length">Длина адгезина</string>
+
+    <string name="mutation_weight_cytoskeleton">Цитоскелет</string>
+
+    <string name="mutation_weight_duplicate_child_gene">Дублировать дочерний ген</string>
+
+    <string name="mutation_weight_insert_linked_child_gene">Вставить связанный дочерний ген</string>
+
+    <string name="mutation_weight_split_child_edge">Разделить ребро дочернего гена</string>
+
+    <string name="mutation_weight_bypass_child_gene">Обойти дочерний ген</string>
+
+    <string name="mutation_weight_local_edge_retarget">Перенаправить локальное ребро</string>
+
+    <string name="mutation_weight_clone_parent_gene">Клонировать родительский ген</string>
+
+    <string name="mutation_weight_add_gene">Добавить ген</string>
+
+    <string name="mutation_weight_delete_gene">Удалить ген</string>
+
+</resources>

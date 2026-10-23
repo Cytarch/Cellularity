@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <string name="gene_bank_rename_genome_dialog_title">Zmień nazwę genomu</string>
+
+    <string name="gene_bank_read_error_message">Nie udało się odczytać tego genomu.</string>
+
+    <string name="gene_bank_search_placeholder">Szukaj genomów</string>
+    <string name="gene_bank_sort_name">Nazwa</string>
+    <string name="gene_bank_sort_gene_count">Geny</string>
+    <string name="gene_bank_sort_unique_gene_count">Unikalne geny</string>
+    <string name="gene_bank_sort_initial_gene">Gen początkowy</string>
+    <string name="gene_bank_sort_cell_type_count">Typy komórek</string>
+    <string name="gene_bank_no_search_results">Nie znaleziono genomów</string>
+    <string name="gene_bank_empty_state">Brak zapisanych genomów</string>
+    <string name="gene_bank_newer_version_short_status">Wymagana nowsza wersja aplikacji</string>
+    <string name="gene_bank_card_genes_label">Geny</string>
+    <string name="gene_bank_card_unique_genes_label">Unikalne</string>
+    <string name="gene_bank_card_initial_gene_label">Początkowy</string>
+    <string name="gene_bank_card_cell_types_label">Typy komórek</string>
+    <string name="gene_bank_delete_dialog_title">Usunąć genom?</string>
+    <string name="gene_bank_delete_dialog_message">„%1$s” zostanie trwale usunięty.</string>
+
+    <string name="gene_bank_import_name_already_exists_message">Genom o tej nazwie już istnieje. Zmień nazwę przed importem.</string>
+
+</resources>

@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <string name="file_collection_newer_version_message">This file was created with a newer version of Cellularity. Please update the app.</string>
+
+    <string name="file_collection_invalid_name_message">Invalid file name.</string>
+
+    <string name="file_collection_substrate_name_already_exists_message">A substrate with this name already exists.</string>
+
+    <string name="file_collection_genome_name_already_exists_message">A genome with this name already exists.</string>
+
+    <string name="file_collection_file_too_large_message">This file is too large.</string>
+
+    <string name="file_collection_operation_failed_message">Could not complete the file operation.</string>
+
+    <string name="file_collection_no_share_target_message">No compatible app is available.</string>
+
+    <string name="file_collection_share_content_description">Share %1$s</string>
+
+    <string name="file_collection_rename_content_description">Rename %1$s</string>
+
+    <string name="file_collection_delete_content_description">Delete %1$s</string>
+
+    <string name="file_collection_more_actions_content_description">More actions for %1$s</string>
+
+    <string name="file_collection_share_action">Share</string>
+    <string name="file_collection_rename_action">Rename</string>
+    <string name="file_collection_delete_action">Delete</string>
+    <string name="file_collection_clear_search_content_description">Clear search</string>
+    <string name="file_collection_clear_search_action">Clear search</string>
+    <string name="file_collection_switch_to_grid_view_content_description">Switch to grid view</string>
+    <string name="file_collection_switch_to_list_view_content_description">Switch to list view</string>
+    <string name="file_collection_sort_ascending">Ascending</string>
+    <string name="file_collection_sort_descending">Descending</string>
+
+    <string name="file_operation_saved_message">Saved</string>
+    <string name="file_operation_invalid_name_message">Invalid name. Enter a non-empty name without slash characters.</string>
+    <string name="file_operation_size_limit_exceeded_message">File exceeds the 2 GiB safety limit.</string>
+    <string name="file_operation_load_failed_message">Could not load this file.</string>
+    <string name="file_operation_save_failed_message">Could not save this file.</string>
+    <string name="file_operation_newer_version_message">This file was created with a newer version of Cellularity. Please update the app.</string>
+
+</resources>

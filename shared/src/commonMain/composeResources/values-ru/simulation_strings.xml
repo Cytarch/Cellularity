@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <string name="simulation_hour_abbreviation">ч</string>
+
+    <string-array name="simulation_cell_type_names">
+            <item>Фагоцит</item>
+
+
+
+            <item>Жгутоцит</item>
+
+
+
+            <item>Фотоцит</item>
+
+
+
+            <item>Девороцит</item>
+
+
+
+            <item>Липоцит</item>
+
+
+
+            <item>Кератиноцит</item>
+
+
+
+            <item>Буецит</item>
+
+
+
+            <item>Клейкоцит</item>
+
+
+
+            <item>Вироцит</item>
+
+
+
+            <item>Нитроцит</item>
+
+
+
+            <item>Стереоцит</item>
+
+
+
+            <item>Сенсеоцит</item>
+
+
+
+            <item>Миоцит</item>
+
+
+
+            <item>Нейроцит</item>
+
+
+
+            <item>Секроцит</item>
+
+
+
+            <item>Стволоцит</item>
+
+
+
+            <item>Гамета</item>
+
+
+
+            <item>Цилиоцит</item>
+
+
+
+        </string-array>
+
+</resources>

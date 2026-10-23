@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="freezer_dish_shape_label">접시 모양</string>
+    <string name="freezer_dish_shape_circle">원</string>
+    <string name="freezer_dish_shape_ring">고리</string>
+    <string name="freezer_inner_diameter_label">구멍 지름 [mm]:</string>
+    <string name="freezer_ring_dimensions_hint">구멍 지름과 고리 폭은 모두 %1$s mm보다 커야 합니다.</string>
+
+    <string name="freezer_new_plate_action">새 배양 접시</string>
+
+    <string name="freezer_relabel_sample_action">샘플 라벨 변경</string>
+
+    <string name="freezer_advanced_settings_title">고급 설정</string>
+
+    <string name="freezer_new_plate_summary">기본 설정으로 시작</string>
+
+    <string name="freezer_search_placeholder">실험 검색</string>
+    <string name="freezer_sort_name">이름</string>
+    <string name="freezer_sort_created">생성일</string>
+    <string name="freezer_sort_age">나이</string>
+    <string name="freezer_sort_cell_count">세포</string>
+    <string name="freezer_sort_maximum_cell_count">세포 한도</string>
+    <string name="freezer_sort_food_count">먹이</string>
+    <string name="freezer_sort_maximum_food_count">먹이 한도</string>
+    <string name="freezer_sort_food_mass">먹이 질량</string>
+    <string name="freezer_sort_dish_size">배양 접시 크기</string>
+    <string name="freezer_no_search_results">실험을 찾을 수 없습니다</string>
+    <string name="freezer_newer_version_short_status">최신 버전이 필요합니다</string>
+    <string name="freezer_delete_dialog_title">실험을 삭제할까요?</string>
+    <string name="freezer_delete_dialog_message">“%1$s”이(가) 영구적으로 삭제됩니다.</string>
+
+    <string name="freezer_card_cells_label">세포</string>
+    <string name="freezer_card_food_label">먹이</string>
+    <string name="freezer_card_mass_label">질량</string>
+    <string name="freezer_card_dish_label">배양 접시</string>
+    <string name="freezer_card_dish_diameter_format">Ø %1$s mm</string>
+    <string name="freezer_card_created_content_description">생성일: %1$s</string>
+    <string name="freezer_card_age_content_description">나이: %1$s</string>
+    <string name="freezer_card_dish_content_description">배양 접시 지름: %1$s</string>
+
+    <string name="freezer_read_error_message">이 기질을 읽을 수 없습니다.</string>
+
+    <string name="freezer_memory_estimate_format">≈ %1$d MB</string>
+
+    <string name="freezer_advanced_settings_warning">이 설정은 고급 사용자를 위한 것입니다. 잘못된 값은 Cellularity를 비정상 종료시키거나 매우 느리게 만들 수 있습니다.</string>
+
+    <string name="freezer_advanced_settings_maximum_cell_count_label">최대 세포 수:</string>
+
+    <string name="freezer_advanced_settings_maximum_nutrient_count_label">최대 영양분 수:</string>
+
+    <string name="freezer_advanced_settings_petri_dish_diameter_label">페트리 접시 지름 [mm]:</string>
+
+    <string name="freezer_import_name_already_exists_message">같은 이름의 라벨이 냉동고에 이미 있습니다. 다른 이름을 선택하세요.</string>
+    <string name="freezer_save_name_already_exists_message">같은 이름의 라벨이 냉동고에 이미 있습니다. 다른 이름을 선택하세요.</string>
+
+</resources>

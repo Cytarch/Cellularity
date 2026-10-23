@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <string name="main_menu_tab_experiments">Eksperymenty</string>
+
+    <string name="main_menu_tab_gene_bank">Bank genów</string>
+
+    <string name="main_menu_tab_settings">Ustawienia</string>
+
+    <string name="main_menu_tab_about">O aplikacji</string>
+
+</resources>

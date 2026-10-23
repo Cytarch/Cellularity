@@ -1,0 +1,119 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <string name="settings_general_section_title">General</string>
+
+    <string name="settings_keep_screen_awake">Keep screen awake</string>
+
+    <string name="settings_confirm_before_sterilize_or_reload">Ask before sterilizing or reloading</string>
+
+    <string name="settings_keep_screen_awake_description">This will keep your device from going to sleep while running long simulations. Remember to plug in your charger!</string>
+
+    <string name="settings_language">Language</string>
+
+    <string name="settings_genome_preview_maximum_cell_count">Maximum genome preview cells</string>
+
+    <string name="settings_incubation_target_updates_per_second">Target incubation UPS</string>
+
+    <string name="settings_performance_hud">Performance HUD</string>
+
+    <string name="settings_performance_hud_description">Show FPS, UPS, and simulation stage timings over the microscope</string>
+
+    <string name="settings_allowed_range_prompt">Enter %1$s–%2$s</string>
+
+    <string name="settings_theme">Theme</string>
+
+    <string name="settings_theme_editor_title">Theme editor</string>
+
+    <string name="settings_theme_import_action">Import theme (.cltheme)</string>
+
+    <string name="settings_theme_share_action">Share theme (.cltheme)</string>
+
+    <string name="settings_theme_name">Name</string>
+
+    <string name="settings_theme_primary">Primary</string>
+
+    <string name="settings_theme_secondary">Secondary</string>
+
+    <string name="settings_theme_primary_container">Primary container</string>
+
+    <string name="settings_theme_background">Background</string>
+
+    <string name="settings_theme_surface_variant">Surface variant</string>
+
+    <string name="settings_theme_text">Text</string>
+
+    <string name="settings_theme_text_field_text">Input text</string>
+
+    <string name="settings_theme_components">Components</string>
+
+    <string name="settings_theme_card_corner_radius">Card corner radius</string>
+
+    <string name="settings_theme_card_elevation">Card elevation</string>
+
+    <string name="settings_theme_item_spacing">Item spacing</string>
+
+    <string name="settings_theme_content_padding">Content padding</string>
+
+    <string name="settings_theme_list_padding">List padding</string>
+
+    <string name="settings_theme_icon_button_size">Icon button size</string>
+
+    <string name="settings_theme_slider_thumb_size">Slider thumb size</string>
+
+    <string name="settings_theme_slider_track_height">Slider track height</string>
+
+    <string name="settings_theme_swatch_size">Swatch size</string>
+
+    <string name="settings_theme_default">Default</string>
+
+    <string name="settings_crash_reports">Crash reports</string>
+
+    <string name="settings_no_crash_reports_message">No crash reports</string>
+
+    <string name="settings_crash_reports_privacy_description">Reports are kept only in private app storage until you choose to export them.</string>
+
+    <string name="settings_crash_report_details_format">%1$s\n%2$s</string>
+
+    <string name="settings_export_diagnostics_action">Export diagnostics</string>
+
+    <plurals name="settings_stored_crash_report_count">
+            <item quantity="one">%1$d stored report</item>
+            <item quantity="other">%1$d stored reports</item>
+        </plurals>
+
+    <string name="settings_export_diagnostics_title">Export diagnostics?</string>
+
+    <string name="settings_export_diagnostics_disclosure">The exported text file can contain:\n• report time, package name and app version\n• Android version, device model and ABI\n• graphics device identifiers, driver details, and Vulkan capability results\n• crashed thread\n• Java/Kotlin stack trace or native signal details\n\nOnly the app you select in the next screen will receive the file.</string>
+
+    <string name="settings_theme_import_failed_message">Could not import theme</string>
+    <string name="settings_theme_share_failed_message">Could not share theme</string>
+    <string name="settings_avoid_camera_cutout">Avoid camera cutout</string>
+    <string name="settings_avoid_camera_cutout_summary">Add padding around the camera cutout on fullscreen Android screens</string>
+
+    <string name="settings_experimental_section_title">Experimental / developer features</string>
+    <string name="settings_render_backend">Rendering backend</string>
+    <string name="settings_render_backend_open_gl_es">OpenGL ES (stable)</string>
+    <string name="settings_render_backend_auto">Auto (experimental)</string>
+    <string name="settings_render_backend_vulkan">Vulkan (experimental)</string>
+    <string name="settings_render_backend_vulkan_unavailable_title">Vulkan could not start</string>
+    <string name="settings_render_backend_vulkan_unavailable_message">The Vulkan renderer is unavailable:\n%1$s</string>
+    <string name="settings_render_backend_use_gles_action">Use OpenGL ES</string>
+    <string name="settings_vulkan_capability_title">Vulkan capability</string>
+    <string name="settings_vulkan_capability_run">Tap to check device support</string>
+    <string name="settings_vulkan_capability_checking">Checking device support…</string>
+    <string name="settings_vulkan_capability_supported">Supported: %1$s (Vulkan %2$s)</string>
+    <string name="settings_vulkan_capability_unsupported">Not supported on this device</string>
+    <string name="settings_vulkan_capability_failed">Could not complete the capability probe</string>
+    <string name="settings_vulkan_capability_retry_action">Retry</string>
+    <string name="settings_vulkan_clear_frame_title">Vulkan world rendering test</string>
+    <string name="settings_vulkan_clear_frame_summary">Open the isolated Vulkan microscope world rendering test</string>
+    <string name="settings_vulkan_clear_frame_unavailable">Available after a successful Vulkan capability check</string>
+    <string name="settings_vulkan_clear_frame_starting">Starting Vulkan…</string>
+    <string name="settings_vulkan_clear_frame_waiting">Waiting for the Android surface…</string>
+    <string name="settings_vulkan_clear_frame_presenting">Presenting frames: %1$d · swapchain recreations: %2$d</string>
+    <string name="settings_vulkan_clear_frame_paused">Vulkan rendering is paused</string>
+    <string name="settings_vulkan_clear_frame_surface_lost">Surface was lost; reconnecting…</string>
+    <string name="settings_vulkan_clear_frame_failed">Vulkan rendering failed</string>
+
+</resources>

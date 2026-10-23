@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <string name="play_discard_substrate_dialog_title">현재 기질을 폐기할까요?</string>
+
+    <string name="play_discard_substrate_dialog_message">실험종을 공개된 장소에 방치하는 것은 연구소 규율에 어긋납니다!</string>
+
+    <string name="play_sterilize_substrate_dialog_title">현재 기질을 멸균할까요?</string>
+
+    <string name="play_sterilize_substrate_dialog_message">너무 많은 세포를 죽이는 것은 윤리 위원회의 감찰 원인이 됩니다…</string>
+
+    <string name="play_temperature_menu_title">기질 온도</string>
+
+    <string name="play_temperature_freeze_action">냉동</string>
+
+    <string name="play_temperature_observe_action">관찰</string>
+
+    <string name="play_temperature_incubate_action">배양</string>
+
+    <string name="play_temperature_incubate_without_rendering_action">렌더링 없이 배양</string>
+
+    <string name="play_temperature_slow_observe_action">천천히 관찰</string>
+
+    <string name="play_sample_label_dialog_title">샘플에 이름 붙이기</string>
+
+    <string name="play_sample_age_label">기질 나이:</string>
+
+    <string name="play_sample_cell_count_label">세포 수:</string>
+
+    <string name="play_sample_nutrient_amount_label">영양분 양:</string>
+
+    <string name="play_sample_gene_pool_label">유전자 풀</string>
+
+    <string name="play_tool_cell_synthesizer">세포 합성기</string>
+
+    <string name="play_tool_optical_tweezers">광학 족집게</string>
+
+    <string name="play_tool_cell_boost">세포 강화</string>
+
+    <string name="play_tool_cell_removal">세포 제거</string>
+
+    <string name="play_tool_cell_diagnostics">세포 진단기</string>
+
+    <string name="play_reload_substrate_dialog_title">현재 기질을 다시 불러올까요?</string>
+
+    <string name="play_tool_selection_title">도구 선택</string>
+
+    <string name="play_reload_plate_action">배양 접시 다시 불러오기</string>
+
+    <string name="play_sterilize_plate_action">배양 접시 멸균</string>
+
+    <string name="play_select_action_prompt">작업 선택</string>
+
+    <string name="play_back_content_description">뒤로</string>
+
+    <string name="play_tab_substrate">기질</string>
+
+    <string name="play_tab_microscope">현미경</string>
+
+    <string name="play_tab_genome_editor">유전체 편집기</string>
+
+    <string name="play_save_plate_menu_action">배양 접시 저장…</string>
+
+    <string name="play_plate_options_content_description">배양 접시 옵션</string>
+
+</resources>

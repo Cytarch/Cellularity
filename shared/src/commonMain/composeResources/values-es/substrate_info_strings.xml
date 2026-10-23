@@ -1,0 +1,122 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <string name="substrate_contaminate_with_random_cells_action">Contaminar con células aleatorias</string>
+
+    <string name="substrate_nitrates">Nitratos</string>
+
+    <string name="substrate_kill_cells_at_edge">Matar células en el borde</string>
+
+    <string name="substrate_radiation_level">Nivel de radiación:</string>
+
+    <string name="substrate_viscosity">Viscosidad del sustrato:</string>
+
+    <string name="substrate_nutrient_rate">Tasa de nutrientes:</string>
+
+    <string name="substrate_nutrient_chunk_size">Tamaño de las porciones de nutrientes:</string>
+
+    <string name="substrate_salinity">Salinidad:</string>
+
+    <string name="substrate_light_amount">Intensidad de la luz:</string>
+
+    <string name="substrate_light_range">Rango de la luz:</string>
+
+    <string name="substrate_light_direction_change">Cambio de dirección de la luz:</string>
+
+    <string name="substrate_gravity">Gravedad:</string>
+
+    <string name="substrate_density">Densidad:</string>
+
+    <string name="substrate_density_gradient">Gradiente de la densidad:</string>
+
+    <string name="substrate_dynamic_friction">Fricción dinámica:</string>
+
+    <string name="substrate_static_friction">Fricción estática:</string>
+
+    <string name="substrate_point_mutations_only">Solo mutaciones puntuales</string>
+
+    <string name="substrate_cell_aging">Envejecimiento celular</string>
+
+    <string name="substrate_nutrient_lumpiness">Agrupamiento de nutrientes</string>
+
+    <string name="substrate_nutrient_lump_size">Tamaño de los grupos de nutrientes</string>
+
+    <string name="substrate_nutrient_coating">Recubrimiento de nutrientes</string>
+
+    <string name="substrate_mobile_nutrients">Nutrientes móviles</string>
+
+    <string name="substrate_environment_loading_message">Cargando entorno…</string>
+
+    <string name="substrate_edit_pending_message">Aplicando cambio…</string>
+
+    <string name="substrate_edit_revision_conflict_message">El entorno ha cambiado; inténtalo de nuevo</string>
+
+    <string name="substrate_edit_invalid_value_message">El valor está fuera del intervalo permitido</string>
+
+    <string name="substrate_edit_empty_gene_pool_message">Debe permanecer activado al menos un tipo de célula</string>
+
+    <string name="substrate_edit_rejected_message">Cambio rechazado</string>
+
+    <string name="substrate_edit_failed_message">No se pudo aplicar el cambio</string>
+
+    <string name="substrate_mutation_only_after_split">Aplicar mutaciones solo después de la división</string>
+
+    <string name="substrate_section_mechanics">Mecánica</string>
+
+    <string name="substrate_section_evolution">Evolución</string>
+
+    <string name="substrate_section_stats">Estadísticas</string>
+
+    <string name="substrate_section_sources">Fuentes</string>
+
+    <string name="substrate_stats_summary_format">Edad del sustrato: %1$s %2$s.\nNúmero de células: %3$d\nCantidad de nutrientes: %4$s</string>
+
+    <string name="substrate_time_value_format">%1$s %2$s</string>
+
+    <string name="substrate_test_multicellular_coefficient">Coeficiente de prueba multicelular</string>
+
+    <string name="substrate_test_mutation_coefficient">Coeficiente de prueba de mutación</string>
+
+    <string name="substrate_test_nutrient_decay">Prueba de degradación de nutrientes</string>
+
+    <string name="substrate_test_idle_metabolism_scale">Escala de metabolismo en reposo</string>
+
+    <string name="substrate_test_flagellocyte_cost_scale">Escala de coste del flagelocito</string>
+
+    <string name="substrate_test_phagocyte_eating_speed_scale">Escala de velocidad de alimentación del fagocito</string>
+
+    <string name="substrate_gene_pool_heading_format">%1$s:</string>
+
+    <string name="substrate_field_summary_format">%1$s, intensidad %2$s</string>
+
+    <string name="substrate_field_gravity">Campo gravitatorio</string>
+
+    <string name="substrate_field_density">Campo de densidad</string>
+
+    <string name="substrate_field_salinity">Campo de salinidad</string>
+
+    <string name="substrate_field_nutrient_coating">Campo de recubrimiento de nutrientes</string>
+
+    <string name="substrate_field_component_base">Base</string>
+
+    <string name="substrate_field_component_strength">Intensidad</string>
+
+    <string name="substrate_field_component_angle">Ángulo</string>
+
+    <string name="substrate_field_component_offset">Desplazamiento</string>
+
+    <string name="substrate_field_component_softness">Suavidad</string>
+
+    <string name="substrate_field_mode_constant">Constante</string>
+
+    <string name="substrate_field_mode_linear_directional">Direccional lineal</string>
+
+    <string name="substrate_field_mode_radial">Radial</string>
+
+    <string name="substrate_field_mode_directional">Direccional</string>
+
+    <string name="substrate_field_mode_radial_inward">Radial hacia dentro</string>
+
+    <string name="substrate_field_mode_radial_outward">Radial hacia fuera</string>
+
+</resources>

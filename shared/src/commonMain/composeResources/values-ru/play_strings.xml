@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <string name="play_discard_substrate_dialog_title">Уничтожить текущий субстрат?</string>
+
+    <string name="play_discard_substrate_dialog_message">Правила лаборатории запрещают оставлять живые организмы без присмотра!</string>
+
+    <string name="play_sterilize_substrate_dialog_title">Стерилизовать текущий субстрат?</string>
+
+    <string name="play_sterilize_substrate_dialog_message">Если убьёте слишком много клеток, к вам может наведаться комитет по биоэтике…</string>
+
+    <string name="play_temperature_menu_title">Температура субстрата</string>
+
+    <string name="play_temperature_freeze_action">Заморозка</string>
+
+    <string name="play_temperature_observe_action">Наблюдение</string>
+
+    <string name="play_temperature_incubate_action">Инкубация</string>
+
+    <string name="play_temperature_incubate_without_rendering_action">Инкубация без отрисовки</string>
+
+    <string name="play_temperature_slow_observe_action">Медленное наблюдение</string>
+
+    <string name="play_sample_label_dialog_title">Назвать образец</string>
+
+    <string name="play_sample_age_label">Возраст субстрата:</string>
+
+    <string name="play_sample_cell_count_label">Количество клеток:</string>
+
+    <string name="play_sample_nutrient_amount_label">Количество питательных веществ:</string>
+
+    <string name="play_sample_gene_pool_label">Генофонд</string>
+
+    <string name="play_tool_cell_synthesizer">Синтезатор клеток</string>
+
+    <string name="play_tool_optical_tweezers">Оптический манипулятор</string>
+
+    <string name="play_tool_cell_boost">Усиление клетки</string>
+
+    <string name="play_tool_cell_removal">Удаление клетки</string>
+
+    <string name="play_tool_cell_diagnostics">Диагностика клетки</string>
+
+    <string name="play_reload_substrate_dialog_title">Перезагрузить текущий субстрат?</string>
+
+    <string name="play_tool_selection_title">Выбрать инструмент</string>
+
+    <string name="play_reload_plate_action">Перезагрузить чашу</string>
+
+    <string name="play_sterilize_plate_action">Стерилизовать чашу</string>
+
+    <string name="play_select_action_prompt">Выбрать действие</string>
+
+    <string name="play_back_content_description">Назад</string>
+
+    <string name="play_tab_substrate">Субстрат</string>
+
+    <string name="play_tab_microscope">Микроскоп</string>
+
+    <string name="play_tab_genome_editor">Редактор генома</string>
+
+    <string name="play_save_plate_menu_action">Сохранить чашу…</string>
+
+    <string name="play_plate_options_content_description">Действия с чашей</string>
+
+</resources>

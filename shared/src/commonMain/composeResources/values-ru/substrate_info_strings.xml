@@ -1,0 +1,122 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <string name="substrate_contaminate_with_random_cells_action">Загрязнить случайными клетками</string>
+
+    <string name="substrate_nitrates">Нитраты</string>
+
+    <string name="substrate_kill_cells_at_edge">Убивать клетки с края</string>
+
+    <string name="substrate_radiation_level">Радиация:</string>
+
+    <string name="substrate_viscosity">Вязкость субстрата:</string>
+
+    <string name="substrate_nutrient_rate">Частота появления питательных веществ:</string>
+
+    <string name="substrate_nutrient_chunk_size">Размер порции питательных веществ:</string>
+
+    <string name="substrate_salinity">Солёность:</string>
+
+    <string name="substrate_light_amount">Количество света:</string>
+
+    <string name="substrate_light_range">Диапазон света:</string>
+
+    <string name="substrate_light_direction_change">Изменение направления света:</string>
+
+    <string name="substrate_gravity">Гравитация:</string>
+
+    <string name="substrate_density">Плотность:</string>
+
+    <string name="substrate_density_gradient">Градиент плотности:</string>
+
+    <string name="substrate_dynamic_friction">Динамическое трение:</string>
+
+    <string name="substrate_static_friction">Трение покоя:</string>
+
+    <string name="substrate_point_mutations_only">Только точечные мутации</string>
+
+    <string name="substrate_mutation_only_after_split">Применять мутации только после деления</string>
+
+    <string name="substrate_cell_aging">Старение клеток</string>
+
+    <string name="substrate_nutrient_lumpiness">Скучивание питательных веществ</string>
+
+    <string name="substrate_nutrient_lump_size">Размер скопления питательных веществ</string>
+
+    <string name="substrate_nutrient_coating">Покрытие питательных веществ</string>
+
+    <string name="substrate_mobile_nutrients">Подвижные питательные вещества</string>
+
+    <string name="substrate_environment_loading_message">Загрузка среды…</string>
+
+    <string name="substrate_edit_pending_message">Применение изменения…</string>
+
+    <string name="substrate_edit_revision_conflict_message">Среда изменилась; попробуйте ещё раз</string>
+
+    <string name="substrate_edit_invalid_value_message">Значение выходит за допустимый диапазон</string>
+
+    <string name="substrate_edit_empty_gene_pool_message">Должен остаться включённым хотя бы один тип клетки</string>
+
+    <string name="substrate_edit_rejected_message">Изменение отклонено</string>
+
+    <string name="substrate_edit_failed_message">Не удалось применить изменение</string>
+
+    <string name="substrate_section_mechanics">Механика</string>
+
+    <string name="substrate_section_evolution">Эволюция</string>
+
+    <string name="substrate_section_stats">Статистика</string>
+
+    <string name="substrate_section_sources">Источники</string>
+
+    <string name="substrate_stats_summary_format">Возраст субстрата: %1$s %2$s.\nКоличество клеток: %3$d\nКоличество питательных веществ: %4$s</string>
+
+    <string name="substrate_time_value_format">%1$s %2$s</string>
+
+    <string name="substrate_test_multicellular_coefficient">Тестовый коэффициент многоклеточности</string>
+
+    <string name="substrate_test_mutation_coefficient">Тестовый коэффициент мутаций</string>
+
+    <string name="substrate_test_nutrient_decay">Тест распада питательных веществ</string>
+
+    <string name="substrate_test_idle_metabolism_scale">Масштаб метаболизма в покое</string>
+
+    <string name="substrate_test_flagellocyte_cost_scale">Масштаб затрат флагеллоцита</string>
+
+    <string name="substrate_test_phagocyte_eating_speed_scale">Масштаб скорости питания фагоцита</string>
+
+    <string name="substrate_gene_pool_heading_format">%1$s:</string>
+
+    <string name="substrate_field_summary_format">%1$s, сила: %2$s</string>
+
+    <string name="substrate_field_gravity">Гравитационное поле</string>
+
+    <string name="substrate_field_density">Поле плотности</string>
+
+    <string name="substrate_field_salinity">Поле солёности</string>
+
+    <string name="substrate_field_nutrient_coating">Поле питательного покрытия</string>
+
+    <string name="substrate_field_component_base">Основа</string>
+
+    <string name="substrate_field_component_strength">Сила</string>
+
+    <string name="substrate_field_component_angle">Угол</string>
+
+    <string name="substrate_field_component_offset">Смещение</string>
+
+    <string name="substrate_field_component_softness">Сглаживание</string>
+
+    <string name="substrate_field_mode_constant">Постоянное</string>
+
+    <string name="substrate_field_mode_linear_directional">Линейно-направленное</string>
+
+    <string name="substrate_field_mode_radial">Радиальное</string>
+
+    <string name="substrate_field_mode_directional">Направленное</string>
+
+    <string name="substrate_field_mode_radial_inward">Радиальное внутрь</string>
+
+    <string name="substrate_field_mode_radial_outward">Радиальное наружу</string>
+
+</resources>

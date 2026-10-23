@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <string name="diagnostics_export_chooser_title">진단 정보 내보내기</string>
+    <string name="recovery_diagnostics_export_failed_message">진단 정보를 내보내지 못했습니다.</string>
+    <string name="recovery_title">Cellularity가 정상적으로 종료되지 않았습니다</string>
+    <plurals name="recovery_report_count">
+        <item quantity="other">새 진단 보고서 %d개를 확인할 수 있습니다.</item>
+    </plurals>
+    <string name="recovery_latest_report_format">최근 보고서: %s</string>
+    <string name="recovery_description">앱을 다시 열기 전에 진단 정보를 내보낼 수 있습니다.</string>
+    <string name="recovery_privacy_notice">내보낸 파일에는 앱 버전, 기기 및 ABI 정보, 스레드 세부 정보와 스택 트레이스가 포함됩니다. 직접 내보내기 전까지 보고서는 비공개 앱 저장소에 보관됩니다.</string>
+    <string name="recovery_export_diagnostics_action">진단 정보 내보내기</string>
+    <string name="recovery_continue_to_app_action">Cellularity 계속 사용</string>
+    <string name="recovery_acknowledge_failed_message">보고서를 확인한 것으로 표시하지 못했습니다. 이번 실행은 계속 진행할 수 있습니다.</string>
+
+</resources>

@@ -1,0 +1,189 @@
+name: Telegram commit notifications
+
+on:
+  push:
+    branches:
+      - "**"
+
+# Required repository secrets:
+# - TELEGRAM_BOT_TOKEN
+# - TELEGRAM_CHAT_ID
+# Optional for a forum topic:
+# - TELEGRAM_MESSAGE_THREAD_ID
+permissions: {}
+
+jobs:
+  notify:
+    if: ${{ !github.event.deleted }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Send Telegram push summary
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          TELEGRAM_MESSAGE_THREAD_ID: ${{ secrets.TELEGRAM_MESSAGE_THREAD_ID }}
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          import sys
+          import time
+          import urllib.error
+          import urllib.request
+
+
+          token = os.environ.get("TELEGRAM_BOT_TOKEN", "").strip()
+          chat_id = os.environ.get("TELEGRAM_CHAT_ID", "").strip()
+          thread_id = os.environ.get("TELEGRAM_MESSAGE_THREAD_ID", "").strip()
+
+          if not token or not chat_id:
+              print(
+                  "Telegram notification skipped: configure TELEGRAM_BOT_TOKEN "
+                  "and TELEGRAM_CHAT_ID repository secrets."
+              )
+              raise SystemExit(0)
+
+          if thread_id:
+              try:
+                  parsed_thread_id = int(thread_id)
+              except ValueError:
+                  print("TELEGRAM_MESSAGE_THREAD_ID must be an integer.", file=sys.stderr)
+                  raise SystemExit(1)
+          else:
+              parsed_thread_id = None
+
+          with open(os.environ["GITHUB_EVENT_PATH"], encoding="utf-8") as event_file:
+              event = json.load(event_file)
+
+          commits = event.get("commits") or []
+          if not commits:
+              head_commit = event.get("head_commit")
+              if head_commit:
+                  commits = [head_commit]
+
+          if not commits:
+              print("Telegram notification skipped: the push contains no commits.")
+              raise SystemExit(0)
+
+          repository = os.environ.get("GITHUB_REPOSITORY", "Cellularity")
+          branch = str(event.get("ref", "")).removeprefix("refs/heads/")
+          fallback_actor = os.environ.get("GITHUB_ACTOR", "unknown")
+          pusher = event.get("pusher") or {}
+          pusher_name = str(pusher.get("name") or fallback_actor)
+          compare_url = str(event.get("compare") or "")
+          total_commit_count = max(int(event.get("size") or 0), len(commits))
+          api_url = f"https://api.telegram.org/bot{token}/sendMessage"
+          maximum_message_length = 3900
+
+
+          def single_line(value: object, maximum_length: int) -> str:
+              normalized = " ".join(str(value or "").split())
+              if len(normalized) <= maximum_length:
+                  return normalized
+              return normalized[: maximum_length - 1] + "…"
+
+
+          def send_message(text: str) -> None:
+              payload: dict[str, object] = {
+                  "chat_id": chat_id,
+                  "text": text,
+              }
+              if parsed_thread_id is not None:
+                  payload["message_thread_id"] = parsed_thread_id
+
+              for attempt in range(2):
+                  request = urllib.request.Request(
+                      api_url,
+                      data=json.dumps(payload).encode("utf-8"),
+                      headers={"Content-Type": "application/json"},
+                      method="POST",
+                  )
+                  try:
+                      with urllib.request.urlopen(request, timeout=20) as response:
+                          result = json.load(response)
+                      break
+                  except urllib.error.HTTPError as failure:
+                      detail = failure.read().decode("utf-8", errors="replace")[:500]
+                      try:
+                          error_payload = json.loads(detail)
+                      except json.JSONDecodeError:
+                          error_payload = {}
+                      retry_after = int(
+                          (error_payload.get("parameters") or {}).get("retry_after") or 0
+                      )
+                      if failure.code == 429 and retry_after > 0 and attempt == 0:
+                          time.sleep(min(retry_after, 30))
+                          continue
+                      print(
+                          f"Telegram API returned HTTP {failure.code}: {detail}",
+                          file=sys.stderr,
+                      )
+                      raise SystemExit(1)
+                  except urllib.error.URLError as failure:
+                      print(f"Telegram request failed: {failure.reason}", file=sys.stderr)
+                      raise SystemExit(1)
+              else:
+                  print("Telegram request retry was exhausted.", file=sys.stderr)
+                  raise SystemExit(1)
+
+              if not result.get("ok"):
+                  description = single_line(result.get("description"), 500)
+                  print(f"Telegram rejected the message: {description}", file=sys.stderr)
+                  raise SystemExit(1)
+
+
+          commit_lines: list[str] = []
+          for commit in commits:
+              commit_id = str(commit.get("id") or commit.get("sha") or "")
+              short_id = commit_id[:7] or "unknown"
+              title = single_line(commit.get("message"), 240) or "No commit message"
+              author = commit.get("author") or {}
+              author_name = single_line(author.get("name"), 100) or fallback_actor
+              commit_lines.append(f"{short_id} | {author_name} | {title}")
+
+          header_lines = [
+              "Cellularity: push",
+              f"Repository: {single_line(repository, 180)}",
+              f"Branch: {single_line(branch, 180)}",
+              f"Pushed by: {single_line(pusher_name, 180)}",
+              f"Commits: {total_commit_count}",
+          ]
+          if event.get("forced"):
+              header_lines.append("Force push: yes")
+
+
+          def render_summary(visible_lines: list[str]) -> str:
+              omitted_count = max(total_commit_count - len(visible_lines), 0)
+              message_lines = [*header_lines, "", *visible_lines]
+              if omitted_count:
+                  message_lines.extend(
+                      ["", f"... and {omitted_count} more commit(s) in this push."]
+                  )
+              if compare_url:
+                  message_lines.extend(["", f"Compare: {compare_url}"])
+              return "\n".join(message_lines)
+
+
+          visible_commit_lines: list[str] = []
+          for commit_line in commit_lines:
+              candidate_lines = [*visible_commit_lines, commit_line]
+              if len(render_summary(candidate_lines)) > maximum_message_length:
+                  break
+              visible_commit_lines = candidate_lines
+
+          summary = render_summary(visible_commit_lines)
+          if len(summary) > maximum_message_length:
+              print(
+                  "Telegram push summary cannot fit after bounded field normalization.",
+                  file=sys.stderr,
+              )
+              raise SystemExit(1)
+
+          send_message(summary)
+          print(
+              f"Sent one Telegram summary for {total_commit_count} commit(s); "
+              f"listed {len(visible_commit_lines)}."
+          )
+          PY

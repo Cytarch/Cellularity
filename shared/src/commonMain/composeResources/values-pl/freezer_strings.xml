@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="freezer_dish_shape_label">Kształt szalki</string>
+    <string name="freezer_dish_shape_circle">Koło</string>
+    <string name="freezer_dish_shape_ring">Pierścień</string>
+    <string name="freezer_inner_diameter_label">Średnica otworu [mm]:</string>
+    <string name="freezer_ring_dimensions_hint">Średnica otworu i szerokość pierścienia muszą przekraczać %1$s mm.</string>
+
+    <string name="freezer_new_plate_action">Nowa szalka</string>
+
+    <string name="freezer_relabel_sample_action">Zmień etykietę próbki</string>
+
+    <string name="freezer_advanced_settings_title">Opcje zaawansowane</string>
+
+    <string name="freezer_new_plate_summary">Uruchom z ustawieniami domyślnymi</string>
+
+    <string name="freezer_search_placeholder">Szukaj eksperymentów</string>
+    <string name="freezer_sort_name">Nazwa</string>
+    <string name="freezer_sort_created">Utworzono</string>
+    <string name="freezer_sort_age">Wiek</string>
+    <string name="freezer_sort_cell_count">Komórki</string>
+    <string name="freezer_sort_maximum_cell_count">Limit komórek</string>
+    <string name="freezer_sort_food_count">Pokarm</string>
+    <string name="freezer_sort_maximum_food_count">Limit pokarmu</string>
+    <string name="freezer_sort_food_mass">Masa pokarmu</string>
+    <string name="freezer_sort_dish_size">Rozmiar szalki</string>
+    <string name="freezer_no_search_results">Nie znaleziono eksperymentów</string>
+    <string name="freezer_newer_version_short_status">Wymagana jest nowsza wersja</string>
+    <string name="freezer_delete_dialog_title">Usunąć eksperyment?</string>
+    <string name="freezer_delete_dialog_message">„%1$s” zostanie trwale usunięty.</string>
+
+    <string name="freezer_card_cells_label">Komórki</string>
+    <string name="freezer_card_food_label">Pokarm</string>
+    <string name="freezer_card_mass_label">Masa</string>
+    <string name="freezer_card_dish_label">Szalka</string>
+    <string name="freezer_card_dish_diameter_format">Ø %1$s mm</string>
+    <string name="freezer_card_created_content_description">Utworzono: %1$s</string>
+    <string name="freezer_card_age_content_description">Wiek: %1$s</string>
+    <string name="freezer_card_dish_content_description">Średnica szalki: %1$s</string>
+
+    <string name="freezer_read_error_message">Nie udało się odczytać tego substratu.</string>
+
+    <string name="freezer_memory_estimate_format">≈ %1$d MB</string>
+
+    <string name="freezer_advanced_settings_warning">Te ustawienia są przeznaczone dla zaawansowanych użytkowników. Nieprawidłowe wartości mogą spowodować awarię lub bardzo wolne działanie Cellularity.</string>
+
+    <string name="freezer_advanced_settings_maximum_cell_count_label">Maksymalna liczba komórek:</string>
+
+    <string name="freezer_advanced_settings_maximum_nutrient_count_label">Maksymalna liczba składników odżywczych:</string>
+
+    <string name="freezer_advanced_settings_petri_dish_diameter_label">Średnica szalki [mm]:</string>
+
+    <string name="freezer_import_name_already_exists_message">Etykieta o tej nazwie już istnieje w zamrażarce. Wybierz inną nazwę.</string>
+        <string name="freezer_save_name_already_exists_message">Etykieta o tej nazwie już istnieje w zamrażarce. Wybierz inną nazwę.</string>
+
+</resources>

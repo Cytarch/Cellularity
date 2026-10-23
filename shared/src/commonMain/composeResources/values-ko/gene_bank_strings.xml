@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <string name="gene_bank_rename_genome_dialog_title">유전체 이름 변경</string>
+
+    <string name="gene_bank_read_error_message">이 유전체를 읽을 수 없습니다.</string>
+
+    <string name="gene_bank_search_placeholder">유전체 검색</string>
+    <string name="gene_bank_sort_name">이름</string>
+    <string name="gene_bank_sort_gene_count">유전자 수</string>
+    <string name="gene_bank_sort_unique_gene_count">고유 유전자</string>
+    <string name="gene_bank_sort_initial_gene">초기 유전자</string>
+    <string name="gene_bank_sort_cell_type_count">세포 유형</string>
+    <string name="gene_bank_no_search_results">유전체를 찾을 수 없음</string>
+    <string name="gene_bank_empty_state">저장된 유전체가 없습니다</string>
+    <string name="gene_bank_newer_version_short_status">최신 앱 버전 필요</string>
+    <string name="gene_bank_card_genes_label">유전자</string>
+    <string name="gene_bank_card_unique_genes_label">고유</string>
+    <string name="gene_bank_card_initial_gene_label">초기</string>
+    <string name="gene_bank_card_cell_types_label">세포 유형</string>
+    <string name="gene_bank_delete_dialog_title">유전체를 삭제할까요?</string>
+    <string name="gene_bank_delete_dialog_message">“%1$s”이(가) 영구적으로 삭제됩니다.</string>
+
+    <string name="gene_bank_import_name_already_exists_message">같은 이름의 유전체가 이미 있습니다. 가져오기 전에 이름을 변경하세요.</string>
+
+</resources>

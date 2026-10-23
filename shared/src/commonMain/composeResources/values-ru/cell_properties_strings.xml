@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <string name="cell_property_true_value">Да</string>
+
+    <string name="cell_property_false_value">Нет</string>
+
+    <string name="cell_property_signal_substance_prefix">S</string>
+
+    <string name="cell_property_signal_substance_unit">μмоль/л</string>
+
+    <string name="cell_property_muscle_contraction">Сокращение мышцы</string>
+
+    <string name="cell_property_muscle_bending">Сгибание мышцы</string>
+
+    <string name="cell_property_muscle_lifting">Поднятие мышцы</string>
+
+    <string name="cell_property_secretion_hcn">HCN</string>
+
+    <string name="cell_property_secretion_nutrient_smell">Запах питательных веществ</string>
+
+    <string name="cell_property_secretion_coated_nutrient_smell">Запах питательных веществ с покрытием</string>
+
+    <string name="cell_property_secretion_lipase">Липаза</string>
+
+    <string name="cell_property_secretion_protease">Протеаза</string>
+
+    <string name="cell_property_secretion_light_sense_activator">Активатор светового сенсора</string>
+
+    <string name="cell_property_secretion_wall_sense_activator">Активатор сенсора стены</string>
+
+    <string name="cell_property_sense_cell">Клетка</string>
+
+    <string name="cell_property_sense_wall">Стена</string>
+
+    <string name="cell_property_sense_light">Свет</string>
+
+    <string name="cell_property_sense_nutrient">Питательное вещество</string>
+
+    <string name="cell_property_sense_coated_nutrient">Питательное вещество с покрытием</string>
+
+    <string name="cell_property_sense_velocity">Скорость</string>
+
+</resources>

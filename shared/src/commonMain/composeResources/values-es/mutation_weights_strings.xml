@@ -1,0 +1,126 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <string name="mutation_weights_title">Pesos de mutación</string>
+
+    <string name="mutation_weights_summary_format">%1$d activados, peso total %2$s</string>
+
+    <string name="mutation_weights_editor_summary_format">%1$d activados, total %2$s</string>
+
+    <string name="mutation_weight_details_format">peso %1$s, %2$s%</string>
+
+    <string name="mutation_weight_numbered_label_format">%1$s %2$d</string>
+
+    <string name="mutation_weight_parametric_label_format">%1$s — %2$s</string>
+
+    <string name="mutation_weight_cell_color_hue">Tono del color celular</string>
+
+    <string name="mutation_weight_cell_color_saturation">Saturación del color celular</string>
+
+    <string name="mutation_weight_cell_color_value">Luminosidad del color celular</string>
+
+    <string name="mutation_weight_split_angle">Ángulo de división</string>
+
+    <string name="mutation_weight_child_1_angle">Ángulo de la célula hija 1</string>
+
+    <string name="mutation_weight_child_2_angle">Ángulo de la célula hija 2</string>
+
+    <string name="mutation_weight_mass_flow_priority">Prioridad del flujo de masa</string>
+
+    <string name="mutation_weight_split_mass">Masa de división</string>
+
+    <string name="mutation_weight_split_ratio">Proporción de división</string>
+
+    <string name="mutation_weight_adhesin_stiffness">Rigidez de la adhesina</string>
+
+    <string name="mutation_weight_child_1_gene">Gen de la célula hija 1</string>
+
+    <string name="mutation_weight_child_2_gene">Gen de la célula hija 2</string>
+
+    <string name="mutation_weight_produce_adhesin">Producir adhesina</string>
+
+    <string name="mutation_weight_child_1_keep_adhesin_connections">La célula hija 1 conserva las conexiones de adhesina</string>
+
+    <string name="mutation_weight_child_2_keep_adhesin_connections">La célula hija 2 conserva las conexiones de adhesina</string>
+
+    <string name="mutation_weight_prioritize_survival">Priorizar supervivencia</string>
+
+    <string name="mutation_weight_child_1_mirror">Reflejar célula hija 1</string>
+
+    <string name="mutation_weight_child_2_mirror">Reflejar célula hija 2</string>
+
+    <string name="mutation_weight_cell_type">Tipo de célula</string>
+
+    <string name="mutation_weight_parametric_swim_force">Fuerza de natación</string>
+
+    <string name="mutation_weight_parametric_cell_density">Densidad celular</string>
+
+    <string name="mutation_weight_parametric_myocyte_bending">Flexión del miocito</string>
+
+    <string name="mutation_weight_parametric_myocyte_contraction">Contracción del miocito</string>
+
+    <string name="mutation_weight_parametric_myocyte_lifting">Elevación del miocito</string>
+
+    <string name="mutation_weight_parametric_stem_threshold_1">Umbral de célula madre 1</string>
+
+    <string name="mutation_weight_parametric_stem_threshold_2">Umbral de célula madre 2</string>
+
+    <string name="mutation_weight_parametric_signal_output">Salida de señal</string>
+
+    <string name="mutation_weight_parametric_variable_a">Variable A</string>
+
+    <string name="mutation_weight_parametric_variable_b">Variable B</string>
+
+    <string name="mutation_weight_parametric_variable_c">Variable C</string>
+
+    <string name="mutation_weight_parametric_signal_channel">Canal de señal</string>
+
+    <string name="mutation_weight_parametric_formula_type">Tipo de fórmula</string>
+
+    <string name="mutation_weight_virus_source_gene">Gen de origen del virus</string>
+
+    <string name="mutation_weight_virus_target_gene">Gen de destino del virus</string>
+
+    <string name="mutation_weight_sense_output_channel">Canal de salida del sensor</string>
+
+    <string name="mutation_weight_sense_type">Tipo de sensor</string>
+
+    <string name="mutation_weight_secretion_type">Tipo de secreción</string>
+
+    <string name="mutation_weight_signal_output_channel">Canal de salida de señal</string>
+
+    <string name="mutation_weight_maximum_adhesin_connections">Número máximo de conexiones de adhesina</string>
+
+    <string name="mutation_weight_telomeres_after_fertilization">Telómeros después de la fertilización</string>
+
+    <string name="mutation_weight_sense_amplitude">Amplitud del sensor</string>
+
+    <string name="mutation_weight_sense_color_hue">Tono del color detectado</string>
+
+    <string name="mutation_weight_sense_color_saturation">Saturación del color detectado</string>
+
+    <string name="mutation_weight_sense_color_value">Luminosidad del color detectado</string>
+
+    <string name="mutation_weight_sense_threshold">Umbral del sensor</string>
+
+    <string name="mutation_weight_adhesin_length">Longitud de la adhesina</string>
+
+    <string name="mutation_weight_cytoskeleton">Citoesqueleto</string>
+
+    <string name="mutation_weight_duplicate_child_gene">Duplicar gen hijo</string>
+
+    <string name="mutation_weight_insert_linked_child_gene">Insertar gen hijo enlazado</string>
+
+    <string name="mutation_weight_split_child_edge">Dividir enlace del gen hijo</string>
+
+    <string name="mutation_weight_bypass_child_gene">Omitir gen hijo</string>
+
+    <string name="mutation_weight_local_edge_retarget">Redirigir enlace local</string>
+
+    <string name="mutation_weight_clone_parent_gene">Clonar gen padre</string>
+
+    <string name="mutation_weight_add_gene">Añadir gen</string>
+
+    <string name="mutation_weight_delete_gene">Eliminar gen</string>
+
+</resources>

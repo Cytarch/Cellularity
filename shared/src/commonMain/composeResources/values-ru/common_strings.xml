@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <string name="common_ok_action">OK</string>
+
+    <string name="common_invalid_number_message">Введите число</string>
+
+    <string name="common_discard_action">Уничтожить</string>
+
+    <string name="common_cancel_action">Отменить</string>
+
+    <string name="common_start_action">Начать</string>
+
+    <string name="common_cancel_button_label">Отмена</string>
+
+    <string name="common_back_action">Назад</string>
+
+    <string name="common_edit_action">Изменить</string>
+
+    <string name="common_export_action">Экспортировать</string>
+
+    <string name="common_reset_action">Сбросить</string>
+
+    <string name="common_search_action">Поиск</string>
+
+    <string name="common_edit_value_precisely_action">Задать точное значение</string>
+
+</resources>

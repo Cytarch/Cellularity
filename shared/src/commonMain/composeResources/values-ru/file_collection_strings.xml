@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <string name="file_collection_newer_version_message">Этот файл создан в более новой версии Cellularity. Обновите приложение.</string>
+
+    <string name="file_collection_invalid_name_message">Недопустимое имя файла.</string>
+
+    <string name="file_collection_substrate_name_already_exists_message">Субстрат с таким именем уже существует.</string>
+
+    <string name="file_collection_genome_name_already_exists_message">Геном с таким именем уже существует.</string>
+
+    <string name="file_collection_file_too_large_message">Этот файл слишком большой.</string>
+
+    <string name="file_collection_operation_failed_message">Не удалось выполнить операцию с файлом.</string>
+
+    <string name="file_collection_no_share_target_message">Нет подходящего приложения.</string>
+
+    <string name="file_collection_share_content_description">Поделиться: %1$s</string>
+
+    <string name="file_collection_rename_content_description">Переименовать: %1$s</string>
+
+    <string name="file_collection_delete_content_description">Удалить: %1$s</string>
+
+    <string name="file_collection_more_actions_content_description">Другие действия: %1$s</string>
+
+    <string name="file_collection_share_action">Поделиться</string>
+    <string name="file_collection_rename_action">Переименовать</string>
+    <string name="file_collection_delete_action">Удалить</string>
+    <string name="file_collection_clear_search_content_description">Очистить поиск</string>
+    <string name="file_collection_clear_search_action">Очистить поиск</string>
+    <string name="file_collection_switch_to_grid_view_content_description">Переключиться на сетку</string>
+    <string name="file_collection_switch_to_list_view_content_description">Переключиться на список</string>
+    <string name="file_collection_sort_ascending">По возрастанию</string>
+    <string name="file_collection_sort_descending">По убыванию</string>
+
+    <string name="file_operation_saved_message">Сохранено</string>
+    <string name="file_operation_invalid_name_message">Недопустимое имя. Введите непустое имя без косых черт.</string>
+    <string name="file_operation_newer_version_message">Этот файл создан в более новой версии Cellularity. Обновите приложение.</string>
+    <string name="file_operation_load_failed_message">Не удалось загрузить этот файл.</string>
+    <string name="file_operation_save_failed_message">Не удалось сохранить этот файл.</string>
+    <string name="file_operation_size_limit_exceeded_message">Файл превышает безопасный лимит 2 ГиБ.</string>
+
+</resources>

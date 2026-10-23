@@ -1,0 +1,118 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <string name="settings_general_section_title">일반</string>
+
+    <string name="settings_keep_screen_awake">화면 켜진 상태 유지</string>
+
+    <string name="settings_confirm_before_sterilize_or_reload">멸균 또는 다시 불러오기 전에 확인</string>
+
+    <string name="settings_keep_screen_awake_description">긴 시뮬레이션을 실행하는 동안 기기가 절전 모드로 전환되지 않습니다. 충전기를 연결하세요!</string>
+
+    <string name="settings_language">언어</string>
+
+    <string name="settings_genome_preview_maximum_cell_count">유전체 미리보기의 최대 세포 수</string>
+
+    <string name="settings_incubation_target_updates_per_second">배양 목표 UPS</string>
+
+    <string name="settings_performance_hud">성능 HUD</string>
+
+    <string name="settings_performance_hud_description">현미경 위에 FPS, UPS 및 시뮬레이션 단계별 시간을 표시합니다</string>
+
+    <string name="settings_allowed_range_prompt">%1$s–%2$s 범위의 값을 입력하세요</string>
+
+    <string name="settings_theme">테마</string>
+
+    <string name="settings_theme_editor_title">테마 편집기</string>
+
+    <string name="settings_theme_import_action">테마 가져오기 (.cltheme)</string>
+
+    <string name="settings_theme_share_action">테마 공유 (.cltheme)</string>
+
+    <string name="settings_theme_name">이름</string>
+
+    <string name="settings_theme_primary">기본 색상</string>
+
+    <string name="settings_theme_secondary">보조 색상</string>
+
+    <string name="settings_theme_primary_container">기본 컨테이너</string>
+
+    <string name="settings_theme_background">배경</string>
+
+    <string name="settings_theme_surface_variant">표면 변형</string>
+
+    <string name="settings_theme_text">텍스트</string>
+
+    <string name="settings_theme_text_field_text">입력 텍스트</string>
+
+    <string name="settings_theme_components">구성 요소</string>
+
+    <string name="settings_theme_card_corner_radius">카드 모서리 반경</string>
+
+    <string name="settings_theme_card_elevation">카드 높이</string>
+
+    <string name="settings_theme_item_spacing">항목 간격</string>
+
+    <string name="settings_theme_content_padding">콘텐츠 안쪽 여백</string>
+
+    <string name="settings_theme_list_padding">목록 안쪽 여백</string>
+
+    <string name="settings_theme_icon_button_size">아이콘 버튼 크기</string>
+
+    <string name="settings_theme_slider_thumb_size">슬라이더 손잡이 크기</string>
+
+    <string name="settings_theme_slider_track_height">슬라이더 트랙 높이</string>
+
+    <string name="settings_theme_swatch_size">색상 견본 크기</string>
+
+    <string name="settings_theme_default">기본값</string>
+
+    <string name="settings_crash_reports">충돌 보고서</string>
+
+    <string name="settings_no_crash_reports_message">충돌 보고서 없음</string>
+
+    <string name="settings_crash_reports_privacy_description">보고서는 직접 내보내기 전까지 비공개 앱 저장소에만 보관됩니다.</string>
+
+    <string name="settings_crash_report_details_format">%1$s\n%2$s</string>
+
+    <string name="settings_export_diagnostics_action">진단 정보 내보내기</string>
+
+    <plurals name="settings_stored_crash_report_count">
+            <item quantity="other">저장된 보고서 %1$d개</item>
+        </plurals>
+
+    <string name="settings_export_diagnostics_title">진단 정보를 내보낼까요?</string>
+
+    <string name="settings_export_diagnostics_disclosure">내보낸 텍스트 파일에는 다음 정보가 포함될 수 있습니다:\n• 보고서 시각, 패키지 이름 및 앱 버전\n• Android 버전, 기기 모델 및 ABI\n• 그래픽 기기 식별자, 드라이버 정보 및 Vulkan 지원 결과\n• 충돌한 스레드\n• Java/Kotlin 스택 트레이스 또는 네이티브 신호 정보\n\n다음 화면에서 선택한 앱만 이 파일을 받습니다.</string>
+
+    <string name="settings_theme_import_failed_message">테마를 가져오지 못했습니다</string>
+    <string name="settings_theme_share_failed_message">테마를 공유하지 못했습니다</string>
+    <string name="settings_avoid_camera_cutout">카메라 컷아웃 피하기</string>
+    <string name="settings_avoid_camera_cutout_summary">Android 전체 화면에서 카메라 컷아웃 주변에 여백을 추가합니다</string>
+
+    <string name="settings_experimental_section_title">실험 / 개발자 기능</string>
+    <string name="settings_render_backend">렌더링 백엔드</string>
+    <string name="settings_render_backend_open_gl_es">OpenGL ES(안정적)</string>
+    <string name="settings_render_backend_auto">자동(실험적)</string>
+    <string name="settings_render_backend_vulkan">Vulkan(실험적)</string>
+    <string name="settings_render_backend_vulkan_unavailable_title">Vulkan을 시작하지 못했습니다</string>
+    <string name="settings_render_backend_vulkan_unavailable_message">Vulkan 렌더러를 사용할 수 없습니다:\n%1$s</string>
+    <string name="settings_render_backend_use_gles_action">OpenGL ES 사용</string>
+    <string name="settings_vulkan_capability_title">Vulkan 지원</string>
+    <string name="settings_vulkan_capability_run">기기 지원 여부를 확인하려면 탭하세요</string>
+    <string name="settings_vulkan_capability_checking">기기 지원 여부 확인 중…</string>
+    <string name="settings_vulkan_capability_supported">지원됨: %1$s (Vulkan %2$s)</string>
+    <string name="settings_vulkan_capability_unsupported">이 기기에서는 지원되지 않음</string>
+    <string name="settings_vulkan_capability_failed">지원 여부 확인을 완료하지 못했습니다</string>
+    <string name="settings_vulkan_capability_retry_action">다시 시도</string>
+    <string name="settings_vulkan_clear_frame_title">Vulkan 월드 렌더링 테스트</string>
+    <string name="settings_vulkan_clear_frame_summary">분리된 Vulkan 현미경 월드 렌더링 테스트 열기</string>
+    <string name="settings_vulkan_clear_frame_unavailable">Vulkan 지원 확인에 성공하면 사용할 수 있습니다</string>
+    <string name="settings_vulkan_clear_frame_starting">Vulkan 시작 중…</string>
+    <string name="settings_vulkan_clear_frame_waiting">Android 표면을 기다리는 중…</string>
+    <string name="settings_vulkan_clear_frame_presenting">표시된 프레임: %1$d · 스왑체인 재생성: %2$d</string>
+    <string name="settings_vulkan_clear_frame_paused">Vulkan 렌더링이 일시 중지됨</string>
+    <string name="settings_vulkan_clear_frame_surface_lost">표면이 손실됨; 다시 연결하는 중…</string>
+    <string name="settings_vulkan_clear_frame_failed">Vulkan 렌더링 실패</string>
+
+</resources>

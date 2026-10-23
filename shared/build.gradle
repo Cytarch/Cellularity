@@ -1,0 +1,77 @@
+plugins {
+    alias(libs.plugins.android.kotlin.multiplatform.library)
+    alias(libs.plugins.kotlin.multiplatform)
+    alias(libs.plugins.kotlin.serialization)
+    alias(libs.plugins.kotlin.compose)
+    alias(libs.plugins.compose.multiplatform)
+}
+
+kotlin {
+    android {
+        namespace = 'com.cytarch.cellularity.shared'
+        compileSdk = libs.versions.compileSdk.get().toInteger()
+        minSdk = libs.versions.minSdk.get().toInteger()
+
+        androidResources {
+            enable = true
+        }
+        withHostTest { }
+
+        compilerOptions {
+            jvmTarget.set(
+                org.jetbrains.kotlin.gradle.dsl.JvmTarget.fromTarget(
+                    libs.versions.jvmTarget.get()
+                )
+            )
+        }
+    }
+    jvm {
+        compilerOptions {
+            jvmTarget.set(
+                org.jetbrains.kotlin.gradle.dsl.JvmTarget.fromTarget(
+                    libs.versions.jvmTarget.get()
+                )
+            )
+        }
+    }
+
+    sourceSets {
+        commonMain {
+            dependencies {
+                implementation(compose.runtime)
+                implementation(compose.foundation)
+                implementation(compose.material3)
+                implementation(compose.materialIconsExtended)
+                api(compose.components.resources)
+                implementation(libs.kotlinx.coroutines.core)
+                implementation(libs.kotlinx.serialization.json)
+            }
+        }
+        commonTest {
+            dependencies {
+                implementation kotlin('test')
+            }
+        }
+        androidMain { }
+        androidHostTest {
+            dependencies {
+                implementation kotlin('test')
+            }
+        }
+        jvmMain { }
+        jvmTest {
+            resources.srcDirs(
+                    rootProject.file('testdata/release-format')
+            )
+            dependencies {
+                implementation kotlin('test-junit')
+            }
+        }
+    }
+}
+
+compose.resources {
+    publicResClass = true
+    packageOfResClass = 'com.cytarch.cellularity.shared.generated.resources'
+    generateResClass = 'always'
+}

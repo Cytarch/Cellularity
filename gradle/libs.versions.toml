@@ -1,0 +1,61 @@
+[versions]
+agp = "9.0.1"
+kotlin = "2.2.10"
+composeMultiplatform = "1.9.3"
+
+jdk = "21"
+jvmTarget = "17"
+compileSdk = "36"
+minSdk = "24"
+targetSdk = "36"
+ndk = "28.2.13676358"
+cmake = "3.22.1"
+
+appVersionCode = "1"
+appVersionName = "0.1.0-alpha.1"
+
+androidxCompose = "1.9.5"
+androidxMaterial3 = "1.4.0"
+androidxComposeIcons = "1.7.8"
+androidxAppcompat = "1.7.1"
+androidxLifecycle = "2.9.4"
+androidxActivity = "1.11.0"
+androidxCore = "1.17.0"
+kotlinxCoroutines = "1.10.2"
+kotlinxSerialization = "1.9.0"
+junit = "4.13.2"
+
+[libraries]
+androidx-appcompat = { module = "androidx.appcompat:appcompat", version.ref = "androidxAppcompat" }
+androidx-activity = { module = "androidx.activity:activity", version.ref = "androidxActivity" }
+androidx-activity-compose = { module = "androidx.activity:activity-compose", version.ref = "androidxActivity" }
+androidx-core = { module = "androidx.core:core", version.ref = "androidxCore" }
+androidx-core-ktx = { module = "androidx.core:core-ktx", version.ref = "androidxCore" }
+androidx-lifecycle-runtime = { module = "androidx.lifecycle:lifecycle-runtime", version.ref = "androidxLifecycle" }
+androidx-lifecycle-runtime-compose = { module = "androidx.lifecycle:lifecycle-runtime-compose", version.ref = "androidxLifecycle" }
+androidx-lifecycle-viewmodel-compose = { module = "androidx.lifecycle:lifecycle-viewmodel-compose", version.ref = "androidxLifecycle" }
+
+androidx-compose-animation = { module = "androidx.compose.animation:animation", version.ref = "androidxCompose" }
+androidx-compose-animation-core = { module = "androidx.compose.animation:animation-core", version.ref = "androidxCompose" }
+androidx-compose-foundation = { module = "androidx.compose.foundation:foundation", version.ref = "androidxCompose" }
+androidx-compose-foundation-layout = { module = "androidx.compose.foundation:foundation-layout", version.ref = "androidxCompose" }
+androidx-compose-material-ripple = { module = "androidx.compose.material:material-ripple", version.ref = "androidxCompose" }
+androidx-compose-runtime = { module = "androidx.compose.runtime:runtime", version.ref = "androidxCompose" }
+androidx-compose-runtime-saveable = { module = "androidx.compose.runtime:runtime-saveable", version.ref = "androidxCompose" }
+androidx-compose-ui = { module = "androidx.compose.ui:ui", version.ref = "androidxCompose" }
+androidx-compose-ui-tooling = { module = "androidx.compose.ui:ui-tooling", version.ref = "androidxCompose" }
+androidx-compose-ui-tooling-preview = { module = "androidx.compose.ui:ui-tooling-preview", version.ref = "androidxCompose" }
+androidx-compose-material3 = { module = "androidx.compose.material3:material3", version.ref = "androidxMaterial3" }
+androidx-compose-material-icons-extended = { module = "androidx.compose.material:material-icons-extended", version.ref = "androidxComposeIcons" }
+
+kotlinx-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "kotlinxCoroutines" }
+kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "kotlinxSerialization" }
+junit = { module = "junit:junit", version.ref = "junit" }
+
+[plugins]
+android-application = { id = "com.android.application", version.ref = "agp" }
+android-kotlin-multiplatform-library = { id = "com.android.kotlin.multiplatform.library", version.ref = "agp" }
+kotlin-multiplatform = { id = "org.jetbrains.kotlin.multiplatform", version.ref = "kotlin" }
+kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
+kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
+compose-multiplatform = { id = "org.jetbrains.compose", version.ref = "composeMultiplatform" }

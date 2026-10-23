@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <string name="diagnostics_export_chooser_title">Export diagnostics</string>
+    <string name="recovery_diagnostics_export_failed_message">Could not export diagnostics.</string>
+    <string name="recovery_title">Cellularity did not close normally</string>
+    <plurals name="recovery_report_count">
+        <item quantity="one">%d new diagnostic report is available.</item>
+        <item quantity="other">%d new diagnostic reports are available.</item>
+    </plurals>
+    <string name="recovery_latest_report_format">Latest report: %s</string>
+    <string name="recovery_description">You can export the diagnostic information before trying to open the application again.</string>
+    <string name="recovery_privacy_notice">The export contains the application version, device and ABI information, thread details, and the stack trace. Reports remain private until you explicitly export them.</string>
+    <string name="recovery_export_diagnostics_action">Export diagnostics</string>
+    <string name="recovery_continue_to_app_action">Continue to Cellularity</string>
+    <string name="recovery_acknowledge_failed_message">The report could not be marked as reviewed. You can still continue for this launch.</string>
+
+</resources>

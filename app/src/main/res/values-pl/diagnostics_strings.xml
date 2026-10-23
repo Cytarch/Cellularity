@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+        <string name="diagnostics_export_chooser_title">Eksportuj diagnostykę</string>
+    <string name="recovery_diagnostics_export_failed_message">Nie udało się wyeksportować diagnostyki.</string>
+        <string name="recovery_title">Aplikacja Cellularity nie została poprawnie zamknięta</string>
+        <plurals name="recovery_report_count">
+            <item quantity="one">Dostępny jest %d nowy raport diagnostyczny.</item>
+            <item quantity="few">Dostępne są %d nowe raporty diagnostyczne.</item>
+            <item quantity="many">Dostępnych jest %d nowych raportów diagnostycznych.</item>
+            <item quantity="other">Dostępnych jest %d nowych raportów diagnostycznych.</item>
+        </plurals>
+        <string name="recovery_latest_report_format">Najnowszy raport: %s</string>
+        <string name="recovery_description">Przed ponownym otwarciem aplikacji możesz wyeksportować informacje diagnostyczne.</string>
+        <string name="recovery_privacy_notice">Eksport zawiera wersję aplikacji, informacje o urządzeniu i ABI, dane wątku oraz stos wywołań. Raporty pozostają prywatne, dopóki ich nie wyeksportujesz.</string>
+        <string name="recovery_export_diagnostics_action">Eksportuj diagnostykę</string>
+        <string name="recovery_continue_to_app_action">Przejdź do Cellularity</string>
+        <string name="recovery_acknowledge_failed_message">Nie udało się oznaczyć raportu jako sprawdzonego. Mimo to możesz kontynuować to uruchomienie.</string>
+
+</resources>

@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <string name="gene_bank_rename_genome_dialog_title">Rename your genome</string>
+
+    <string name="gene_bank_read_error_message">Could not read this genome.</string>
+
+    <string name="gene_bank_search_placeholder">Search genomes</string>
+    <string name="gene_bank_sort_name">Name</string>
+    <string name="gene_bank_sort_gene_count">Genes</string>
+    <string name="gene_bank_sort_unique_gene_count">Unique genes</string>
+    <string name="gene_bank_sort_initial_gene">Initial gene</string>
+    <string name="gene_bank_sort_cell_type_count">Cell types</string>
+    <string name="gene_bank_no_search_results">No genomes found</string>
+    <string name="gene_bank_empty_state">No saved genomes yet</string>
+    <string name="gene_bank_newer_version_short_status">Newer app version required</string>
+    <string name="gene_bank_card_genes_label">Genes</string>
+    <string name="gene_bank_card_unique_genes_label">Unique</string>
+    <string name="gene_bank_card_initial_gene_label">Initial</string>
+    <string name="gene_bank_card_cell_types_label">Cell types</string>
+    <string name="gene_bank_delete_dialog_title">Delete genome?</string>
+    <string name="gene_bank_delete_dialog_message">“%1$s” will be permanently deleted.</string>
+
+    <string name="gene_bank_import_name_already_exists_message">A genome with this name already exists. Rename it before importing.</string>
+
+</resources>

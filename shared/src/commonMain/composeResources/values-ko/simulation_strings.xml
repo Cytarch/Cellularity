@@ -1,0 +1,100 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <string name="simulation_hour_abbreviation">h</string>
+
+    <string-array name="simulation_cell_type_names">
+
+
+
+
+            <item name="cell_type_names0">섭식세포</item>
+
+
+
+
+            <item name="cell_type_names1">편모세포</item>
+
+
+
+
+            <item name="cell_type_names2">광합성세포</item>
+
+
+
+
+            <item name="cell_type_names3">포식세포</item>
+
+
+
+
+            <item name="cell_type_names4">지방세포</item>
+
+
+
+
+            <item name="cell_type_names5">각질세포</item>
+
+
+
+
+            <item name="cell_type_names6">부유세포</item>
+
+
+
+
+            <item name="cell_type_names7">접착세포</item>
+
+
+
+
+            <item name="cell_type_names8">바이러스세포</item>
+
+
+
+
+            <item name="cell_type_names9">질소세포</item>
+
+
+
+
+            <item name="cell_type_names10">조향세포</item>
+
+
+
+
+            <item name="cell_type_names11">감각세포</item>
+
+
+
+
+            <item name="cell_type_names12">근육세포</item>
+
+
+
+
+            <item name="cell_type_names13">신경세포</item>
+
+
+
+
+            <item name="cell_type_names14">분비세포</item>
+
+
+
+
+            <item name="cell_type_names15">줄기세포</item>
+
+
+
+
+            <item name="cell_type_names16">생식세포</item>
+
+
+
+
+            <item name="cell_type_names17">섬모세포</item>
+
+        </string-array>
+
+</resources>

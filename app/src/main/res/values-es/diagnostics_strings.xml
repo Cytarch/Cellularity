@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <string name="diagnostics_export_chooser_title">Exportar diagnóstico</string>
+    <string name="recovery_diagnostics_export_failed_message">No se pudo exportar el diagnóstico.</string>
+    <string name="recovery_title">Cellularity no se cerró correctamente</string>
+    <plurals name="recovery_report_count">
+        <item quantity="one">Hay %d informe de diagnóstico nuevo disponible.</item>
+        <item quantity="many">Hay %d informes de diagnóstico nuevos disponibles.</item>
+        <item quantity="other">Hay %d informes de diagnóstico nuevos disponibles.</item>
+    </plurals>
+    <string name="recovery_latest_report_format">Informe más reciente: %s</string>
+    <string name="recovery_description">Puedes exportar la información de diagnóstico antes de intentar abrir de nuevo la aplicación.</string>
+    <string name="recovery_privacy_notice">La exportación contiene la versión de la aplicación, información del dispositivo y la ABI, datos del hilo y la traza de la pila. Los informes permanecen privados hasta que decidas exportarlos.</string>
+    <string name="recovery_export_diagnostics_action">Exportar diagnóstico</string>
+    <string name="recovery_continue_to_app_action">Continuar con Cellularity</string>
+    <string name="recovery_acknowledge_failed_message">No se pudo marcar el informe como revisado. Aun así, puedes continuar esta vez.</string>
+
+</resources>

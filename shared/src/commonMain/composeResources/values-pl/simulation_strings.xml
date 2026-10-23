@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <string name="simulation_hour_abbreviation">h</string>
+
+    <string-array name="simulation_cell_type_names">
+                <item >Fagocyt</item>
+                <item >Flagellocyt</item>
+                <item >Fotocyt</item>
+                <item >Destrocyt</item>
+                <item >Lipocyt</item>
+                <item >Keratynocyt</item>
+                <item >Bojocyt</item>
+                <item >Lepocyt</item>
+                <item >Wirocyt</item>
+                <item >Nitrocyt</item>
+                <item >Stereocyt</item>
+                <item >Sensocyt</item>
+                <item >Miocyt</item>
+                <item >Neurocyt</item>
+                <item >Sekrecyt</item>
+                <item >Morfocyt</item>
+                <item >Gameta</item>
+                <item >Ciliocyt</item>
+            </string-array>
+
+</resources>

@@ -1,0 +1,330 @@
+{
+  "schemaVersion": 1,
+  "backend": "OpenGL ES 3.0",
+  "shaderPrograms": [
+    {
+      "name": "arrow",
+      "vertexInputs": {"vPosition": "vec4", "vTPosition": "vec4", "vCenter": "vec4", "vColor": "vec4"},
+      "uniforms": {"uMVPMatrix": "mat4"},
+      "samplers": {}
+    },
+    {
+      "name": "background",
+      "vertexInputs": {"aPosition": "vec4"},
+      "uniforms": {"uMVPMatrix": "mat4", "uRadius": "float", "uDirection": "vec4", "uBackgroundColor": "vec3", "uInnerRadiusSquared": "float"},
+      "samplers": {}
+    },
+    {
+      "name": "buoyocyte",
+      "vertexInputs": {"vPosition": "vec4", "vTPosition": "vec4", "vCenter": "vec4", "vColor": "vec4"},
+      "uniforms": {"uMVPMatrix": "mat4", "tex1": "sampler2D"},
+      "samplers": {"tex1": "small-dots"}
+    },
+    {
+      "name": "ciliocyte_outline",
+      "vertexInputs": {"vPosition": "vec4", "vColor": "vec4", "vTPosition": "vec4", "vCenter": "vec4"},
+      "uniforms": {"uMVPMatrix": "mat4"},
+      "samplers": {}
+    },
+    {
+      "name": "dead",
+      "vertexInputs": {"vPosition": "vec2", "vInstance": "vec4", "vColor": "vec4"},
+      "uniforms": {"uMVPMatrix": "mat4", "tex1": "sampler2D"},
+      "samplers": {"tex1": "gauss-bessel-integral"}
+    },
+    {
+      "name": "density_field",
+      "vertexInputs": {"aPosition": "vec4"},
+      "uniforms": {"uMVPMatrix": "mat4", "uRadius": "float", "uField": "vec4", "uFieldExtra": "vec4", "uDisplayRange": "vec4"},
+      "samplers": {}
+    },
+    {
+      "name": "devorocyte_outline",
+      "vertexInputs": {"vPosition": "vec4", "vColor": "vec4", "vTPosition": "vec4", "vCenter": "vec4"},
+      "uniforms": {"uMVPMatrix": "mat4"},
+      "samplers": {}
+    },
+    {
+      "name": "flagellocyte_outline",
+      "vertexInputs": {"vPosition": "vec4", "vColor": "vec4", "vTPosition": "vec4", "vCenter": "vec4"},
+      "uniforms": {"uMVPMatrix": "mat4"},
+      "samplers": {}
+    },
+    {
+      "name": "food",
+      "vertexInputs": {"vPosition": "vec2", "vInstance": "vec4", "color": "vec4"},
+      "uniforms": {"uMVPMatrix": "mat4"},
+      "samplers": {}
+    },
+    {
+      "name": "gamete",
+      "vertexInputs": {"vPosition": "vec4", "vTPosition": "vec4", "vCenter": "vec4", "vColor": "vec4"},
+      "uniforms": {"uMVPMatrix": "mat4"},
+      "samplers": {}
+    },
+    {
+      "name": "genome_grid",
+      "vertexInputs": {"aPosition": "vec4"},
+      "uniforms": {"uMVPMatrix": "mat4", "uWorldRadius": "float", "uGridSize": "float"},
+      "samplers": {}
+    },
+    {
+      "name": "glueocyte_outline",
+      "vertexInputs": {"vPosition": "vec4", "vColor": "vec4", "vTPosition": "vec4", "vCenter": "vec4"},
+      "uniforms": {"uMVPMatrix": "mat4"},
+      "samplers": {}
+    },
+    {
+      "name": "keratinocyte",
+      "vertexInputs": {"vPosition": "vec4", "vTPosition": "vec4", "vCenter": "vec4", "vColor": "vec4"},
+      "uniforms": {"uMVPMatrix": "mat4"},
+      "samplers": {}
+    },
+    {
+      "name": "link",
+      "vertexInputs": {"vLinkVertex": "vec4", "vLinkPatternPosition": "float"},
+      "uniforms": {"uMVPMatrix": "mat4"},
+      "samplers": {}
+    },
+    {
+      "name": "lipocyte",
+      "vertexInputs": {"vPosition": "vec4", "vTPosition": "vec4", "vCenter": "vec4", "vColor": "vec4"},
+      "uniforms": {"uMVPMatrix": "mat4"},
+      "samplers": {}
+    },
+    {
+      "name": "marker",
+      "vertexInputs": {"vPosition": "vec4", "vCenter": "vec4"},
+      "uniforms": {"uMVPMatrix": "mat4"},
+      "samplers": {}
+    },
+    {
+      "name": "myocyte",
+      "vertexInputs": {"vPosition": "vec4", "vTPosition": "vec4", "vCenter": "vec4", "vColor": "vec4"},
+      "uniforms": {"uMVPMatrix": "mat4"},
+      "samplers": {}
+    },
+    {
+      "name": "neurocyte",
+      "vertexInputs": {"vPosition": "vec4", "vTPosition": "vec4", "vCenter": "vec4", "vColor": "vec4"},
+      "uniforms": {"uMVPMatrix": "mat4"},
+      "samplers": {}
+    },
+    {
+      "name": "nitrocyte_outline",
+      "vertexInputs": {"vPosition": "vec4", "vColor": "vec4", "vTPosition": "vec4", "vCenter": "vec4"},
+      "uniforms": {"uMVPMatrix": "mat4"},
+      "samplers": {}
+    },
+    {
+      "name": "phagocyte",
+      "vertexInputs": {"vPosition": "vec4", "vTPosition": "vec4", "vCenter": "vec4", "vColor": "vec4"},
+      "uniforms": {"uMVPMatrix": "mat4"},
+      "samplers": {}
+    },
+    {
+      "name": "photocyte",
+      "vertexInputs": {"vPosition": "vec4", "vTPosition": "vec4", "vCenter": "vec4", "vColor": "vec4"},
+      "uniforms": {"uMVPMatrix": "mat4", "chloroplastTexture": "sampler2D"},
+      "samplers": {"chloroplastTexture": "small-dots"}
+    },
+    {
+      "name": "pixel_text",
+      "vertexInputs": {"aRect": "vec4", "aGlyph": "float", "aColor": "vec4"},
+      "uniforms": {"uMVPMatrix": "mat4", "uGlyphAtlas": "sampler2D"},
+      "samplers": {"uGlyphAtlas": "generated-glyph-atlas"}
+    },
+    {
+      "name": "secrocyte",
+      "vertexInputs": {"vPosition": "vec4", "vTPosition": "vec4", "vCenter": "vec4", "vColor": "vec4"},
+      "uniforms": {"uMVPMatrix": "mat4"},
+      "samplers": {}
+    },
+    {
+      "name": "senseocyte_outline",
+      "vertexInputs": {"vPosition": "vec4", "vColor": "vec4", "vTPosition": "vec4", "vCenter": "vec4"},
+      "uniforms": {"uMVPMatrix": "mat4"},
+      "samplers": {}
+    },
+    {
+      "name": "solid_color",
+      "vertexInputs": {"aPosition": "vec2"},
+      "uniforms": {"uMVPMatrix": "mat4", "uColor": "vec4"},
+      "samplers": {}
+    },
+    {
+      "name": "stemocyte",
+      "vertexInputs": {"vPosition": "vec4", "vTPosition": "vec4", "vCenter": "vec4", "vColor": "vec4"},
+      "uniforms": {"uMVPMatrix": "mat4"},
+      "samplers": {}
+    },
+    {
+      "name": "stereocyte_outline",
+      "vertexInputs": {"vPosition": "vec4", "vColor": "vec4", "vTPosition": "vec4", "vCenter": "vec4"},
+      "uniforms": {"uMVPMatrix": "mat4"},
+      "samplers": {}
+    },
+    {
+      "name": "virocyte_outline",
+      "vertexInputs": {"vPosition": "vec4", "vColor": "vec4", "vTPosition": "vec4", "vCenter": "vec4"},
+      "uniforms": {"uMVPMatrix": "mat4"},
+      "samplers": {}
+    }
+  ],
+  "uniformSemantics": {
+    "uMVPMatrix": "Current world-to-clip presentation matrix; pixel text uses its screen-space orthographic matrix",
+    "uRadius": "Current environment or preview dish radius",
+    "uDirection": "vec4(cos(lightAngle), sin(lightAngle), lightRange, lightIntensity)",
+    "uBackgroundColor": "Current presentation background RGB",
+    "uInnerRadiusSquared": "Squared inner/outer radius ratio; zero for circular dishes",
+    "tex1": "Texture unit 0; concrete texture is selected by the program sampler map",
+    "uField": "vec4(fieldType, base, strength, angle)",
+    "uFieldExtra": "vec4(offset, softness, 0, 0)",
+    "uDisplayRange": "vec4(displayMinimum, displayMaximum, 0, 0)",
+    "uWorldRadius": "Genome preview collision-grid world radius",
+    "uGridSize": "Genome preview collision-grid cell size",
+    "chloroplastTexture": "Texture unit 0 with the small-dots texture",
+    "uGlyphAtlas": "Texture unit 0 with the generated R8 glyph atlas",
+    "uColor": "Per-call solid-color RGBA"
+  },
+  "textures": {
+    "small-dots": {"source": "textures/small_dots.png", "minFilter": "nearest", "magFilter": "linear", "wrap": "repeat"},
+    "gauss-bessel-integral": {"source": "textures/gauss_bessel_integral.png", "minFilter": "nearest", "magFilter": "linear", "wrap": "clamp-to-edge"},
+    "generated-glyph-atlas": {"source": "generated-r8-5x7-atlas", "minFilter": "nearest", "magFilter": "nearest", "wrap": "clamp-to-edge"}
+  },
+  "bufferLayouts": {
+    "cell-indexed": [
+      {"input": "vPosition", "source": "PreparedRenderFrame.cellTriangleCoords", "type": "float32", "components": 2, "strideBytes": 8, "rate": "vertex"},
+      {"input": "vTPosition", "source": "PreparedRenderFrame.cellTextureCoords", "type": "float32", "components": 4, "strideBytes": 16, "rate": "vertex"},
+      {"input": "vCenter", "source": "PreparedRenderFrame.cellCenterCoords", "type": "float32", "components": 2, "strideBytes": 8, "rate": "vertex"},
+      {"input": "vColor", "source": "PreparedRenderFrame.cellColors", "type": "float32", "components": 4, "strideBytes": 16, "rate": "vertex"},
+      {"input": "index", "source": "PreparedRenderFrame.cellIndices", "type": "uint16", "components": 1, "strideBytes": 2, "rate": "index"}
+    ],
+    "cell-outline": [
+      {"input": "vPosition", "source": "PreparedRenderFrame.cellTriangleCoords", "type": "float32", "components": 2, "strideBytes": 8, "rate": "vertex"},
+      {"input": "vTPosition", "source": "PreparedRenderFrame.cellTextureCoords", "type": "float32", "components": 4, "strideBytes": 16, "rate": "vertex"},
+      {"input": "vCenter", "source": "PreparedRenderFrame.cellCenterCoords", "type": "float32", "components": 4, "strideBytes": 16, "rate": "vertex"},
+      {"input": "vColor", "source": "PreparedRenderFrame.cellColors", "type": "float32", "components": 4, "strideBytes": 16, "rate": "vertex"}
+    ],
+    "food-instanced": [
+      {"input": "vPosition", "source": "static-unit-quad", "type": "float32", "components": 2, "strideBytes": 8, "rate": "vertex"},
+      {"input": "vInstance", "source": "PreparedRenderFrame.foodInstanceAttributes", "type": "float32", "components": 4, "strideBytes": 16, "rate": "instance"},
+      {"input": "color", "source": "PreparedRenderFrame.foodVertexAttributes", "type": "float32", "components": 4, "strideBytes": 16, "rate": "instance"}
+    ],
+    "dead-instanced": [
+      {"input": "vPosition", "source": "static-unit-quad", "type": "float32", "components": 2, "strideBytes": 8, "rate": "vertex"},
+      {"input": "vInstance", "source": "PreparedRenderFrame.deadCellInstanceAttributes", "type": "float32", "components": 4, "strideBytes": 16, "rate": "instance"},
+      {"input": "vColor", "source": "PreparedRenderFrame.deadCellVertexAttributes", "type": "float32", "components": 4, "strideBytes": 16, "rate": "instance"}
+    ],
+    "links": [
+      {"input": "vLinkVertex", "source": "PreparedRenderFrame.linkTriangleCoords", "type": "float32", "components": 4, "strideBytes": 16, "rate": "vertex"},
+      {"input": "vLinkPatternPosition", "source": "PreparedRenderFrame.linkTextureCoords", "type": "float32", "components": 1, "strideBytes": 4, "rate": "vertex"}
+    ],
+    "pixel-text-instanced": [
+      {"input": "aRect", "source": "PixelTextRenderer.packedInstances", "type": "float32", "components": 4, "strideBytes": 36, "offsetBytes": 0, "rate": "instance"},
+      {"input": "aGlyph", "source": "PixelTextRenderer.packedInstances", "type": "float32", "components": 1, "strideBytes": 36, "offsetBytes": 16, "rate": "instance"},
+      {"input": "aColor", "source": "PixelTextRenderer.packedInstances", "type": "float32", "components": 4, "strideBytes": 36, "offsetBytes": 20, "rate": "instance"}
+    ],
+    "cpu-position-2f": [
+      {"input": "aPosition", "source": "pass-local-triangle-list", "type": "float32", "components": 2, "strideBytes": 8, "rate": "vertex"}
+    ],
+    "marker-cpu": [
+      {"input": "vPosition", "source": "static-marker-quad", "type": "float32", "components": 2, "strideBytes": 8, "rate": "vertex"},
+      {"input": "vCenter", "source": "six-repeated-marker-records", "type": "float32", "components": 4, "strideBytes": 16, "rate": "vertex"}
+    ]
+  },
+  "passes": {
+    "microscope-background": {"programs": ["background"], "primitive": "triangles", "layout": "cpu-position-2f", "state": {"blend": "disabled", "depthTest": false, "depthCompare": "less", "depthWrite": false}},
+    "markers": {"programs": ["marker"], "primitive": "triangles", "layout": "marker-cpu", "state": {"blend": "src-alpha/one-minus-src-alpha", "depthTest": false, "depthCompare": "less", "depthWrite": false}},
+    "foods": {"programs": ["food"], "primitive": "triangles-instanced", "layout": "food-instanced", "state": {"blend": "src-alpha/one-minus-src-alpha", "depthTest": false, "depthCompare": "less", "depthWrite": false}},
+    "links": {"programs": ["link"], "primitive": "triangles", "layout": "links", "state": {"blend": "src-alpha/one-minus-src-alpha", "depthTest": false, "depthCompare": "less", "depthWrite": false}},
+    "microscope-dead-splashes": {"programs": ["dead"], "primitive": "triangles-instanced", "layout": "dead-instanced", "state": {"blend": "src-alpha/one-minus-src-alpha", "depthTest": true, "depthCompare": "always", "depthWrite": false}},
+    "microscope-cells": {"programs": ["phagocyte", "photocyte", "lipocyte", "keratinocyte", "buoyocyte", "myocyte", "neurocyte", "secrocyte", "stemocyte", "gamete"], "primitive": "indexed-triangles", "layout": "cell-indexed", "state": {"blend": "src-alpha/one-minus-src-alpha", "depthTest": true, "depthCompare": "always", "depthWrite": true}},
+    "microscope-outlines": {"programs": ["flagellocyte_outline", "devorocyte_outline", "glueocyte_outline", "virocyte_outline", "nitrocyte_outline", "stereocyte_outline", "senseocyte_outline", "ciliocyte_outline"], "primitive": "triangles", "layout": "cell-outline", "state": {"blend": "src-alpha/one-minus-src-alpha", "depthTest": true, "depthCompare": "less", "depthWrite": false}},
+    "performance-hud": {"programs": ["pixel_text"], "primitive": "triangles-instanced", "layout": "pixel-text-instanced", "state": {"blend": "src-alpha/one-minus-src-alpha", "depthTest": false, "depthCompare": "less", "depthWrite": false}},
+    "genome-grid": {"programs": ["genome_grid"], "primitive": "triangles", "layout": "cpu-position-2f", "state": {"blend": "disabled", "depthTest": false, "depthCompare": "less", "depthWrite": false}},
+    "genome-tree-links": {"programs": ["solid_color"], "primitive": "triangles", "layout": "cpu-position-2f", "state": {"blend": "src-alpha/one-minus-src-alpha", "depthTest": false, "depthCompare": "less", "depthWrite": true}},
+    "preview-dead-splashes": {"programs": ["dead"], "primitive": "triangles-instanced", "layout": "dead-instanced", "state": {"blend": "src-alpha/one-minus-src-alpha", "depthTest": false, "depthCompare": "always", "depthWrite": false}},
+    "preview-cells": {"programs": ["phagocyte", "photocyte", "lipocyte", "keratinocyte", "buoyocyte", "myocyte", "neurocyte", "secrocyte", "stemocyte", "gamete"], "primitive": "indexed-triangles", "layout": "cell-indexed", "state": {"blend": "disabled", "depthTest": true, "depthCompare": "always", "depthWrite": true}},
+    "preview-arrows": {"programs": ["arrow"], "primitive": "indexed-triangles", "layout": "cell-indexed", "state": {"blend": "src-alpha/one-minus-src-alpha", "depthTest": true, "depthCompare": "always", "depthWrite": true}},
+    "preview-links": {"programs": ["link"], "primitive": "triangles", "layout": "links", "state": {"blend": "src-alpha/one-minus-src-alpha", "depthTest": true, "depthCompare": "always", "depthWrite": true}},
+    "preview-outlines": {"programs": ["flagellocyte_outline", "devorocyte_outline", "glueocyte_outline", "virocyte_outline", "nitrocyte_outline", "stereocyte_outline", "senseocyte_outline", "ciliocyte_outline"], "primitive": "triangles", "layout": "cell-outline", "state": {"blend": "src-alpha/one-minus-src-alpha", "depthTest": true, "depthCompare": "less", "depthWrite": false}},
+    "environment-background": {"programs": ["background"], "primitive": "triangles", "layout": "cpu-position-2f", "state": {"blend": "inherited", "depthTest": false, "depthCompare": "less", "depthWrite": true}, "stateDependency": "The first frame normally inherits disabled blending; each completed environment preview leaves alpha blending enabled for the next frame."},
+    "environment-density-field": {"programs": ["density_field"], "primitive": "triangles", "layout": "cpu-position-2f", "state": {"blend": "src-alpha/one-minus-src-alpha", "depthTest": false, "depthCompare": "less", "depthWrite": false}},
+    "environment-direction-arrows": {"programs": ["solid_color"], "primitive": "triangles", "layout": "cpu-position-2f", "state": {"blend": "src-alpha/one-minus-src-alpha", "depthTest": false, "depthCompare": "less", "depthWrite": false}},
+    "environment-direction-marker": {"programs": ["marker"], "primitive": "triangles", "layout": "marker-cpu", "state": {"blend": "src-alpha/one-minus-src-alpha", "depthTest": false, "depthCompare": "less", "depthWrite": false}}
+  },
+  "scenarios": [
+    {
+      "name": "microscope",
+      "target": {"framebuffer": "caller-current", "viewport": "0,0,surfaceWidth,surfaceHeight", "color": "surface-format", "depth": "surface-depth"},
+      "clear": {"rgba": [0.31372549019, 0.31372549019, 0.31372549019, 1.0], "color": true, "depth": true},
+      "orderedPasses": [
+        {"pass": "microscope-background"},
+        {"pass": "markers", "when": "markers-present"},
+        {"pass": "foods"},
+        {"pass": "links"},
+        {"pass": "microscope-dead-splashes"},
+        {"pass": "microscope-cells"},
+        {"pass": "microscope-outlines"},
+        {"pass": "performance-hud", "when": "hud-enabled"}
+      ]
+    },
+    {
+      "name": "genome-preview",
+      "target": {"framebuffer": "caller-current", "viewport": "0,0,surfaceWidth,surfaceHeight", "color": "surface-format", "depth": "surface-depth"},
+      "clear": {"rgba": [0.12549019608, 0.12549019608, 0.12549019608, 0.0], "transparentVariantRgba": [0.0, 0.0, 0.0, 0.0], "color": true, "depth": true},
+      "orderedPasses": [
+        {"pass": "genome-grid", "when": "grid-enabled"},
+        {"pass": "genome-tree-links", "when": "tree-mode"},
+        {"group": ["preview-dead-splashes", "preview-cells", "preview-links", "preview-outlines"], "when": "ghost-enabled"},
+        {"pass": "markers", "when": "selection-present"},
+        {"pass": "preview-dead-splashes"},
+        {"pass": "preview-cells"},
+        {"pass": "preview-arrows", "when": "direction-arrows-enabled"},
+        {"pass": "preview-links", "when": "links-enabled"},
+        {"pass": "preview-outlines"}
+      ]
+    },
+    {
+      "name": "environment-field-preview",
+      "target": {"framebuffer": "caller-current", "viewport": "0,0,surfaceWidth,surfaceHeight", "color": "surface-format", "depth": "surface-depth"},
+      "clear": {"rgba": [0.10196078431, 0.10980392157, 0.12156862745, 1.0], "color": true, "depth": true},
+      "orderedPasses": [
+        {"pass": "environment-background"},
+        {"pass": "environment-density-field", "when": "scalar-field"},
+        {"pass": "environment-direction-arrows", "when": "direction-arrows-required"},
+        {"pass": "environment-direction-marker", "when": "radial-center-marker-required"}
+      ]
+    },
+    {
+      "name": "saved-file-preview",
+      "target": {"framebuffer": "owned-offscreen", "viewport": "0,0,512,512", "color": "rgba8", "depth": "depth-component16", "readback": "top-left-rgba8"},
+      "variants": {
+        "substrate": {
+          "clear": "microscope",
+          "orderedPasses": [
+            {"pass": "microscope-background"},
+            {"pass": "markers", "when": "selection-present"},
+            {"pass": "foods"},
+            {"pass": "links"},
+            {"pass": "microscope-dead-splashes"},
+            {"pass": "microscope-cells"},
+            {"pass": "microscope-outlines"}
+          ]
+        },
+        "genome": {
+          "clearRgba": [0.0, 0.0, 0.0, 0.0],
+          "orderedPasses": [
+            {"pass": "preview-dead-splashes"},
+            {"pass": "preview-cells"},
+            {"pass": "preview-arrows", "when": "direction-arrows-present"},
+            {"pass": "preview-links"},
+            {"pass": "preview-outlines"}
+          ]
+        }
+      },
+      "restore": ["framebuffer", "viewport", "pack-alignment"]
+    }
+  ]
+}

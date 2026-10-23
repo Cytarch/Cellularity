@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <string name="common_ok_action">확인</string>
+
+    <string name="common_discard_action">파기</string>
+
+    <string name="common_cancel_action">취소</string>
+
+    <string name="common_start_action">시작</string>
+
+    <string name="common_cancel_button_label">취소</string>
+
+    <string name="common_invalid_number_message">숫자를 입력하세요</string>
+
+    <string name="common_back_action">뒤로</string>
+
+    <string name="common_edit_action">편집</string>
+
+    <string name="common_export_action">내보내기</string>
+
+    <string name="common_reset_action">초기화</string>
+
+    <string name="common_search_action">검색</string>
+
+    <string name="common_edit_value_precisely_action">정확한 값 편집</string>
+
+</resources>

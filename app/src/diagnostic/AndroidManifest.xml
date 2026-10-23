@@ -1,0 +1,17 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <application>
+        <receiver
+            android:name="com.cytarch.cellularity.debug.DebugRenderBackendReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="com.cytarch.cellularity.debug.SET_RENDER_BACKEND" />
+                <action android:name="com.cytarch.cellularity.debug.DUMP_RENDER_DIAGNOSTICS" />
+                <action android:name="com.cytarch.cellularity.debug.START_RENDER_PROFILE" />
+                <action android:name="com.cytarch.cellularity.debug.STOP_RENDER_PROFILE" />
+                <action android:name="com.cytarch.cellularity.debug.RESET_RENDER_PROFILE" />
+            </intent-filter>
+        </receiver>
+    </application>
+
+</manifest>

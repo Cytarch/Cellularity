@@ -1,0 +1,126 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <string name="mutation_weights_title">Mutation weights</string>
+
+    <string name="mutation_weights_summary_format">%1$d enabled, total weight %2$s</string>
+
+    <string name="mutation_weights_editor_summary_format">%1$d enabled, total %2$s</string>
+
+    <string name="mutation_weight_details_format">%1$s weight, %2$s%</string>
+
+    <string name="mutation_weight_numbered_label_format">%1$s %2$d</string>
+
+    <string name="mutation_weight_parametric_label_format">%1$s — %2$s</string>
+
+    <string name="mutation_weight_cell_color_hue">Cell color hue</string>
+
+    <string name="mutation_weight_cell_color_saturation">Cell color saturation</string>
+
+    <string name="mutation_weight_cell_color_value">Cell color value</string>
+
+    <string name="mutation_weight_split_angle">Split angle</string>
+
+    <string name="mutation_weight_child_1_angle">Child 1 angle</string>
+
+    <string name="mutation_weight_child_2_angle">Child 2 angle</string>
+
+    <string name="mutation_weight_mass_flow_priority">Mass flow priority</string>
+
+    <string name="mutation_weight_split_mass">Split mass</string>
+
+    <string name="mutation_weight_split_ratio">Split ratio</string>
+
+    <string name="mutation_weight_adhesin_stiffness">Adhesin stiffness</string>
+
+    <string name="mutation_weight_child_1_gene">Child 1 gene</string>
+
+    <string name="mutation_weight_child_2_gene">Child 2 gene</string>
+
+    <string name="mutation_weight_produce_adhesin">Produce adhesin</string>
+
+    <string name="mutation_weight_child_1_keep_adhesin_connections">Child 1 keeps adhesin connections</string>
+
+    <string name="mutation_weight_child_2_keep_adhesin_connections">Child 2 keeps adhesin connections</string>
+
+    <string name="mutation_weight_prioritize_survival">Prioritize survival</string>
+
+    <string name="mutation_weight_child_1_mirror">Mirror child 1</string>
+
+    <string name="mutation_weight_child_2_mirror">Mirror child 2</string>
+
+    <string name="mutation_weight_cell_type">Cell type</string>
+
+    <string name="mutation_weight_parametric_swim_force">Swim force</string>
+
+    <string name="mutation_weight_parametric_cell_density">Cell density</string>
+
+    <string name="mutation_weight_parametric_myocyte_bending">Myocyte bending</string>
+
+    <string name="mutation_weight_parametric_myocyte_contraction">Myocyte contraction</string>
+
+    <string name="mutation_weight_parametric_myocyte_lifting">Myocyte lifting</string>
+
+    <string name="mutation_weight_parametric_stem_threshold_1">Stem threshold 1</string>
+
+    <string name="mutation_weight_parametric_stem_threshold_2">Stem threshold 2</string>
+
+    <string name="mutation_weight_parametric_signal_output">Signal output</string>
+
+    <string name="mutation_weight_parametric_variable_a">Variable A</string>
+
+    <string name="mutation_weight_parametric_variable_b">Variable B</string>
+
+    <string name="mutation_weight_parametric_variable_c">Variable C</string>
+
+    <string name="mutation_weight_parametric_signal_channel">Signal channel</string>
+
+    <string name="mutation_weight_parametric_formula_type">Formula type</string>
+
+    <string name="mutation_weight_virus_source_gene">Virus source gene</string>
+
+    <string name="mutation_weight_virus_target_gene">Virus target gene</string>
+
+    <string name="mutation_weight_sense_output_channel">Sense output channel</string>
+
+    <string name="mutation_weight_sense_type">Sense type</string>
+
+    <string name="mutation_weight_secretion_type">Secretion type</string>
+
+    <string name="mutation_weight_signal_output_channel">Signal output channel</string>
+
+    <string name="mutation_weight_maximum_adhesin_connections">Maximum adhesin connections</string>
+
+    <string name="mutation_weight_telomeres_after_fertilization">Telomeres after fertilization</string>
+
+    <string name="mutation_weight_sense_amplitude">Sense amplitude</string>
+
+    <string name="mutation_weight_sense_color_hue">Sense color hue</string>
+
+    <string name="mutation_weight_sense_color_saturation">Sense color saturation</string>
+
+    <string name="mutation_weight_sense_color_value">Sense color value</string>
+
+    <string name="mutation_weight_sense_threshold">Sense threshold</string>
+
+    <string name="mutation_weight_adhesin_length">Adhesin length</string>
+
+    <string name="mutation_weight_cytoskeleton">Cytoskeleton</string>
+
+    <string name="mutation_weight_duplicate_child_gene">Duplicate child gene</string>
+
+    <string name="mutation_weight_insert_linked_child_gene">Insert linked child gene</string>
+
+    <string name="mutation_weight_split_child_edge">Split child edge</string>
+
+    <string name="mutation_weight_bypass_child_gene">Bypass child gene</string>
+
+    <string name="mutation_weight_local_edge_retarget">Retarget local edge</string>
+
+    <string name="mutation_weight_clone_parent_gene">Clone parent gene</string>
+
+    <string name="mutation_weight_add_gene">Add gene</string>
+
+    <string name="mutation_weight_delete_gene">Delete gene</string>
+
+</resources>

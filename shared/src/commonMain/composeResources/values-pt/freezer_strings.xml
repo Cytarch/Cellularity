@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="freezer_dish_shape_label">Forma da placa</string>
+    <string name="freezer_dish_shape_circle">Círculo</string>
+    <string name="freezer_dish_shape_ring">Anel</string>
+    <string name="freezer_inner_diameter_label">Diâmetro do orifício [mm]:</string>
+    <string name="freezer_ring_dimensions_hint">O diâmetro do orifício e a largura do anel devem superar %1$s mm.</string>
+
+    <string name="freezer_new_plate_action">Nova placa</string>
+
+    <string name="freezer_relabel_sample_action">Renomeie sua amostra</string>
+
+    <string name="freezer_advanced_settings_title">Configurações avançadas</string>
+
+    <string name="freezer_new_plate_summary">Iniciar com as configurações padrão</string>
+
+    <string name="freezer_search_placeholder">Pesquisar experimentos</string>
+    <string name="freezer_sort_name">Nome</string>
+    <string name="freezer_sort_created">Criação</string>
+    <string name="freezer_sort_age">Idade</string>
+    <string name="freezer_sort_cell_count">Células</string>
+    <string name="freezer_sort_maximum_cell_count">Limite de células</string>
+    <string name="freezer_sort_food_count">Alimento</string>
+    <string name="freezer_sort_maximum_food_count">Limite de alimento</string>
+    <string name="freezer_sort_food_mass">Massa de alimento</string>
+    <string name="freezer_sort_dish_size">Tamanho da placa</string>
+    <string name="freezer_no_search_results">Nenhum experimento encontrado</string>
+    <string name="freezer_newer_version_short_status">É necessária uma versão mais recente</string>
+    <string name="freezer_delete_dialog_title">Excluir experimento?</string>
+    <string name="freezer_delete_dialog_message">“%1$s” será excluído permanentemente.</string>
+
+    <string name="freezer_card_cells_label">Células</string>
+    <string name="freezer_card_food_label">Alimento</string>
+    <string name="freezer_card_mass_label">Massa</string>
+    <string name="freezer_card_dish_label">Placa</string>
+    <string name="freezer_card_dish_diameter_format">Ø %1$s mm</string>
+    <string name="freezer_card_created_content_description">Criação: %1$s</string>
+    <string name="freezer_card_age_content_description">Idade: %1$s</string>
+    <string name="freezer_card_dish_content_description">Diâmetro da placa: %1$s</string>
+
+    <string name="freezer_read_error_message">Não foi possível ler este substrato.</string>
+
+    <string name="freezer_memory_estimate_format">≈ %1$d MB</string>
+
+    <string name="freezer_advanced_settings_warning">Estas configurações são destinadas ao uso avançado. Valores incorretos podem causar uma falha ou deixar o Cellularity extremamente lento.</string>
+
+    <string name="freezer_advanced_settings_maximum_cell_count_label">Número máximo de células:</string>
+
+    <string name="freezer_advanced_settings_maximum_nutrient_count_label">Número máximo de nutrientes:</string>
+
+    <string name="freezer_advanced_settings_petri_dish_diameter_label">Diâmetro da placa de Petri [mm]:</string>
+
+    <string name="freezer_import_name_already_exists_message">Já existe uma etiqueta com esse nome no congelador. Escolha outro nome.</string>
+    <string name="freezer_save_name_already_exists_message">Já existe uma etiqueta com esse nome no congelador. Escolha outro nome.</string>
+
+</resources>

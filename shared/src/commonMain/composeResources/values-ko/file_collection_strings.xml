@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <string name="file_collection_newer_version_message">이 파일은 더 최신 버전의 Cellularity에서 생성되었습니다. 앱을 업데이트하세요.</string>
+
+    <string name="file_collection_invalid_name_message">올바르지 않은 파일 이름입니다.</string>
+
+    <string name="file_collection_substrate_name_already_exists_message">같은 이름의 기질이 이미 있습니다.</string>
+
+    <string name="file_collection_genome_name_already_exists_message">같은 이름의 유전체가 이미 있습니다.</string>
+
+    <string name="file_collection_file_too_large_message">파일이 너무 큽니다.</string>
+
+    <string name="file_collection_operation_failed_message">파일 작업을 완료할 수 없습니다.</string>
+
+    <string name="file_collection_no_share_target_message">사용 가능한 호환 앱이 없습니다.</string>
+
+    <string name="file_collection_share_content_description">%1$s 공유</string>
+
+    <string name="file_collection_rename_content_description">%1$s 이름 변경</string>
+
+    <string name="file_collection_delete_content_description">%1$s 삭제</string>
+
+    <string name="file_collection_more_actions_content_description">%1$s 추가 작업</string>
+
+    <string name="file_collection_share_action">공유</string>
+    <string name="file_collection_rename_action">이름 변경</string>
+    <string name="file_collection_delete_action">삭제</string>
+    <string name="file_collection_clear_search_content_description">검색 지우기</string>
+    <string name="file_collection_clear_search_action">검색 지우기</string>
+    <string name="file_collection_switch_to_grid_view_content_description">그리드 보기로 전환</string>
+    <string name="file_collection_switch_to_list_view_content_description">목록 보기로 전환</string>
+    <string name="file_collection_sort_ascending">오름차순</string>
+    <string name="file_collection_sort_descending">내림차순</string>
+
+    <string name="file_operation_saved_message">저장됨</string>
+    <string name="file_operation_invalid_name_message">잘못된 이름입니다. 비어 있지 않고 슬래시가 없는 이름을 입력하세요.</string>
+    <string name="file_operation_newer_version_message">이 파일은 더 최신 버전의 Cellularity에서 생성되었습니다. 앱을 업데이트하세요.</string>
+    <string name="file_operation_load_failed_message">이 파일을 불러오지 못했습니다.</string>
+    <string name="file_operation_save_failed_message">이 파일을 저장하지 못했습니다.</string>
+    <string name="file_operation_size_limit_exceeded_message">파일이 2 GiB 안전 제한을 초과합니다.</string>
+
+</resources>

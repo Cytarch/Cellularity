@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <string name="common_ok_action">Aceptar</string>
+
+    <string name="common_discard_action">Descartar</string>
+
+    <string name="common_cancel_action">Cancelar</string>
+
+    <string name="common_start_action">Iniciar</string>
+
+    <string name="common_cancel_button_label">Cancelar</string>
+
+    <string name="common_invalid_number_message">Introduce un número</string>
+
+    <string name="common_back_action">Atrás</string>
+
+    <string name="common_edit_action">Editar</string>
+
+    <string name="common_export_action">Exportar</string>
+
+    <string name="common_reset_action">Restablecer</string>
+
+    <string name="common_search_action">Buscar</string>
+
+    <string name="common_edit_value_precisely_action">Editar valor con precisión</string>
+
+</resources>

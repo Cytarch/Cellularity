@@ -1,0 +1,191 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <string name="genome_editor_secretion_label">분비</string>
+
+    <string name="genome_editor_sense_type_label">감지 유형</string>
+
+    <string name="genome_editor_compatible_mode_label">호환 모드</string>
+
+    <string name="genome_editor_mode_after_fertilization_label">수정 후 모드</string>
+
+    <string name="genome_editor_load_dialog_title">불러오기</string>
+    <string name="genome_editor_gene_mode_prefix">M</string>
+    <string name="genome_editor_genome_loaded_message">새 유전체를 불러왔습니다.</string>
+    <string name="genome_editor_load_from_microscope_action">현미경에서 불러오기</string>
+    <string name="genome_editor_save_action">저장</string>
+    <string name="genome_editor_load_action">불러오기</string>
+    <string name="genome_editor_produce_adhesin_label">어드헤신 생성</string>
+    <string name="genome_editor_divide_label">분열</string>
+    <string name="genome_editor_prioritize_survival_label">생존 우선</string>
+    <string name="genome_editor_cell_type_label">세포 유형:</string>
+    <string name="genome_editor_initial_gene_label">초기 유전자</string>
+    <string name="genome_editor_child_1_gene_label">자식 1:</string>
+    <string name="genome_editor_keep_adhesin_connections_label">어드헤신 연결 유지</string>
+    <string name="genome_editor_mirror_label">반전</string>
+    <string name="genome_editor_child_2_gene_label">자식 2:</string>
+    <string name="genome_editor_split_mass_label">분열 질량:</string>
+    <string name="genome_editor_split_ratio_label">분열 비율:</string>
+    <string name="genome_editor_mass_flow_priority_label">질량 흐름 우선도:</string>
+    <string name="genome_editor_snap_values_label">값 맞춤</string>
+    <string name="genome_editor_split_angle_label">분열 각도:</string>
+    <string name="genome_editor_child_1_angle_label">자식 1 각도:</string>
+    <string name="genome_editor_child_2_angle_label">자식 2 각도:</string>
+    <string name="genome_editor_adhesin_stiffness_label">어드헤신 강성:</string>
+    <string name="genome_editor_density_label">밀도</string>
+    <string name="genome_editor_swim_force_label">유영력</string>
+    <string name="genome_editor_virus_source_gene_label">바이러스 원본 유전자</string>
+    <string name="genome_editor_virus_target_gene_label">바이러스 대상 유전자</string>
+    <string name="genome_editor_stem_path_2_signal_label">2번 경로 신호</string>
+    <string name="genome_editor_stem_path_2_mode_label">세포분화 2번 경로 모드</string>
+    <string name="genome_editor_stem_path_1_signal_label">1번 경로 신호</string>
+    <string name="genome_editor_stem_path_1_mode_label">세포분화 1번 경로 모드</string>
+    <string name="genome_editor_output_channel_label">신호 출력 채널</string>
+    <string name="genome_editor_output_amount_label">출력량</string>
+    <string name="genome_editor_sense_red_label">빨강</string>
+    <string name="genome_editor_sense_green_label">초록</string>
+    <string name="genome_editor_sense_blue_label">파랑</string>
+    <string name="genome_editor_sense_color_threshold_label">색상 임계값</string>
+    <string name="genome_editor_oscillator_preset_action">발진기 사전 설정…</string>
+    <string name="genome_editor_save_dialog_title">유전체 이름 지정</string>
+    <string name="genome_editor_save_dialog_description">유전체를 저장하면 다른 도전에서 다시 사용하거나 친구에게 보낼 수 있습니다.</string>
+    <string name="genome_editor_save_dialog_action">저장</string>
+    <string name="genome_editor_cell_state_dependence_dialog_title">세포 상태 의존성</string>
+    <string name="genome_editor_value_dialog_linear_formula">a × 입력 + b</string>
+    <string name="genome_editor_value_dialog_heaviside_formula"><![CDATA[a, 입력 < c인 경우\nb, 입력 ≥ c인 경우]]></string>
+    <string name="genome_editor_value_dialog_value_label">값</string>
+    <string name="genome_editor_value_dialog_variable_a_label">a</string>
+    <string name="genome_editor_value_dialog_variable_b_label">b</string>
+    <string name="genome_editor_value_dialog_variable_c_label">c</string>
+    <string name="genome_editor_oscillator_preset_title">발진기 사전 설정</string>
+    <string name="genome_editor_oscillator_preset_description">이 사전 설정은 두 신호 물질의 농도가 진동하도록 네 개의 출력 채널을 구성합니다.</string>
+    <string name="genome_editor_oscillator_preset_adhesin_connections_label">어드헤신 연결</string>
+    <string name="genome_editor_oscillator_preset_channel_pair_label">채널 쌍</string>
+    <string name="genome_editor_oscillator_preset_period_label">주기</string>
+    <string name="genome_editor_value_dialog_value_equals_label">값 =</string>
+    <string name="genome_editor_load_default_genome_action">기본 유전체 불러오기</string>
+    <string name="genome_editor_value_dialog_fixed_value_label">고정값:</string>
+    <string name="genome_editor_value_dialog_input_label">입력:</string>
+    <string name="genome_editor_value_dialog_use_cell_state_label">세포 상태 사용:</string>
+    <string-array name="genome_editor_cell_type_abbreviations">
+
+        <item name="cell_type_abbreviations0">섭식</item>
+
+
+
+
+        <item name="cell_type_abbreviations1">편모</item>
+
+
+
+
+        <item name="cell_type_abbreviations2">광합</item>
+
+
+
+
+        <item name="cell_type_abbreviations3">포식</item>
+
+
+
+
+        <item name="cell_type_abbreviations4">지방</item>
+
+
+
+
+        <item name="cell_type_abbreviations5">각질</item>
+
+
+
+
+        <item name="cell_type_abbreviations6">부유</item>
+
+
+
+
+        <item name="cell_type_abbreviations7">접착</item>
+
+
+
+
+        <item name="cell_type_abbreviations8">바이로</item>
+
+
+
+
+        <item name="cell_type_abbreviations9">질소</item>
+
+
+
+
+        <item name="cell_type_abbreviations10">조향</item>
+
+        <item name="cell_type_abbreviations11">감각</item>
+
+        <item name="cell_type_abbreviations12">근육</item>
+
+        <item name="cell_type_abbreviations13">신경</item>
+
+        <item name="cell_type_abbreviations14">분비</item>
+
+        <item name="cell_type_abbreviations15">줄기</item>
+
+        <item name="cell_type_abbreviations16">생식</item>
+
+        <item name="cell_type_abbreviations17">섬모</item>
+
+    </string-array>
+    <string name="genome_editor_value_dependency_nitrogen_reserve"><![CDATA[NH<sub><small>3</small></sub> 비축량 [0–1]]]></string>
+    <string name="genome_editor_value_dependency_adhesin_connection_number">어드헤신 연결 #</string>
+    <string name="genome_editor_value_dependency_cell_mass">세포 질량</string>
+    <string name="genome_editor_value_dependency_cell_age">세포 나이</string>
+    <string name="genome_editor_cytoskeleton_label">세포골격</string>
+    <string name="genome_editor_adhesin_length_label">어드헤신 길이</string>
+    <string name="genome_editor_maximum_adhesin_connections_label">최대 어드헤신 연결 수</string>
+    <string name="genome_editor_telomeres_after_fertilization_label">수정 후 텔로미어</string>
+    <string name="genome_editor_ciliocyte_left_movement_speed_label">왼쪽 이동 속도</string>
+    <string name="genome_editor_ciliocyte_right_movement_speed_label">오른쪽 이동 속도</string>
+    <string name="genome_editor_value_dialog_sine_formula">a × sin(입력 × x - b)</string>
+    <plurals name="genome_editor_validation_issue_count">
+        <item quantity="other">유전체에 잘못된 값이 %1$d개 있습니다. 미리보기와 저장에는 마지막 유효 상태를 사용합니다.</item>
+    </plurals>
+    <string name="genome_editor_no_specific_settings_message">세포별 설정이 없습니다</string>
+    <string name="genome_editor_no_specific_settings_for_cell_type_message">이 세포 유형에는 세포별 설정이 없습니다</string>
+    <string name="genome_editor_no_signal_settings_for_cell_type_message">이 세포 유형에는 신호 설정이 없습니다</string>
+    <string name="genome_editor_preview_settings_title">미리보기 설정</string>
+    <string name="genome_editor_preview_grid_option">격자</string>
+    <string name="genome_editor_preview_tree_option">트리</string>
+    <string name="genome_editor_preview_ghost_option">고스트</string>
+    <string name="genome_editor_preview_summary_format">%1$s %2$s 후 발달 · 세포 수: %3$d / %4$d</string>
+    <string name="genome_editor_tab_general">일반</string>
+    <string name="genome_editor_tab_splitting">분열</string>
+    <string name="genome_editor_tab_specific">세포별</string>
+    <string name="genome_editor_mode_title_format">%1$s%2$d</string>
+    <string name="genome_editor_load_default_to_mode_action_format">기본값을 %1$s%2$d에 불러오기</string>
+    <string name="genome_editor_copy_mode_action_format">%1$s%2$d을(를) %1$s%3$d에 복사</string>
+    <string name="genome_editor_add_gene_action">유전자 추가</string>
+    <string name="genome_editor_duplicate_gene_action_format">%1$s%2$d 복제</string>
+    <string name="genome_editor_move_gene_before_action">한 위치 앞으로 이동</string>
+    <string name="genome_editor_move_gene_after_action">한 위치 뒤로 이동</string>
+    <string name="genome_editor_delete_gene_full_action">유전자 삭제</string>
+    <string name="genome_editor_delete_gene_dialog_title">유전자 삭제</string>
+    <string name="genome_editor_delete_gene_replacement_label">참조를 다음으로 변경:</string>
+    <string name="genome_editor_color_label">색상:</string>
+    <string name="genome_editor_color_dialog_title">색상</string>
+    <string name="genome_editor_color_red_label">빨강</string>
+    <string name="genome_editor_color_green_label">초록</string>
+    <string name="genome_editor_color_blue_label">파랑</string>
+    <string name="genome_editor_unknown_formula_message">알 수 없는 수식</string>
+    <string name="genome_editor_numbered_label_format">%1$s %2$d</string>
+    <string name="genome_editor_oscillator_channel_pair_format">채널 %1$d 및 %2$d 진동</string>
+    <plurals name="genome_editor_adhesin_connection_count">
+        <item quantity="other">어드헤신 연결 %1$d개</item>
+    </plurals>
+    <string name="genome_editor_label_with_unit_format">%1$s (%2$s)</string>
+    <string name="genome_editor_value_with_unit_format">%1$s %2$s</string>
+    <string name="genome_editor_signal_name_format">%1$s%2$d</string>
+    <string name="genome_editor_signed_signal_name_format">%1$s%2$s%3$d</string>
+    <string name="genome_editor_gene_with_type_format">%1$s%2$d %3$s</string>
+
+</resources>

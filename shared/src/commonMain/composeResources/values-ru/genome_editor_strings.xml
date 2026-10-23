@@ -1,0 +1,178 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <string name="genome_editor_secretion_label">Секреция</string>
+
+    <string name="genome_editor_sense_type_label">Тип сенсора</string>
+
+    <string name="genome_editor_compatible_mode_label">Режим совместимости</string>
+
+    <string name="genome_editor_mode_after_fertilization_label">Режим после оплодотворения</string>
+
+    <string name="genome_editor_load_dialog_title">Загрузить</string>
+    <string name="genome_editor_gene_mode_prefix">M</string>
+    <string-array name="genome_editor_cell_type_abbreviations">
+        <item>Фг</item>
+
+
+
+        <item>Жг</item>
+
+
+
+        <item>Фт</item>
+
+
+
+        <item>Дв</item>
+
+
+
+        <item>Лп</item>
+
+
+
+        <item>Кт</item>
+
+
+
+        <item>Бу</item>
+
+
+
+        <item>Кй</item>
+
+
+
+        <item>Вр</item>
+
+
+
+        <item>Ни</item>
+
+
+
+        <item>Ср</item>
+        <item>Сн</item>
+        <item>Ми</item>
+        <item>Нй</item>
+        <item>Ск</item>
+        <item>Св</item>
+        <item>Гм</item>
+        <item>Цл</item>
+    </string-array>
+    <string name="genome_editor_genome_loaded_message">Новый геном загружен</string>
+    <string name="genome_editor_load_from_microscope_action">Загрузить из микроскопа</string>
+    <string name="genome_editor_save_action">Сохранить</string>
+    <string name="genome_editor_load_action">Загрузить</string>
+    <string name="genome_editor_produce_adhesin_label">Производить адгезин</string>
+    <string name="genome_editor_divide_label">Делиться</string>
+    <string name="genome_editor_prioritize_survival_label">Приоритет выживания</string>
+    <string name="genome_editor_cell_type_label">Тип клетки:</string>
+    <string name="genome_editor_initial_gene_label">Начальный ген</string>
+    <string name="genome_editor_child_1_gene_label">Потомок 1:</string>
+    <string name="genome_editor_keep_adhesin_connections_label">Сохранять адгезиновые соединения</string>
+    <string name="genome_editor_mirror_label">Отразить зеркально</string>
+    <string name="genome_editor_child_2_gene_label">Потомок 2:</string>
+    <string name="genome_editor_split_mass_label">Масса деления:</string>
+    <string name="genome_editor_split_ratio_label">Пропорция деления:</string>
+    <string name="genome_editor_mass_flow_priority_label">Приоритет потока массы:</string>
+    <string name="genome_editor_snap_values_label">Округлять значения</string>
+    <string name="genome_editor_split_angle_label">Угол деления:</string>
+    <string name="genome_editor_child_1_angle_label">Угол первого потомка:</string>
+    <string name="genome_editor_child_2_angle_label">Угол второго потомка:</string>
+    <string name="genome_editor_adhesin_stiffness_label">Жёсткость адгезина:</string>
+    <string name="genome_editor_density_label">Плотность</string>
+    <string name="genome_editor_swim_force_label">Сила плавания</string>
+    <string name="genome_editor_virus_source_gene_label">Исходный ген вируса</string>
+    <string name="genome_editor_virus_target_gene_label">Целевой ген вируса</string>
+    <string name="genome_editor_stem_path_2_signal_label">Сигнал пути 2</string>
+    <string name="genome_editor_stem_path_2_mode_label">Режим дифференциации пути 2</string>
+    <string name="genome_editor_stem_path_1_signal_label">Сигнал пути 1</string>
+    <string name="genome_editor_stem_path_1_mode_label">Режим дифференциации пути 1</string>
+    <string name="genome_editor_save_dialog_title">Назовите геном</string>
+    <string name="genome_editor_save_dialog_description">Сохранение генома позволит вам использовать его снова или отправить другу.</string>
+    <string name="genome_editor_save_dialog_action">Сохранить</string>
+    <string name="genome_editor_oscillator_preset_action">Предустановка генератора колебаний…</string>
+    <string name="genome_editor_output_amount_label">Уровень выхода</string>
+    <string name="genome_editor_sense_blue_label">Синий</string>
+    <string name="genome_editor_output_channel_label">Выходной канал</string>
+    <string name="genome_editor_sense_green_label">Зелёный</string>
+    <string name="genome_editor_sense_red_label">Красный</string>
+    <string name="genome_editor_sense_color_threshold_label">Цветовой порог</string>
+    <string name="genome_editor_cell_state_dependence_dialog_title">Зависимость от состояния клетки</string>
+    <string name="genome_editor_oscillator_preset_period_label">Период</string>
+    <string name="genome_editor_value_dialog_value_label">Значение</string>
+    <string name="genome_editor_value_dialog_linear_formula">a × вход + b</string>
+    <string name="genome_editor_value_dialog_variable_a_label">a</string>
+    <string name="genome_editor_value_dialog_variable_c_label">c</string>
+    <string name="genome_editor_value_dialog_variable_b_label">b</string>
+    <string name="genome_editor_value_dialog_heaviside_formula"><![CDATA[a, если вход < c\nb, если вход ≥ c]]></string>
+    <string name="genome_editor_value_dialog_fixed_value_label">Фиксированное значение:</string>
+    <string name="genome_editor_value_dialog_input_label">Вход:</string>
+    <string name="genome_editor_value_dialog_use_cell_state_label">Использовать состояние клетки:</string>
+    <string name="genome_editor_value_dialog_value_equals_label">Значение =</string>
+    <string name="genome_editor_load_default_genome_action">Загрузить геном по умолчанию</string>
+    <string name="genome_editor_value_dependency_nitrogen_reserve"><![CDATA[Запас NH<sub><small>3</small></sub> [0–1]]]></string>
+    <string name="genome_editor_value_dependency_adhesin_connection_number">Адгезиновое соединение #</string>
+    <string name="genome_editor_value_dependency_cell_mass">Масса клетки</string>
+    <string name="genome_editor_value_dependency_cell_age">Возраст клетки</string>
+    <string name="genome_editor_cytoskeleton_label">Цитоскелет</string>
+    <string name="genome_editor_adhesin_length_label">Длина адгезина</string>
+    <string name="genome_editor_maximum_adhesin_connections_label">Максимум адгезиновых соединений</string>
+    <string name="genome_editor_telomeres_after_fertilization_label">Теломеры после оплодотворения</string>
+    <string name="genome_editor_ciliocyte_left_movement_speed_label">Скорость движения влево</string>
+    <string name="genome_editor_ciliocyte_right_movement_speed_label">Скорость движения вправо</string>
+    <string name="genome_editor_oscillator_preset_title">Предустановка генератора</string>
+    <string name="genome_editor_oscillator_preset_description">Эта предустановка настраивает четыре выходных канала так, чтобы концентрации двух сигнальных веществ колебались.</string>
+    <string name="genome_editor_oscillator_preset_channel_pair_label">Пара каналов</string>
+    <string name="genome_editor_oscillator_preset_adhesin_connections_label">Адгезиновые соединения</string>
+    <string name="genome_editor_value_dialog_sine_formula">a × sin(вход × x - b)</string>
+    <plurals name="genome_editor_validation_issue_count">
+        <item quantity="one">Геном содержит %1$d недопустимое значение. Для предпросмотра и сохранения используется последнее корректное состояние.</item>
+        <item quantity="few">Геном содержит %1$d недопустимых значения. Для предпросмотра и сохранения используется последнее корректное состояние.</item>
+        <item quantity="many">Геном содержит %1$d недопустимых значений. Для предпросмотра и сохранения используется последнее корректное состояние.</item>
+        <item quantity="other">Геном содержит %1$d недопустимых значений. Для предпросмотра и сохранения используется последнее корректное состояние.</item>
+    </plurals>
+    <string name="genome_editor_no_specific_settings_message">Нет особых настроек</string>
+    <string name="genome_editor_no_specific_settings_for_cell_type_message">Для этого типа клетки нет особых настроек</string>
+    <string name="genome_editor_no_signal_settings_for_cell_type_message">Для этого типа клетки нет настроек сигналов</string>
+    <string name="genome_editor_preview_settings_title">Настройки предпросмотра</string>
+    <string name="genome_editor_preview_grid_option">Сетка</string>
+    <string name="genome_editor_preview_tree_option">Дерево</string>
+    <string name="genome_editor_preview_ghost_option">Призрак</string>
+    <string name="genome_editor_preview_summary_format">Развитие через %1$s %2$s · Количество клеток: %3$d / %4$d</string>
+    <string name="genome_editor_tab_general">Общие</string>
+    <string name="genome_editor_tab_splitting">Деление</string>
+    <string name="genome_editor_tab_specific">Особенности</string>
+    <string name="genome_editor_mode_title_format">%1$s%2$d</string>
+    <string name="genome_editor_load_default_to_mode_action_format">Загрузить значения по умолчанию в %1$s%2$d</string>
+    <string name="genome_editor_copy_mode_action_format">Скопировать %1$s%2$d в %1$s%3$d</string>
+    <string name="genome_editor_add_gene_action">Добавить ген</string>
+    <string name="genome_editor_duplicate_gene_action_format">Дублировать %1$s%2$d</string>
+    <string name="genome_editor_move_gene_before_action">Переместить на одну позицию раньше</string>
+    <string name="genome_editor_move_gene_after_action">Переместить на одну позицию позже</string>
+    <string name="genome_editor_delete_gene_full_action">Удалить ген</string>
+    <string name="genome_editor_delete_gene_dialog_title">Удалить ген</string>
+    <string name="genome_editor_delete_gene_replacement_label">Перенаправить ссылки на:</string>
+    <string name="genome_editor_color_label">Цвет:</string>
+    <string name="genome_editor_color_dialog_title">Цвет</string>
+    <string name="genome_editor_color_red_label">Красный</string>
+    <string name="genome_editor_color_green_label">Зелёный</string>
+    <string name="genome_editor_color_blue_label">Синий</string>
+    <string name="genome_editor_unknown_formula_message">Неизвестная формула</string>
+    <string name="genome_editor_numbered_label_format">%1$s %2$d</string>
+    <string name="genome_editor_oscillator_channel_pair_format">Колебания каналов %1$d и %2$d</string>
+    <plurals name="genome_editor_adhesin_connection_count">
+        <item quantity="one">%1$d адгезиновое соединение</item>
+        <item quantity="few">%1$d адгезиновых соединения</item>
+        <item quantity="many">%1$d адгезиновых соединений</item>
+        <item quantity="other">%1$d адгезиновых соединений</item>
+    </plurals>
+    <string name="genome_editor_label_with_unit_format">%1$s (%2$s)</string>
+    <string name="genome_editor_value_with_unit_format">%1$s %2$s</string>
+    <string name="genome_editor_signal_name_format">%1$s%2$d</string>
+    <string name="genome_editor_signed_signal_name_format">%1$s%2$s%3$d</string>
+    <string name="genome_editor_gene_with_type_format">%1$s%2$d %3$s</string>
+
+</resources>

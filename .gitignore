@@ -1,0 +1,56 @@
+# Gradle and Android build outputs
+.gradle/
+build/
+**/build/
+.externalNativeBuild/
+**/.externalNativeBuild/
+.cxx/
+**/.cxx/
+captures/
+app/release/
+*.apk
+*.aab
+*.apks
+*.idsig
+
+# Local configuration and IDE state
+local.properties
+/.idea/
+*.iml
+.kotlin/
+**/.kotlin/
+
+# Local secrets and signing material
+.env
+.env.*
+!.env.example
+keystore.properties
+*.jks
+*.keystore
+*.p12
+*.pfx
+
+# Local agent state
+/.agents/
+/.codex/
+
+# Logs and diagnostics
+*.log
+hs_err_pid*
+replay_pid*
+*.hprof
+
+# Profiling outputs
+perf.data
+perf.data.*
+*.profraw
+*.profdata
+*.trace
+
+# Python tooling caches
+__pycache__/
+*.py[cod]
+
+# OS files
+.DS_Store
+Thumbs.db

@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <string name="cell_property_true_value">Tak</string>
+
+    <string name="cell_property_false_value">Nie</string>
+
+    <string name="cell_property_signal_substance_prefix">S</string>
+
+    <string name="cell_property_signal_substance_unit">μmol/L</string>
+
+    <string name="cell_property_muscle_contraction">Skurcz mięśnia</string>
+
+    <string name="cell_property_muscle_bending">Wygięcie mięśnia</string>
+
+    <string name="cell_property_muscle_lifting">Siła nośna mięśnia</string>
+
+    <string name="cell_property_secretion_hcn">HCN</string>
+
+    <string name="cell_property_secretion_nutrient_smell">Zapach składników odżywczych</string>
+
+    <string name="cell_property_secretion_coated_nutrient_smell">Zapach powleczonych składników odżywczych</string>
+
+    <string name="cell_property_secretion_lipase">Lipaza</string>
+
+    <string name="cell_property_secretion_protease">Proteaza</string>
+
+    <string name="cell_property_secretion_light_sense_activator">Aktywator światłoczułego sensora</string>
+
+    <string name="cell_property_secretion_wall_sense_activator">Aktywator sensora krawędzi szalki</string>
+
+    <string name="cell_property_sense_cell">Komórka</string>
+
+    <string name="cell_property_sense_wall">Krawędź szalki</string>
+
+    <string name="cell_property_sense_light">Światło</string>
+
+    <string name="cell_property_sense_nutrient">Składnik odżywczy</string>
+
+    <string name="cell_property_sense_coated_nutrient">Powleczony składnik odżywczy</string>
+
+    <string name="cell_property_sense_velocity">Prędkość</string>
+
+</resources>
