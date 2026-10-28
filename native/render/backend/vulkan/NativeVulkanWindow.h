@@ -83,7 +83,11 @@ protected:
  * in the platform window object file.
  */
 [[nodiscard]] inline NativeVulkanWindowReference createNativeVulkanWindow(
-        ANativeWindow* window) noexcept {
+        void* handle) noexcept {
+    // The ABI carries the window as an opaque handle because the same seam serves a
+    // Win32 HWND on the desktop, so this factory is where the handle becomes concrete.
+    // The Windows branch below takes the same type for the same reason.
+    auto* window = static_cast<ANativeWindow*>(handle);
     if (window == nullptr) {
         return nullptr;
     }

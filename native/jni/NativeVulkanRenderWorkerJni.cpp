@@ -117,9 +117,14 @@ void writeLittleEndian(std::uint8_t* destination, std::size_t offset,
     return static_cast<std::uint64_t>(value);
 }
 
-void releaseAndroidWindow(ANativeWindow* window) noexcept {
-    if (window != nullptr)
-        ANativeWindow_release(window);
+// The ABI hands the window around as an opaque handle, because the same seam serves a
+// Win32 HWND on the desktop, so the callback has to take that type rather than
+// ANativeWindow*. The handle is the ANativeWindow the JNI acquired, which is why the
+// conversion happens here at the one place that knows what the handle really is.
+void releaseAndroidWindow(CellularityVulkanNativeWindowHandleV1 window) noexcept {
+    if (window != nullptr) {
+        ANativeWindow_release(static_cast<ANativeWindow*>(window));
+    }
 }
 
 class JniWorkerStatusSignal final : public NativeVulkanWorkerStatusSignal {
