@@ -917,6 +917,27 @@ if(WIN32)
     add_custom_target(cellularity_vulkan_shaders
             DEPENDS "${CELLULARITY_HOST_SHADER_DIR}/vulkan/shaders/.stamp")
 
+    # The desktop host: a Win32 window that renders through the same backend and
+    # the same frame producer the Android worker uses. It is the piece that makes
+    # the port usable rather than merely testable, so it links the production
+    # rendering library rather than drawing anything itself.
+    add_executable(cellularity_win32_host host/win32/Win32Host.cpp)
+    cellularity_configure_source_target(cellularity_win32_host)
+    cellularity_optimize_target(cellularity_win32_host)
+    add_dependencies(cellularity_win32_host cellularity_vulkan_shaders)
+    target_link_libraries(cellularity_win32_host PRIVATE
+            cellularity_rendering
+            cellularity_vulkan_host
+            cellularity_vulkan_frame_contract
+            cellularity_render_overlay_contract
+            cellularity_render_assets
+            cellularity_render_frame_result
+            ${CELLULARITY_HOST_VULKAN_LIBRARY}
+    )
+    target_include_directories(cellularity_win32_host PRIVATE
+            ${CELLULARITY_HOST_VULKAN_INCLUDE_DIRS}
+    )
+
     add_library(cellularity_vulkan_host STATIC
             render/backend/vulkan/AndroidVulkanClearFrameSession.cpp
             render/backend/vulkan/NativeVulkanSurface.cpp
