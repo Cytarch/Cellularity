@@ -117,6 +117,21 @@ tasks.register('runPlayScreen', JavaExec) {
     environment 'PATH', "${nativeOutputDirectory.absolutePath};${System.getenv('PATH')}"
 }
 
+// Drives the genome editor the way a person would and photographs each section. An editor
+// that composes but discards its input looks finished from the outside, so this checks that
+// an edit reached the reducer as well as writing the pictures; the pictures are still for a
+// person to look at, because no assertion can say whether a layout is right.
+tasks.register('runGenomeEditor', JavaExec) {
+    group = 'verification'
+    description = 'Opens the desktop genome editor, drives it, and captures each section.'
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'com.cytarch.cellularity.desktop.GenomeEditorProbeKt'
+    environment 'JDK_JAVA_OPTIONS', "${existingJavaOptions ?: ''} ${requiredOpens}".trim()
+    systemProperty 'java.library.path', nativeOutputDirectory.absolutePath
+    environment 'CELLULARITY_NATIVE_DIR', nativeOutputDirectory.absolutePath
+    environment 'PATH', "${nativeOutputDirectory.absolutePath};${System.getenv('PATH')}"
+}
+
 compose.desktop {
     application {
         mainClass = 'com.cytarch.cellularity.desktop.MainKt'

@@ -15,12 +15,6 @@
 
     <string name="file_collection_no_share_target_message">Brak zgodnej aplikacji.</string>
 
-    <string name="file_collection_share_content_description">Udostępnij: %1$s</string>
-
-    <string name="file_collection_rename_content_description">Zmień nazwę: %1$s</string>
-
-    <string name="file_collection_delete_content_description">Usuń: %1$s</string>
-
     <string name="file_collection_more_actions_content_description">Więcej działań dla %1$s</string>
 
     <string name="file_collection_share_action">Udostępnij</string>
@@ -32,6 +26,7 @@
     <string name="file_collection_switch_to_list_view_content_description">Przełącz na widok listy</string>
     <string name="file_collection_sort_ascending">Rosnąco</string>
     <string name="file_collection_sort_descending">Malejąco</string>
+    <string name="file_collection_sort_field_with_direction">%1$s %2$s</string>
 
     <string name="file_operation_saved_message">Zapisano</string>
         <string name="file_operation_invalid_name_message">Nieprawidłowa nazwa. Wprowadź niepustą nazwę bez ukośników.</string>

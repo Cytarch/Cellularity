@@ -182,6 +182,15 @@ UI_LITERAL_ALLOWLIST = {
         "compose-text",
         "0.0",
     ): (1, "locale-neutral editable-number example"),
+    (
+        "app/src/main/java/com/cytarch/cellularity/ui/main_menu/screens/StoredFilePreview.kt",
+        "ui-text-parameter",
+        "stored-file-preview",
+    ): (
+        1,
+        "animateFloatAsState debug label: read by the animation inspector, never "
+        "rendered, so there is nothing to translate",
+    ),
 }
 
 HTML_TAG = re.compile(r"</?[A-Za-z][^>]*>")

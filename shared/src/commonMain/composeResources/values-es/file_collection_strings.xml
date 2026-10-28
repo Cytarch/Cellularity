@@ -15,12 +15,6 @@
 
     <string name="file_collection_no_share_target_message">No hay ninguna aplicación compatible disponible.</string>
 
-    <string name="file_collection_share_content_description">Compartir %1$s</string>
-
-    <string name="file_collection_rename_content_description">Renombrar %1$s</string>
-
-    <string name="file_collection_delete_content_description">Eliminar %1$s</string>
-
     <string name="file_collection_more_actions_content_description">Más acciones para %1$s</string>
 
     <string name="file_collection_share_action">Compartir</string>
@@ -32,6 +26,7 @@
     <string name="file_collection_switch_to_list_view_content_description">Cambiar a vista de lista</string>
     <string name="file_collection_sort_ascending">Ascendente</string>
     <string name="file_collection_sort_descending">Descendente</string>
+    <string name="file_collection_sort_field_with_direction">%1$s %2$s</string>
 
     <string name="file_operation_saved_message">Guardado</string>
     <string name="file_operation_invalid_name_message">Nombre no válido. Introduce un nombre que no esté vacío ni contenga barras.</string>

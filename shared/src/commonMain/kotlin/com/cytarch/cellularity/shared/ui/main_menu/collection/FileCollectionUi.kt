@@ -87,6 +87,7 @@ import com.cytarch.cellularity.shared.generated.resources.file_collection_rename
 import com.cytarch.cellularity.shared.generated.resources.file_collection_share_action
 import com.cytarch.cellularity.shared.generated.resources.file_collection_sort_ascending
 import com.cytarch.cellularity.shared.generated.resources.file_collection_sort_descending
+import com.cytarch.cellularity.shared.generated.resources.file_collection_sort_field_with_direction
 import com.cytarch.cellularity.shared.generated.resources.file_collection_switch_to_grid_view_content_description
 import com.cytarch.cellularity.shared.generated.resources.file_collection_switch_to_list_view_content_description
 import com.cytarch.cellularity.shared.settings.CollectionLayoutMode
@@ -167,7 +168,13 @@ internal fun <SortField> FileCollectionToolbar(
                     )
                     Spacer(Modifier.width(dimensions.small))
                     Text(
-                        text = "$fieldLabel ${sortDirection.arrow}",
+                        // The label and the arrow are one phrase, so the language gets to
+                        // put the arrow where it belongs rather than having it appended.
+                        text = stringResource(
+                            Res.string.file_collection_sort_field_with_direction,
+                            fieldLabel,
+                            sortDirection.arrow
+                        ),
                         modifier = Modifier.widthIn(max = 112.dp),
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         style = MaterialTheme.typography.labelLarge,

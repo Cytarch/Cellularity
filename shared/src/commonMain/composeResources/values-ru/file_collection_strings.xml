@@ -15,12 +15,6 @@
 
     <string name="file_collection_no_share_target_message">Нет подходящего приложения.</string>
 
-    <string name="file_collection_share_content_description">Поделиться: %1$s</string>
-
-    <string name="file_collection_rename_content_description">Переименовать: %1$s</string>
-
-    <string name="file_collection_delete_content_description">Удалить: %1$s</string>
-
     <string name="file_collection_more_actions_content_description">Другие действия: %1$s</string>
 
     <string name="file_collection_share_action">Поделиться</string>
@@ -32,6 +26,7 @@
     <string name="file_collection_switch_to_list_view_content_description">Переключиться на список</string>
     <string name="file_collection_sort_ascending">По возрастанию</string>
     <string name="file_collection_sort_descending">По убыванию</string>
+    <string name="file_collection_sort_field_with_direction">%1$s %2$s</string>
 
     <string name="file_operation_saved_message">Сохранено</string>
     <string name="file_operation_invalid_name_message">Недопустимое имя. Введите непустое имя без косых черт.</string>

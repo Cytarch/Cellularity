@@ -1,9 +1,13 @@
 package com.cytarch.cellularity.shared.model
 
-import kotlin.jvm.JvmOverloads
-
-/** Allocation parameters required before a native simulation world can be created. */
-data class SimulationConfiguration @JvmOverloads constructor(
+/**
+ * Allocation parameters required before a native simulation world can be created.
+ *
+ * The constructor keeps a real Kotlin default for [innerRadius] instead of a JVM-only
+ * generated overload, so every caller above common code still omits it by name and the
+ * declaration stays platform-neutral.
+ */
+data class SimulationConfiguration(
     val maxCellCount: Int,
     val maxFoodCount: Int,
     val radius: Double,

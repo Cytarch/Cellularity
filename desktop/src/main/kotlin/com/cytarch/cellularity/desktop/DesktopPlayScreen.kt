@@ -231,15 +231,15 @@ private fun SubstrateTab(isVisible: Boolean, onPlateActionClick: () -> Unit) {
 /**
  * The genome panel.
  *
- * The editor is a screen of its own with its own view model and co-ordinator, both of
- * which live in the Android module, so there is nothing here that can edit a genome yet.
+ * The editor itself is shared: the same sections and the same reducer the phone uses. What
+ * the phone adds around them -- a native preview and a file repository -- is not here, and
+ * the editor says so rather than quietly discarding a genome it cannot save.
+ *
+ * The store is remembered for the life of the screen, not per tab visit, so switching to
+ * the microscope and back does not throw away work in progress.
  */
 @Composable
 private fun GenomeTab() {
-    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Text(
-            text = "The genome editor is not available in the desktop build yet.",
-            modifier = Modifier.padding(24.dp)
-        )
-    }
+    val store = remember { DesktopGenomeEditorStore() }
+    DesktopGenomeEditor(store = store, modifier = Modifier.fillMaxSize())
 }

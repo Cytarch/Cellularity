@@ -38,7 +38,7 @@ import com.cytarch.cellularity.shared.model.GeneFloatType
 import com.cytarch.cellularity.shared.model.GenomeContract
 import com.cytarch.cellularity.shared.ui.components.CellularityAlertDialog
 import com.cytarch.cellularity.shared.ui.components.DefaultCard
-import java.util.Locale
+import com.cytarch.cellularity.shared.ui.text.formatLocalizedNumber
 
 @Composable
 fun GenomeSignalsSection(
@@ -311,7 +311,7 @@ private fun OscillatorPresetDialog(
                 Text(
                     text = stringResource(
                         Res.string.genome_editor_value_with_unit_format,
-                        String.format(Locale.getDefault(), "%.2f", period),
+                        formatLocalizedNumber(period.toDouble(), 2, 2),
                         stringResource(Res.string.simulation_hour_abbreviation)
                     ),
                     color = MaterialTheme.colorScheme.primary,

@@ -54,7 +54,8 @@ import com.cytarch.cellularity.shared.ui.components.DefaultLabeledRadioButton
 import com.cytarch.cellularity.shared.ui.components.SliderCard
 import com.cytarch.cellularity.shared.ui.components.SliderCardStrings
 import com.cytarch.cellularity.shared.ui.theme.CellularityDimensions
-import java.util.Locale
+import com.cytarch.cellularity.shared.ui.text.formatLocalizedNumber
+import com.cytarch.cellularity.shared.ui.text.localizeCanonicalNumber
 import kotlin.math.PI
 import kotlin.math.floor
 import kotlin.math.round
@@ -72,22 +73,40 @@ data class GenomeEditorGestureCallbacks(
     val onFinished: () -> Unit = {}
 )
 
-// Both of these are deliberately locale-neutral, and deliberately so together.
-//
-// The displayed text and the text a user types into the same field have to agree on what
-// separates the fraction, because they are the same number in the same box. Formatting the
-// display through the default locale and parsing the input through a fixed one means a
-// value that is shown as 2,520000 is rejected when it is typed back, on any machine whose
-// locale uses a comma -- a round trip through the field that silently loses the edit.
-//
-// Fixing the locale also fixes the decimal count: the value is a physical quantity shown
-// to six places, not a user-facing number that wants grouping separators, and the grouped
-// form would break the parse that reads it back.
+// A number shown in the editor is formatted to a fixed six places with a dot, and the text
+// a user types into the same field is parsed with the same rule. That is deliberate and
+// the two have to agree: a display that wrote the active locale's separator while the
+// parser expected a dot would reject a value the moment it was typed back, losing the edit
+// in a round trip through the field. The six places are part of the same decision -- this
+// is a physical quantity with a fixed presentation, not a user-facing number that wants
+// grouping separators, and a grouped form would break the parse on its own.
 fun formatGenomeSliderValue(value: Double): String =
-    String.format(Locale.US, "%.6f", value)
+    formatCanonicalGenomeNumber(value)
 
 fun formatGenomeSliderInput(value: Double): String =
-    String.format(Locale.US, "%.6f", value)
+    formatCanonicalGenomeNumber(value)
+
+/**
+ * Six decimal places with a dot, whatever the machine's locale says.
+ *
+ * Written out rather than delegated, because the only formatting the interface offers is
+ * locale-aware and this is the one place that must not be.
+ */
+fun formatCanonicalGenomeNumber(value: Double): String {
+    if (!value.isFinite()) return value.toString()
+    val negative = value < 0.0
+    val scaled = kotlin.math.round(kotlin.math.abs(value) * 1_000_000.0)
+    val whole = (scaled / 1_000_000.0).toLong()
+    val fraction = (scaled - whole * 1_000_000.0).toLong()
+    return buildString {
+        if (negative) append('-')
+        append(whole)
+        append('.')
+        val digits = fraction.toString()
+        repeat(6 - digits.length) { append('0') }
+        append(digits)
+    }
+}
 
 fun scaleGenomeEditorValue(value: Double, displayScale: Double): Double =
     value * displayScale
@@ -124,11 +143,14 @@ fun angleDegreesToRadians(degrees: Double): Double = degrees * PI / 180.0
 fun angleRadiansToEditorDegrees(radians: Double): Double =
     angleRadiansToDegrees(radians).coerceIn(0.0, 360.0)
 
+// The angle is shown to the same six places as every other quantity in the editor, and its
+// text field is parsed by the same rule, so it formats the same way rather than through the
+// active locale. See the note above the value formatter for why the two have to agree.
 fun formatGenomeAngleValue(degrees: Double): String =
-    String.format(Locale.getDefault(), "%1$,.6f°", degrees)
+    formatCanonicalGenomeNumber(degrees) + "°"
 
 fun formatGenomeAngleInput(degrees: Double): String =
-    String.format(Locale.US, "%.6f", degrees)
+    formatCanonicalGenomeNumber(degrees)
 
 @Composable
 fun GenomeEditorSlider(

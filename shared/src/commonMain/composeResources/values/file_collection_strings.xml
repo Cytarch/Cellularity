@@ -15,12 +15,6 @@
 
     <string name="file_collection_no_share_target_message">No compatible app is available.</string>
 
-    <string name="file_collection_share_content_description">Share %1$s</string>
-
-    <string name="file_collection_rename_content_description">Rename %1$s</string>
-
-    <string name="file_collection_delete_content_description">Delete %1$s</string>
-
     <string name="file_collection_more_actions_content_description">More actions for %1$s</string>
 
     <string name="file_collection_share_action">Share</string>
@@ -32,6 +26,7 @@
     <string name="file_collection_switch_to_list_view_content_description">Switch to list view</string>
     <string name="file_collection_sort_ascending">Ascending</string>
     <string name="file_collection_sort_descending">Descending</string>
+    <string name="file_collection_sort_field_with_direction">%1$s %2$s</string>
 
     <string name="file_operation_saved_message">Saved</string>
     <string name="file_operation_invalid_name_message">Invalid name. Enter a non-empty name without slash characters.</string>

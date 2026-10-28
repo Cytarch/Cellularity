@@ -52,7 +52,6 @@ import com.cytarch.cellularity.shared.ui.components.DefaultCard
 import com.cytarch.cellularity.shared.ui.components.DefaultLabeledCheckbox
 import com.cytarch.cellularity.shared.ui.components.DefaultSlider
 import com.cytarch.cellularity.shared.ui.theme.cellularityOutlinedTextFieldColors
-import java.util.Locale
 import kotlin.math.roundToInt
 
 @Composable
@@ -249,7 +248,7 @@ private fun GenomeColorDialog(
                 OutlinedTextField(
                     value = hexDraft,
                     onValueChange = { input ->
-                        hexDraft = input.trim().uppercase(Locale.US).take(7)
+                        hexDraft = input.trim().uppercase().take(7)
                         parseHexColor(hexDraft)?.let {
                             update(it.first, it.second, it.third, syncHex = false)
                         }
@@ -315,13 +314,25 @@ private fun ColorChannelSlider(label: String, value: Float, onChange: (Float) ->
 
 private fun Float.coerceUnit(): Float = coerceIn(0.0f, 1.0f)
 
-private fun rgbToHex(red: Float, green: Float, blue: Float): String = String.format(
-    Locale.US,
-    "#%02X%02X%02X",
-    (red.coerceUnit() * 255.0f).roundToInt(),
-    (green.coerceUnit() * 255.0f).roundToInt(),
-    (blue.coerceUnit() * 255.0f).roundToInt()
-)
+// Assembled by hand rather than through String.format, which is a JVM API and would put a
+// platform dependency in common code for six characters. Uppercase is what the field
+// accepts when the text is read back, so the case is part of the contract, not a style.
+private const val HEX_DIGITS = "0123456789ABCDEF"
+
+private fun rgbToHex(red: Float, green: Float, blue: Float): String = buildString(7) {
+    append('#')
+    append(((red.coerceUnit() * 255.0f).roundToInt()).toHexByte())
+    append(((green.coerceUnit() * 255.0f).roundToInt()).toHexByte())
+    append(((blue.coerceUnit() * 255.0f).roundToInt()).toHexByte())
+}
+
+private fun Int.toHexByte(): String {
+    val value = coerceIn(0, 255)
+    return buildString(2) {
+        append(HEX_DIGITS[value ushr 4])
+        append(HEX_DIGITS[value and 0x0F])
+    }
+}
 
 private fun parseHexColor(value: String): Triple<Float, Float, Float>? {
     val normalized = value.trim().removePrefix("#")
