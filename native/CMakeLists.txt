@@ -14,6 +14,14 @@ project("cellularity")
 
 find_package(Threads REQUIRED)
 
+# One definition of the Vulkan backend sources, shared by the Android DSO and the
+# Windows host, so the two platforms compile the same list.
+include(cmake/VulkanBackendSources.cmake)
+# Resolved at the top level rather than inside either platform branch: the list is
+# needed by whichever backend this build produces, and a platform branch that never
+# ran would leave it empty.
+cellularity_vulkan_backend_sources(CELLULARITY_VULKAN_BACKEND_SOURCES)
+
 # Symbol inspection for the archive isolation tests. GNU toolchains provide nm
 # through CMAKE_NM; MSVC has no nm, so dumpbin is located from the compiler path.
 # tests/cmake/ArchiveSymbols.cmake understands both.
@@ -787,17 +795,15 @@ if(ANDROID)
     # library. This focused backend library is loaded lazily from settings, so
     # a missing or broken Vulkan loader cannot prevent the GLES path from
     # loading.
+    # The backend sources, the profiling definition and the contract links are
+    # named once in cmake/VulkanBackendSources.cmake and used by both this target
+    # and the Windows host, so the two platforms cannot quietly diverge.
     add_library(cellularity_vulkan SHARED
             jni/AndroidJniVulkanCapabilityProbe.cpp
             platform/android/AndroidRenderAssets.cpp
             platform/android/vulkan/AndroidVulkanCapabilityProbe.cpp
-            render/backend/vulkan/AndroidVulkanClearFrameSession.cpp
-            render/backend/vulkan/NativeVulkanSurface.cpp
-            render/backend/vulkan/VulkanBackendAbiExports.cpp
             render/backend/vulkan/VulkanBackendJniExports.cpp
-            render/backend/vulkan/VulkanBasicCellRenderer.cpp
-            render/backend/vulkan/VulkanResourceFoundation.cpp
-            render/backend/vulkan/VulkanResult.cpp
+            ${CELLULARITY_VULKAN_BACKEND_SOURCES}
     )
     cellularity_configure_source_target(cellularity_vulkan)
     cellularity_optimize_target(cellularity_vulkan)
@@ -811,15 +817,9 @@ if(ANDROID)
     target_link_options(cellularity_vulkan PRIVATE
             "LINKER:--version-script=${CMAKE_CURRENT_SOURCE_DIR}/render/backend/vulkan/cellularity_vulkan.exports.map"
     )
-    target_compile_definitions(cellularity_vulkan PRIVATE
-            CELLULARITY_ENABLE_VULKAN_PROFILING=$<BOOL:${CELLULARITY_ENABLE_VULKAN_PROFILING}>
-            "$<$<CONFIG:Debug>:CELLULARITY_VULKAN_VALIDATION=1>"
-    )
+    cellularity_configure_vulkan_backend(cellularity_vulkan)
+    cellularity_link_vulkan_backend_contracts(cellularity_vulkan)
     target_link_libraries(cellularity_vulkan PRIVATE
-            cellularity_vulkan_frame_contract
-            cellularity_render_overlay_contract
-            cellularity_render_assets
-            cellularity_render_frame_result
             android
             log
             ${CELLULARITY_VULKAN_LIBRARY}
@@ -939,24 +939,13 @@ if(WIN32)
     )
 
     add_library(cellularity_vulkan_host STATIC
-            render/backend/vulkan/AndroidVulkanClearFrameSession.cpp
-            render/backend/vulkan/NativeVulkanSurface.cpp
-            render/backend/vulkan/VulkanBackendAbiExports.cpp
-            render/backend/vulkan/VulkanBasicCellRenderer.cpp
-            render/backend/vulkan/VulkanResourceFoundation.cpp
-            render/backend/vulkan/VulkanResult.cpp
+            ${CELLULARITY_VULKAN_BACKEND_SOURCES}
     )
     cellularity_configure_source_target(cellularity_vulkan_host)
     add_dependencies(cellularity_vulkan_host cellularity_vulkan_shaders)
-    target_compile_definitions(cellularity_vulkan_host PRIVATE
-            CELLULARITY_ENABLE_VULKAN_PROFILING=$<BOOL:${CELLULARITY_ENABLE_VULKAN_PROFILING}>
-            "$<$<CONFIG:Debug>:CELLULARITY_VULKAN_VALIDATION=1>"
-    )
+    cellularity_configure_vulkan_backend(cellularity_vulkan_host)
+    cellularity_link_vulkan_backend_contracts(cellularity_vulkan_host)
     target_link_libraries(cellularity_vulkan_host PRIVATE
-            cellularity_vulkan_frame_contract
-            cellularity_render_overlay_contract
-            cellularity_render_assets
-            cellularity_render_frame_result
             ${CELLULARITY_HOST_VULKAN_LIBRARY}
     )
 endif()

@@ -26,9 +26,9 @@ using ClearFrameResult = RenderFrameOutcome;
  * targets also survive; the native surface, swapchain and swapchain-depth
  * resources do not.
  */
-class AndroidVulkanClearFrameSession final {
+class VulkanClearFrameSession final {
 public:
-    AndroidVulkanClearFrameSession(
+    VulkanClearFrameSession(
             std::vector<std::uint32_t> backgroundVertexSpirv,
             std::vector<std::uint32_t> backgroundFragmentSpirv,
             std::vector<std::uint32_t> densityFieldVertexSpirv,
@@ -40,12 +40,12 @@ public:
                     worldShaderSpirv,
             NativeRenderTexturePayload dotTexture,
             NativeRenderTexturePayload besselTexture);
-    ~AndroidVulkanClearFrameSession();
+    ~VulkanClearFrameSession();
 
-    AndroidVulkanClearFrameSession(
-            const AndroidVulkanClearFrameSession&) = delete;
-    AndroidVulkanClearFrameSession& operator=(
-            const AndroidVulkanClearFrameSession&) = delete;
+    VulkanClearFrameSession(
+            const VulkanClearFrameSession&) = delete;
+    VulkanClearFrameSession& operator=(
+            const VulkanClearFrameSession&) = delete;
 
     [[nodiscard]] bool attachWindow(
             NativeVulkanWindowReference window, int width, int height);

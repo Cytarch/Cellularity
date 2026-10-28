@@ -22,7 +22,7 @@
 
 #include "core/SimulationMemoryPolicy.h"
 #include "formats/SnapshotCodecSupport.h"
-#include "platform/PortableFile.h"
+#include "formats/SnapshotTemporaryPath.h"
 
 namespace cellularity::snapshot_codec {
 
@@ -31,7 +31,7 @@ TemporarySnapshotFile::TemporarySnapshotFile(const std::string& adjacentPath) {
     // same-filesystem rename. A system temp directory would make the placement
     // non-atomic and, on Windows, would land the file outside the directory whose
     // permissions the caller expects.
-    mPath = platform::makeUniqueAdjacentPath(adjacentPath, ".cellularity-load-");
+    mPath = makeUniqueAdjacentPath(adjacentPath, ".cellularity-load-");
     if (mPath.empty()) {
         failDecode(DecodeErrorCode::IoFailure,
                 "Could not create a temporary substrate file");

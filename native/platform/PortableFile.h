@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 // Minimal cross-platform file primitives for project-owned code that must run
 // on both POSIX hosts and Windows with MSVC.
@@ -207,43 +207,6 @@ inline void closeFile(FileHandle handle) noexcept {
     size.HighPart = static_cast<LONG>(data.nFileSizeHigh);
     size.LowPart = data.nFileSizeLow;
     return static_cast<std::int64_t>(size.QuadPart);
-}
-
-// Compose a unique path beside an existing file, in the same directory, so a
-// later rename onto the target stays within one filesystem. Returns an empty
-// string when the directory cannot be determined or is not writable.
-//
-// This replaces POSIX mkstemp-style naming for the save/load path. Using a
-// system temp directory instead would make the placement rename non-atomic
-// across filesystems, which the substrate and save-container writers must not
-// risk.
-[[nodiscard]] inline std::string makeUniqueAdjacentPath(
-        const std::string& adjacentPath, const char* stem) {
-    std::string parent;
-    const std::size_t separator = adjacentPath.find_last_of("/\\");
-    if (separator != std::string::npos) {
-        parent = adjacentPath.substr(0, separator + 1);
-    }
-    const std::string name = (stem != nullptr ? stem : ".cellularity-tmp");
-
-    for (int attempt = 0; attempt < 32; attempt++) {
-        const std::string candidate = parent + name + "-"
-                + std::to_string(::GetCurrentProcessId()) + "-"
-                + std::to_string(::GetTickCount64() + static_cast<ULONGLONG>(attempt));
-
-        // CREATE_NEW fails when the name is taken, which is the uniqueness check.
-        const HANDLE handle = ::CreateFileA(candidate.c_str(), GENERIC_WRITE, 0,
-                nullptr, CREATE_NEW, FILE_ATTRIBUTE_TEMPORARY, nullptr);
-        if (handle != INVALID_HANDLE_VALUE) {
-            ::CloseHandle(handle);
-            return candidate;
-        }
-        if (::GetLastError() != ERROR_FILE_EXISTS
-                && ::GetLastError() != ERROR_ALREADY_EXISTS) {
-            return {};
-        }
-    }
-    return {};
 }
 
 // True when the path names an existing regular file.
@@ -456,38 +419,6 @@ inline void closeFile(FileHandle handle) noexcept {
         return false;
     }
     return (status.st_mode & 0777) == 0600;
-}
-
-// Compose a unique path beside an existing file, in the same directory, so a
-// later rename onto the target stays within one filesystem. Returns an empty
-// string when the name cannot be reserved.
-//
-// This replaces ad-hoc mkstemp naming for the save/load path. Using a system
-// temp directory instead would make the placement rename non-atomic across
-// filesystems, which the substrate and save-container writers must not risk.
-[[nodiscard]] inline std::string makeUniqueAdjacentPath(
-        const std::string& adjacentPath, const char* stem) {
-    std::string parent;
-    const std::size_t separator = adjacentPath.find_last_of("/\\");
-    if (separator != std::string::npos) {
-        parent = adjacentPath.substr(0, separator + 1);
-    }
-    const std::string name = (stem != nullptr ? stem : ".cellularity-tmp");
-
-    // mkstemp both picks a free name and creates the file atomically.
-    std::string pattern = parent + name + "-XXXXXX";
-    std::vector<char> writable(pattern.begin(), pattern.end());
-    writable.push_back('\0');
-    const int descriptor = ::mkstemp(writable.data());
-    if (descriptor < 0) {
-        return {};
-    }
-    const std::string created(writable.data());
-    if (::close(descriptor) != 0) {
-        ::unlink(created.c_str());
-        return {};
-    }
-    return created;
 }
 
 [[nodiscard]] inline std::string createTemporaryDirectory(const char* prefix) {

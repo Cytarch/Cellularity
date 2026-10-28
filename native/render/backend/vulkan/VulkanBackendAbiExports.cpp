@@ -32,7 +32,7 @@
 #include "render/backend/RenderFrameResult.h"
 #include "render/backend/abi/VulkanBackendAbiError.h"
 #include "render/backend/abi/VulkanBackendAbiValidation.h"
-#include "render/backend/vulkan/AndroidVulkanClearFrameSession.h"
+#include "render/backend/vulkan/VulkanClearFrameSession.h"
 // createNativeVulkanWindow interprets the opaque ABI window handle for the
 // running platform, so the backend needs the platform window header here.
 #include "render/backend/vulkan/NativeVulkanWindow.h"
@@ -60,7 +60,7 @@ using cellularity::render::abi::error::setError;
 using cellularity::render::abi::validation::validInt32Matrix;
 using cellularity::render::abi::validation::validInt32Span;
 using cellularity::render::abi::validation::validSpan;
-using cellularity::render::vulkan::AndroidVulkanClearFrameSession;
+using cellularity::render::vulkan::VulkanClearFrameSession;
 using cellularity::render::vulkan::kVulkanBasicCellProgramCount;
 using cellularity::render::vulkan::kVulkanWorldProgramCount;
 using cellularity::render::vulkan::VulkanBasicCellProgram;
@@ -413,10 +413,10 @@ void copyViewport(const CellularityVulkanViewportStateV1& source,
 
 struct CellularityVulkanSessionOpaque final {
     explicit CellularityVulkanSessionOpaque(
-            std::unique_ptr<AndroidVulkanClearFrameSession> value)
+            std::unique_ptr<VulkanClearFrameSession> value)
             : implementation(std::move(value)) {}
 
-    std::unique_ptr<AndroidVulkanClearFrameSession> implementation;
+    std::unique_ptr<VulkanClearFrameSession> implementation;
     std::string diagnosticsSnapshot;
     std::uint64_t diagnosticsRevision = 0;
     std::uint64_t nextDiagnosticsRevision = 1;
@@ -522,7 +522,7 @@ CellularityVulkanSessionHandle createSession(
         }
 
         AssetRenderTextureLoader textureLoader(*assets);
-        auto implementation = std::make_unique<AndroidVulkanClearFrameSession>(
+        auto implementation = std::make_unique<VulkanClearFrameSession>(
                 readSpirv(*assets, "vulkan/shaders/background.vert.spv",
                         "Background vertex"),
                 readSpirv(*assets, "vulkan/shaders/background.frag.spv",

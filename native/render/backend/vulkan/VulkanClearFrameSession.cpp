@@ -1,4 +1,4 @@
-#include "render/backend/vulkan/AndroidVulkanClearFrameSession.h"
+#include "render/backend/vulkan/VulkanClearFrameSession.h"
 
 #include "app/microscope/render/MicroscopeDebugHud.h"
 #include "platform/PlatformLog.h"
@@ -677,7 +677,7 @@ cellularity::microscope::MicroscopeDebugHudTelemetry demoHudTelemetry() {
 
 } // namespace
 
-struct AndroidVulkanClearFrameSession::Impl final {
+struct VulkanClearFrameSession::Impl final {
     struct PendingGenomeLayer final {
         std::size_t geometrySlot = 0;
         RenderPresentationState presentation{};
@@ -5430,7 +5430,7 @@ struct AndroidVulkanClearFrameSession::Impl final {
     }
 };
 
-AndroidVulkanClearFrameSession::AndroidVulkanClearFrameSession(
+VulkanClearFrameSession::VulkanClearFrameSession(
         std::vector<std::uint32_t> backgroundVertexSpirv,
         std::vector<std::uint32_t> backgroundFragmentSpirv,
         std::vector<std::uint32_t> densityFieldVertexSpirv,
@@ -5450,38 +5450,38 @@ AndroidVulkanClearFrameSession::AndroidVulkanClearFrameSession(
                   std::move(worldShaderSpirv), std::move(dotTexture),
                   std::move(besselTexture))) {}
 
-AndroidVulkanClearFrameSession::~AndroidVulkanClearFrameSession() = default;
+VulkanClearFrameSession::~VulkanClearFrameSession() = default;
 
-bool AndroidVulkanClearFrameSession::attachWindow(
+bool VulkanClearFrameSession::attachWindow(
         NativeVulkanWindowReference window, int width, int height) {
     return mImpl->attachWindow(std::move(window), width, height);
 }
 
-void AndroidVulkanClearFrameSession::resizeSurface(int width, int height) {
+void VulkanClearFrameSession::resizeSurface(int width, int height) {
     mImpl->resizeSurface(width, height);
 }
 
-void AndroidVulkanClearFrameSession::detachSurface() {
+void VulkanClearFrameSession::detachSurface() {
     mImpl->detachSurface();
 }
 
-void AndroidVulkanClearFrameSession::setPerformanceProfilingEnabled(
+void VulkanClearFrameSession::setPerformanceProfilingEnabled(
         bool enabled) {
     mImpl->setPerformanceProfilingEnabled(enabled);
 }
 
-RenderFrameResult AndroidVulkanClearFrameSession::renderFrame() {
+RenderFrameResult VulkanClearFrameSession::renderFrame() {
     return makeRenderFrameResult(
             mImpl->renderFrame(), kPrimaryContentPresented);
 }
 
-RenderFrameResult AndroidVulkanClearFrameSession::renderFrame(
+RenderFrameResult VulkanClearFrameSession::renderFrame(
         bool performanceHudEnabled) {
     return makeRenderFrameResult(mImpl->renderFrame(performanceHudEnabled),
             kPrimaryContentPresented);
 }
 
-RenderFrameResult AndroidVulkanClearFrameSession::renderFrame(
+RenderFrameResult VulkanClearFrameSession::renderFrame(
         const PreparedRenderFrameView& frame,
         const RenderPresentationState& presentation) {
     return makeRenderFrameResult(
@@ -5489,7 +5489,7 @@ RenderFrameResult AndroidVulkanClearFrameSession::renderFrame(
             kPrimaryContentPresented);
 }
 
-RenderFrameResult AndroidVulkanClearFrameSession::renderFrame(
+RenderFrameResult VulkanClearFrameSession::renderFrame(
         const PreparedRenderFrameView& frame,
         const RenderPresentationState& presentation,
         const cellularity::microscope::MicroscopeDebugHudTelemetry*
@@ -5499,7 +5499,7 @@ RenderFrameResult AndroidVulkanClearFrameSession::renderFrame(
             kPrimaryContentPresented);
 }
 
-RenderPassStatus AndroidVulkanClearFrameSession::drawMicroscopeOffscreenPass(
+RenderPassStatus VulkanClearFrameSession::drawMicroscopeOffscreenPass(
         const PreparedRenderFrameView& frame,
         const RenderPresentationState& presentation) {
     return mImpl->renderFrame(frame, presentation, nullptr)
@@ -5508,7 +5508,7 @@ RenderPassStatus AndroidVulkanClearFrameSession::drawMicroscopeOffscreenPass(
             : RenderPassStatus::Failed;
 }
 
-RenderFrameResult AndroidVulkanClearFrameSession::renderClear(
+RenderFrameResult VulkanClearFrameSession::renderClear(
         const RenderViewportState& viewport,
         const std::array<float, 4>& color) {
     return makeRenderFrameResult(
@@ -5516,41 +5516,41 @@ RenderFrameResult AndroidVulkanClearFrameSession::renderClear(
 }
 
 RenderFrameResult
-AndroidVulkanClearFrameSession::renderEnvironmentFieldPreview(
+VulkanClearFrameSession::renderEnvironmentFieldPreview(
         const EnvironmentFieldPreviewCommand& command) {
     return makeRenderFrameResult(
             mImpl->renderEnvironmentFieldPreview(command),
             kPrimaryContentPresented);
 }
 
-void AndroidVulkanClearFrameSession::beginOffscreenRgba(
+void VulkanClearFrameSession::beginOffscreenRgba(
         OffscreenRenderTarget target, int width, int height) {
     mImpl->beginOffscreenRgba(target, width, height);
 }
 
 std::vector<std::uint8_t>
-AndroidVulkanClearFrameSession::finishOffscreenRgba(
+VulkanClearFrameSession::finishOffscreenRgba(
         OffscreenRenderTarget target) {
     return mImpl->finishOffscreenRgba(target);
 }
 
-void AndroidVulkanClearFrameSession::cancelOffscreenRgba(
+void VulkanClearFrameSession::cancelOffscreenRgba(
         OffscreenRenderTarget target) noexcept {
     mImpl->cancelOffscreenRgba(target);
 }
 
-void AndroidVulkanClearFrameSession::beginGenomePreviewFrame(
+void VulkanClearFrameSession::beginGenomePreviewFrame(
         int width, int height, bool fullyTransparentClear) {
     mImpl->beginGenomePreviewFrame(
             width, height, fullyTransparentClear);
 }
 
-void AndroidVulkanClearFrameSession::drawGenomePreviewGrid(
+void VulkanClearFrameSession::drawGenomePreviewGrid(
         const GenomePreviewGridCommand& command) {
     mImpl->drawGenomePreviewGrid(command);
 }
 
-void AndroidVulkanClearFrameSession::drawGenomePreviewTree(
+void VulkanClearFrameSession::drawGenomePreviewTree(
         const RenderPresentationState& presentation,
         const PreparedRenderFrameView& frame,
         const std::array<float, 16>& matrix,
@@ -5560,34 +5560,34 @@ void AndroidVulkanClearFrameSession::drawGenomePreviewTree(
             presentation, frame, matrix, lineVertices, options);
 }
 
-void AndroidVulkanClearFrameSession::drawGenomePreview(
+void VulkanClearFrameSession::drawGenomePreview(
         const RenderPresentationState& presentation,
         const PreparedRenderFrameView& frame,
         const GenomePreviewDrawOptions& options) {
     mImpl->drawGenomePreview(presentation, frame, options);
 }
 
-RenderFrameResult AndroidVulkanClearFrameSession::endGenomePreviewFrame() {
+RenderFrameResult VulkanClearFrameSession::endGenomePreviewFrame() {
     return makeRenderFrameResult(
             mImpl->endGenomePreviewFrame(), kPrimaryContentPresented);
 }
 
 RenderPassStatus
-AndroidVulkanClearFrameSession::endGenomePreviewOffscreenPass() {
+VulkanClearFrameSession::endGenomePreviewOffscreenPass() {
     return mImpl->endGenomePreviewFrame() == RenderFrameOutcome::Presented
             ? RenderPassStatus::Completed
             : RenderPassStatus::Failed;
 }
 
-void AndroidVulkanClearFrameSession::cancelGenomePreviewFrame() noexcept {
+void VulkanClearFrameSession::cancelGenomePreviewFrame() noexcept {
     mImpl->cancelGenomePreviewFrame();
 }
 
-bool AndroidVulkanClearFrameSession::hasAttachedSurface() const noexcept {
+bool VulkanClearFrameSession::hasAttachedSurface() const noexcept {
     return mImpl->surface != VK_NULL_HANDLE;
 }
 
-std::string AndroidVulkanClearFrameSession::diagnostics() const {
+std::string VulkanClearFrameSession::diagnostics() const {
     return mImpl->diagnostics();
 }
 
