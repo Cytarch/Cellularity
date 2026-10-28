@@ -123,6 +123,30 @@ class DesktopNativeRendererIntegrationTest {
             assertEquals(1, DesktopNativeRenderer.nativeQueuePan(sessionHandle, 10f, 0f))
             assertEquals(1, DesktopNativeRenderer.nativeQueueZoom(sessionHandle, 1.1f, 10f, 10f))
 
+            // A resize has to reach the surface, not only the window. A success code does
+            // not establish that it did, and a surface left at its old extent presents a
+            // stretched picture rather than failing, so the world is required to keep
+            // producing frames and cells after the window changes size.
+            assertEquals(
+                "the renderer refused to resize its window",
+                0,
+                DesktopNativeRenderer.nativeResizeWindow(windowHandle, 480, 360)
+            )
+            var afterResize = 0
+            while (afterResize < 30) {
+                assertEquals(
+                    "frame $afterResize failed after a resize",
+                    0,
+                    DesktopNativeRenderer.nativeRenderFrame(sessionHandle)
+                )
+                afterResize++
+                Thread.sleep(8)
+            }
+            assertTrue(
+                "the world stopped advancing after a resize",
+                DesktopNativeRenderer.nativeCellCount(sessionHandle) > 0L
+            )
+
             assertEquals(0, DesktopNativeRenderer.nativeStopSession(sessionHandle))
             // Stopping twice must be safe: the window is destroyed on a path that can
             // run after a failure, and a second stop must not reach a freed session.
