@@ -961,6 +961,99 @@ if(WIN32)
             ${CELLULARITY_HOST_VULKAN_INCLUDE_DIRS}
     )
 
+    # The same simulation behind a JNI front door. A managed desktop application
+    # already owns a window and an event loop, so it cannot use the standalone host's
+    # shape; what it needs is the renderer in a child window of its own and a handful
+    # of entry points its frame loop can call. That is exactly what this library is,
+    # which is why it links the same libraries the host links rather than a similar
+    # set: one renderer, two front doors.
+    #
+    # jni.h comes from a JDK rather than from the NDK, because this is a JVM library
+    # and not an Android one. The JDK that runs the application is preferred when the
+    # environment names it, then the usual Windows install locations, so a machine
+    # with more than one JDK does not silently compile against another one's headers.
+    set(CELLULARITY_DESKTOP_JNI_INCLUDE_DIRS)
+    set(CELLULARITY_DESKTOP_JNI_ROOT_CANDIDATES)
+    if(DEFINED ENV{JAVA_HOME})
+        file(TO_CMAKE_PATH "$ENV{JAVA_HOME}" CELLULARITY_DESKTOP_JAVA_HOME)
+        list(APPEND CELLULARITY_DESKTOP_JNI_ROOT_CANDIDATES
+                "${CELLULARITY_DESKTOP_JAVA_HOME}")
+    endif()
+    if(DEFINED ENV{JDK_HOME})
+        file(TO_CMAKE_PATH "$ENV{JDK_HOME}" CELLULARITY_DESKTOP_JDK_HOME)
+        list(APPEND CELLULARITY_DESKTOP_JNI_ROOT_CANDIDATES
+                "${CELLULARITY_DESKTOP_JDK_HOME}")
+    endif()
+    # The Android Studio-managed OpenJDK is listed before the system ones because it is
+    # the JVM the desktop module is run with (see build/desk1.cmd).
+    file(GLOB CELLULARITY_DESKTOP_JNI_GLOB_CANDIDATES
+            "C:/Program Files/Android/openjdk/*"
+            "C:/Program Files/Java/*"
+            "C:/Program Files/Eclipse Adoptium/*"
+            "C:/Program Files/Microsoft/*"
+            "C:/Program Files/Zulu/*")
+    list(APPEND CELLULARITY_DESKTOP_JNI_ROOT_CANDIDATES
+            ${CELLULARITY_DESKTOP_JNI_GLOB_CANDIDATES})
+    foreach(CELLULARITY_DESKTOP_JNI_ROOT IN LISTS CELLULARITY_DESKTOP_JNI_ROOT_CANDIDATES)
+        if(NOT CELLULARITY_DESKTOP_JNI_INCLUDE_DIRS
+                AND EXISTS "${CELLULARITY_DESKTOP_JNI_ROOT}/include/jni.h"
+                AND EXISTS "${CELLULARITY_DESKTOP_JNI_ROOT}/include/win32/jni_md.h")
+            set(CELLULARITY_DESKTOP_JNI_INCLUDE_DIRS
+                    "${CELLULARITY_DESKTOP_JNI_ROOT}/include"
+                    "${CELLULARITY_DESKTOP_JNI_ROOT}/include/win32")
+        endif()
+    endforeach()
+    if(NOT CELLULARITY_DESKTOP_JNI_INCLUDE_DIRS)
+        find_package(JNI QUIET)
+        if(JNI_FOUND)
+            set(CELLULARITY_DESKTOP_JNI_INCLUDE_DIRS ${JNI_INCLUDE_DIRS})
+        endif()
+    endif()
+    if(NOT CELLULARITY_DESKTOP_JNI_INCLUDE_DIRS)
+        message(FATAL_ERROR
+                "The desktop JNI bridge needs a JDK: jni.h and jni_md.h were not "
+                "found. Set JAVA_HOME to a JDK, or install one under "
+                "'C:/Program Files/Java'.")
+    endif()
+    message(STATUS
+            "Cellularity desktop JNI headers: ${CELLULARITY_DESKTOP_JNI_INCLUDE_DIRS}")
+
+    add_library(cellularity_desktop_jni SHARED host/win32/DesktopJniBridge.cpp)
+    # System.loadLibrary("cellularity_desktop") resolves a file name, not a CMake
+    # target, so the output name is part of the contract with the managed side and is
+    # fixed here rather than left to follow the target name.
+    set_target_properties(cellularity_desktop_jni PROPERTIES
+            OUTPUT_NAME cellularity_desktop
+    )
+    cellularity_configure_source_target(cellularity_desktop_jni)
+    cellularity_optimize_target(cellularity_desktop_jni)
+    add_dependencies(cellularity_desktop_jni cellularity_vulkan_shaders)
+    # A STATIC library does not forward its own include directories, so the Vulkan
+    # headers arrive here the same way they arrive at the host.
+    target_include_directories(cellularity_desktop_jni PRIVATE
+            ${CELLULARITY_HOST_VULKAN_INCLUDE_DIRS}
+    )
+    # jni.h is not this project's code and is not warning-clean at /W4.
+    target_include_directories(cellularity_desktop_jni SYSTEM PRIVATE
+            ${CELLULARITY_DESKTOP_JNI_INCLUDE_DIRS}
+    )
+    # cellularity_win32_host_camera is linked for parity with the executable rather
+    # than because the bridge calls it today; the linker pulls nothing in from a static
+    # library that is not referenced. cellularity_interaction is named directly for the
+    # reason given above the host target: the controller's layout depends on its public
+    # compile definitions.
+    target_link_libraries(cellularity_desktop_jni PRIVATE
+            cellularity_win32_host_camera
+            cellularity_interaction
+            cellularity_rendering
+            cellularity_vulkan_host
+            cellularity_vulkan_frame_contract
+            cellularity_render_overlay_contract
+            cellularity_render_assets
+            cellularity_render_frame_result
+            ${CELLULARITY_HOST_VULKAN_LIBRARY}
+    )
+
     add_library(cellularity_vulkan_host STATIC
             ${CELLULARITY_VULKAN_BACKEND_SOURCES}
     )

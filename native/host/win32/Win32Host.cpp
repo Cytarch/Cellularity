@@ -532,7 +532,7 @@ namespace {
 int captureFrame(const std::shared_ptr<VulkanBackendSession>& session,
         const std::string& outputPath, int width, int height, bool useCamera,
         float panX, float panY, float zoomFactor, int temperatureMode,
-        int warmupFrames) {
+        int warmupFrames, int maxCellCount, int maxFoodCount, double dishRadius) {
     using cellularity::render::CaptureSurfaceSession;
 
     try {
@@ -666,11 +666,12 @@ int main(int argc, char** argv) {
     float captureZoomFactor = 1.0F;
     int captureTemperature = 1;
     int captureWarmup = 90;
-    // The run configuration, overridable from the command line so a substrate can be
-    // opened with the allocation it was saved with.
+    // The run configuration, overridable from the command line so a substrate opens
+    // with the allocation it was saved with rather than with this host's defaults.
     int maxCellCount = kMaxCellCount;
     int maxFoodCount = kMaxFoodCount;
     double dishRadius = kDishRadius;
+
     std::vector<std::string> positional;
     for (int index = 1; index < argc; ++index) {
         const std::string argument = argv[index];
@@ -802,7 +803,8 @@ int main(int argc, char** argv) {
         // but nothing is ever shown because the frame is drawn off-screen.
         const int result = captureFrame(session, capturePath, captureWidth,
                 captureHeight, captureWithCamera, capturePanX, capturePanY,
-                captureZoomFactor, captureTemperature, captureWarmup);
+                captureZoomFactor, captureTemperature, captureWarmup, maxCellCount,
+                maxFoodCount, dishRadius);
         session->detachSurface();
         try {
             session->closeOnOwnerThread();

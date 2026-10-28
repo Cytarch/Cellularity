@@ -241,7 +241,7 @@ private class SurfaceHolder(
                 // been applied frame by frame, and must not also count as a click or
                 // every pan would end by selecting whatever it stopped over.
                 if (!moved) {
-                    DesktopNativeRenderer.queueTap(
+                    DesktopNativeRenderer.nativeQueueTap(
                         sessionHandle,
                         event.x.toFloat(),
                         event.y.toFloat()
@@ -257,14 +257,14 @@ private class SurfaceHolder(
                 lastY = event.y
                 if (dx == 0 && dy == 0) return
                 moved = true
-                DesktopNativeRenderer.queuePan(sessionHandle, dx.toFloat(), dy.toFloat())
+                DesktopNativeRenderer.nativeQueuePan(sessionHandle, dx.toFloat(), dy.toFloat())
             }
 
             override fun mouseWheelMoved(event: MouseWheelEvent) {
                 // Multiplicative, matching the wheel on the phone and the native host:
                 // zooming in then out returns exactly where it started.
                 val factor = if (event.wheelRotation < 0) 1.1f else 1f / 1.1f
-                DesktopNativeRenderer.queueZoom(
+                DesktopNativeRenderer.nativeQueueZoom(
                     sessionHandle,
                     factor,
                     event.x.toFloat(),
@@ -288,7 +288,7 @@ private class SurfaceHolder(
         }
 
         if (windowHandle == 0L) {
-            windowHandle = DesktopNativeRenderer.createWindow(
+            windowHandle = DesktopNativeRenderer.nativeCreateWindow(
                 ownerHandle,
                 0,
                 0,
@@ -300,13 +300,13 @@ private class SurfaceHolder(
                 return
             }
         } else {
-            DesktopNativeRenderer.resizeWindow(windowHandle, newWidth, newHeight)
+            DesktopNativeRenderer.nativeResizeWindow(windowHandle, newWidth, newHeight)
         }
         width = newWidth
         height = newHeight
 
         if (sessionHandle == 0L) {
-            sessionHandle = DesktopNativeRenderer.createSession(
+            sessionHandle = DesktopNativeRenderer.nativeCreateSession(
                 windowHandle,
                 newWidth,
                 newHeight,
@@ -330,13 +330,13 @@ private class SurfaceHolder(
             Thread.sleep(8)
             return true
         }
-        val result = DesktopNativeRenderer.renderFrame(sessionHandle)
+        val result = DesktopNativeRenderer.nativeRenderFrame(sessionHandle)
         if (result == 2) return false
         if (result == 1) {
             failOnce("The renderer reported a failed frame.")
             return false
         }
-        onCellCount(DesktopNativeRenderer.cellCount(sessionHandle))
+        onCellCount(DesktopNativeRenderer.nativeCellCount(sessionHandle))
         return true
     }
 
@@ -344,22 +344,22 @@ private class SurfaceHolder(
         if (sessionHandle == 0L) return
         when (event) {
             is SurfaceInputEvent.Pan ->
-                DesktopNativeRenderer.queuePan(sessionHandle, event.dx, event.dy)
+                DesktopNativeRenderer.nativeQueuePan(sessionHandle, event.dx, event.dy)
 
             is SurfaceInputEvent.Zoom ->
-                DesktopNativeRenderer.queueZoom(sessionHandle, event.factor, event.x, event.y)
+                DesktopNativeRenderer.nativeQueueZoom(sessionHandle, event.factor, event.x, event.y)
 
             is SurfaceInputEvent.Tap ->
-                DesktopNativeRenderer.queueTap(sessionHandle, event.x, event.y)
+                DesktopNativeRenderer.nativeQueueTap(sessionHandle, event.x, event.y)
 
             is SurfaceInputEvent.Temperature ->
-                DesktopNativeRenderer.setTemperatureMode(sessionHandle, event.mode)
+                DesktopNativeRenderer.nativeSetTemperatureMode(sessionHandle, event.mode)
 
             is SurfaceInputEvent.Tool ->
-                DesktopNativeRenderer.setToolOrdinal(sessionHandle, event.ordinal)
+                DesktopNativeRenderer.nativeSetToolOrdinal(sessionHandle, event.ordinal)
 
             SurfaceInputEvent.Reset ->
-                DesktopNativeRenderer.resetWorld(sessionHandle)
+                DesktopNativeRenderer.nativeResetWorld(sessionHandle)
         }
     }
 
@@ -367,11 +367,11 @@ private class SurfaceHolder(
         if (released) return
         released = true
         if (sessionHandle != 0L) {
-            DesktopNativeRenderer.stopSession(sessionHandle)
+            DesktopNativeRenderer.nativeStopSession(sessionHandle)
             sessionHandle = 0L
         }
         if (windowHandle != 0L) {
-            DesktopNativeRenderer.destroyWindow(windowHandle)
+            DesktopNativeRenderer.nativeDestroyWindow(windowHandle)
             windowHandle = 0L
         }
         canvas = null
@@ -385,29 +385,35 @@ private class SurfaceHolder(
 
     private companion object {
         /**
-         * The AWT peer's native handle, which is the parent the renderer needs.
+         * The AWT peer's native window handle, which is the parent the renderer needs.
          *
-         * Reached reflectively on purpose. `getPeer()` is public but its return type
-         * lives in `java.awt.peer`, which the module system does not export, so the
-         * value can be held as `Any` but its type cannot be named. The handle comes from
-         * `getHWnd`, the same accessor AWT itself uses on Windows; there is no supported
-         * public alternative, and a future JDK that removes it fails here cleanly rather
-         * than corrupting anything.
+         * There is no supported way to get this. `Component.getPeer` was removed in JDK
+         * 21, so the package-private `peer` field is the only route left, and reading it
+         * needs `--add-opens java.desktop/java.awt=ALL-UNNAMED` on the command line --
+         * see the note in the launcher. `getHWnd` is the accessor AWT itself uses on
+         * Windows, and the peer's type lives in a package the module system does not
+         * export, so the value can be held as `Any` but its type cannot be named.
+         *
+         * When the open is missing this returns zero, and the interface reports the
+         * renderer as unavailable rather than crashing, which is the right failure for a
+         * packaging mistake.
          */
         fun nativeWindowHandleOf(component: Component): Long {
             if (!component.isShowing) return 0L
             return try {
-                // Both hops are reflective. `getPeer()` is public but returns a type
-                // from an unexported package, and the field behind it is package
-                // private, so neither can be named in Kotlin source.
-                val getPeer = Component::class.java.getMethod("getPeer")
-                val peer: Any = getPeer.invoke(component) ?: return 0L
+                val peerField = Component::class.java.getDeclaredField("peer")
+                peerField.isAccessible = true
+                val peer: Any = peerField.get(component) ?: return 0L
                 val getHWnd = peer.javaClass.methods.firstOrNull { it.name == "getHWnd" }
                     ?: return 0L
                 (getHWnd.invoke(peer) as? Long) ?: 0L
             } catch (_: ReflectiveOperationException) {
                 0L
             } catch (_: RuntimeException) {
+                0L
+            } catch (_: LinkageError) {
+                // A missing --add-opens surfaces as an error rather than an exception on
+                // some JDKs. Either way the caller gets zero and says so.
                 0L
             }
         }

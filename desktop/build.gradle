@@ -50,6 +50,51 @@ dependencies {
     testImplementation(libs.junit)
 }
 
+// The renderer is a CMake target, so it lands in the build tree where neither the JVM
+// nor the Windows loader would look for it. Pointing both at that directory is what lets
+// the integration test exercise the real library instead of skipping itself; an installed
+// build has the library on the default search path and does not need this.
+def nativeOutputDirectory = rootProject.file('build/win-cmake')
+if (nativeOutputDirectory.isDirectory()) {
+    tasks.withType(Test).configureEach {
+        systemProperty 'java.library.path', nativeOutputDirectory.absolutePath
+        environment 'CELLULARITY_NATIVE_DIR', nativeOutputDirectory.absolutePath
+        environment 'PATH', "${nativeOutputDirectory.absolutePath};${System.getenv('PATH')}"
+    }
+}
+
+// AWT keeps the native window handle behind a package-private field, and the package is
+// not exported by default. Opening it for the test process is what allows the handle
+// lookup to be exercised at all; the production launch does not need this because it only
+// reflects over public methods.
+tasks.withType(Test).configureEach {
+    jvmArgs += [
+        '--add-opens', 'java.desktop/java.awt=ALL-UNNAMED',
+        '--add-opens', 'java.desktop/java.awt.peer=ALL-UNNAMED',
+        '--add-exports', 'java.desktop/java.awt.peer=ALL-UNNAMED',
+        '--add-exports', 'java.desktop/sun.awt.windows=ALL-UNNAMED'
+    ]
+}
+
+// AWT keeps the native window handle behind a package-private field, and JDK 21 removed
+// the accessor that used to expose it. Reading the field is what lets the renderer find
+// the window to present into, so the module has to be opened for the launched process.
+// JDK_JAVA_OPTIONS is used rather than a task option because it reaches the JVM however
+// it was started -- under `run`, from a packaged launcher, or by hand -- and a flag that
+// only applies to one of those would make the app work in development and fail when
+// installed.
+def requiredOpens = '-XX:+IgnoreUnrecognizedVMOptions ' +
+        '--add-opens=java.desktop/java.awt=ALL-UNNAMED ' +
+        '--add-exports=java.desktop/sun.awt.windows=ALL-UNNAMED'
+def existingJavaOptions = System.getenv('JDK_JAVA_OPTIONS')
+if (existingJavaOptions == null || !existingJavaOptions.contains('java.desktop/java.awt')) {
+    tasks.withType(JavaExec).configureEach {
+        environment 'JDK_JAVA_OPTIONS', existingJavaOptions == null
+                ? requiredOpens
+                : "${existingJavaOptions} ${requiredOpens}"
+    }
+}
+
 compose.desktop {
     application {
         mainClass = 'com.cytarch.cellularity.desktop.MainKt'
