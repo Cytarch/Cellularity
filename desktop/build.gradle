@@ -132,6 +132,21 @@ tasks.register('runGenomeEditor', JavaExec) {
     environment 'PATH', "${nativeOutputDirectory.absolutePath};${System.getenv('PATH')}"
 }
 
+// Opens and closes the substrate panel on a running world. A screen that is composed only
+// while its tab is showing is the classic way to make Compose fail on a group mismatch, and
+// it fails when the tab is first opened rather than at build time, so the toggling is what
+// this checks; the picture is of the world it ended up reading.
+tasks.register('runSubstrateTab', JavaExec) {
+    group = 'verification'
+    description = 'Toggles the desktop substrate panel on a live simulation and captures it.'
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'com.cytarch.cellularity.desktop.SubstrateTabProbeKt'
+    environment 'JDK_JAVA_OPTIONS', "${existingJavaOptions ?: ''} ${requiredOpens}".trim()
+    systemProperty 'java.library.path', nativeOutputDirectory.absolutePath
+    environment 'CELLULARITY_NATIVE_DIR', nativeOutputDirectory.absolutePath
+    environment 'PATH', "${nativeOutputDirectory.absolutePath};${System.getenv('PATH')}"
+}
+
 compose.desktop {
     application {
         mainClass = 'com.cytarch.cellularity.desktop.MainKt'

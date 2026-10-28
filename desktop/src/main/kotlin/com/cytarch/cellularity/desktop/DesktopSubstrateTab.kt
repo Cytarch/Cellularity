@@ -19,7 +19,7 @@ import com.cytarch.cellularity.shared.ui.play.substrate_info.SubstrateInfoScreen
 import com.cytarch.cellularity.shared.ui.play.substrate_info.SubstrateInfoState
 import com.cytarch.cellularity.shared.ui.play.substrate_info.toSubstrateEnvironmentUiState
 import com.cytarch.cellularity.shared.ui.play.substrate_info.toSubstrateStatsSectionState
-import java.util.Locale
+import com.cytarch.cellularity.shared.ui.text.formatCanonicalQuantity
 import kotlinx.coroutines.launch
 
 /**
@@ -40,10 +40,16 @@ fun SubstrateTab(
     onPlateActionClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    // The screen is built even when another tab is showing, because it is cheap and
-    // rebuilding it would restart the section and scroll positions the user had set.
-    if (!isVisible) return
-
+    // Everything the screen needs is created before the visibility check, and the check
+    // decides only whether the screen is called.
+    //
+    // Returning early used to happen before these, which read as "skip the work while the
+    // tab is hidden" but was not that: a composable that returns on one pass and calls a
+    // composable on the next changes how many groups the composition emits at the same
+    // position, and Compose has no way to reconcile that. It shows up as a crash when the
+    // tab is first opened, or worse, as the hidden tab's state being silently discarded.
+    // The state is kept across visits on purpose -- see below -- and keeping it means
+    // creating it on every visit.
     val state = remember { SubstrateInfoState() }
     val controller = remember(gateway) { SubstrateInfoGatewayController(gateway) }
     val scope = rememberCoroutineScope()
@@ -61,6 +67,8 @@ fun SubstrateTab(
         // simulation alone because the capacity is a property of the run.
         stats.toSubstrateStatsSectionState()
     }
+
+    if (!isVisible) return
 
     SubstrateInfoScreen(
         state = state,
@@ -94,8 +102,12 @@ fun SubstrateTab(
         onGenePoolChanged = { index, checked ->
             scope.launch { controller.changeGenePool(index, checked) }
         },
-        sliderValueFormatter = { value -> String.format(Locale.getDefault(), "%1$,.6f", value) },
-        sliderInputValueFormatter = { value -> String.format(Locale.US, "%.6f", value) },
+        // Both of these are quantities in a field that is read back, so both are written
+        // the one way the parser accepts. Formatting the display through the machine's
+        // locale would write 0,500000 on a machine that uses a comma and the value would
+        // be refused the moment it was edited.
+        sliderValueFormatter = ::formatCanonicalQuantity,
+        sliderInputValueFormatter = ::formatCanonicalQuantity,
         modifier = modifier.fillMaxSize()
     )
 }

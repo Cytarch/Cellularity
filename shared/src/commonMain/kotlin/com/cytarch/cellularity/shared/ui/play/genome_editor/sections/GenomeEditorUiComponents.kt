@@ -54,8 +54,8 @@ import com.cytarch.cellularity.shared.ui.components.DefaultLabeledRadioButton
 import com.cytarch.cellularity.shared.ui.components.SliderCard
 import com.cytarch.cellularity.shared.ui.components.SliderCardStrings
 import com.cytarch.cellularity.shared.ui.theme.CellularityDimensions
+import com.cytarch.cellularity.shared.ui.text.formatCanonicalQuantity
 import com.cytarch.cellularity.shared.ui.text.formatLocalizedNumber
-import com.cytarch.cellularity.shared.ui.text.localizeCanonicalNumber
 import kotlin.math.PI
 import kotlin.math.floor
 import kotlin.math.round
@@ -81,32 +81,10 @@ data class GenomeEditorGestureCallbacks(
 // is a physical quantity with a fixed presentation, not a user-facing number that wants
 // grouping separators, and a grouped form would break the parse on its own.
 fun formatGenomeSliderValue(value: Double): String =
-    formatCanonicalGenomeNumber(value)
+    formatCanonicalQuantity(value)
 
 fun formatGenomeSliderInput(value: Double): String =
-    formatCanonicalGenomeNumber(value)
-
-/**
- * Six decimal places with a dot, whatever the machine's locale says.
- *
- * Written out rather than delegated, because the only formatting the interface offers is
- * locale-aware and this is the one place that must not be.
- */
-fun formatCanonicalGenomeNumber(value: Double): String {
-    if (!value.isFinite()) return value.toString()
-    val negative = value < 0.0
-    val scaled = kotlin.math.round(kotlin.math.abs(value) * 1_000_000.0)
-    val whole = (scaled / 1_000_000.0).toLong()
-    val fraction = (scaled - whole * 1_000_000.0).toLong()
-    return buildString {
-        if (negative) append('-')
-        append(whole)
-        append('.')
-        val digits = fraction.toString()
-        repeat(6 - digits.length) { append('0') }
-        append(digits)
-    }
-}
+    formatCanonicalQuantity(value)
 
 fun scaleGenomeEditorValue(value: Double, displayScale: Double): Double =
     value * displayScale
@@ -147,10 +125,10 @@ fun angleRadiansToEditorDegrees(radians: Double): Double =
 // text field is parsed by the same rule, so it formats the same way rather than through the
 // active locale. See the note above the value formatter for why the two have to agree.
 fun formatGenomeAngleValue(degrees: Double): String =
-    formatCanonicalGenomeNumber(degrees) + "°"
+    formatCanonicalQuantity(degrees) + "°"
 
 fun formatGenomeAngleInput(degrees: Double): String =
-    formatCanonicalGenomeNumber(degrees)
+    formatCanonicalQuantity(degrees)
 
 @Composable
 fun GenomeEditorSlider(
