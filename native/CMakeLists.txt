@@ -856,6 +856,61 @@ if(WIN32)
         set(CELLULARITY_HOST_VULKAN_INCLUDE_DIRS "")
     endif()
 
+    # Vulkan shaders have to be compiled to SPIR-V before the session can create a
+    # pipeline, and until now only the Android build did that, through the NDK's
+    # glslc. The host build compiles the same sources against the same contract
+    # with a glslc from vcpkg's shaderc or the LunarG SDK, and validates every
+    # module with spirv-val, so the two builds cannot drift.
+    find_program(CELLULARITY_GLSLC
+            NAMES glslc
+            HINTS
+                    "${VCPKG_ROOT}/installed/${VCPKG_TARGET_TRIPLET}/tools/shaderc"
+                    "$ENV{VULKAN_SDK}/Bin"
+            DOC "glslc, used to compile the Vulkan shaders to SPIR-V")
+    find_program(CELLULARITY_SPIRV_VAL
+            NAMES spirv-val
+            HINTS
+                    "${VCPKG_ROOT}/installed/${VCPKG_TARGET_TRIPLET}/tools/spirv-tools"
+                    "$ENV{VULKAN_SDK}/Bin"
+            DOC "spirv-val, used to validate the compiled shader modules")
+    if(NOT CELLULARITY_GLSLC OR NOT CELLULARITY_SPIRV_VAL)
+        message(FATAL_ERROR
+                "The Windows Vulkan build needs glslc and spirv-val to compile "
+                "native/rendering/vulkan/shaders. Install them with "
+                "'vcpkg install shaderc spirv-tools[tools]' or install the LunarG "
+                "Vulkan SDK. Found glslc='${CELLULARITY_GLSLC}' "
+                "spirv-val='${CELLULARITY_SPIRV_VAL}'.")
+    endif()
+
+    set(CELLULARITY_HOST_SHADER_DIR
+            "${CMAKE_CURRENT_BINARY_DIR}/generated/vulkanShaders/host/assets")
+    # The shader sources are a build input, so the compile step has to depend on
+    # them. Without this the step only ran when the contract or this script
+    # changed, and an edited shader would silently keep its old module.
+    # CONFIGURE_DEPENDS makes a newly added source re-run the configure, which is
+    # what makes the inventory check below able to reject it.
+    file(GLOB_RECURSE CELLULARITY_HOST_SHADER_SOURCES CONFIGURE_DEPENDS
+            "${CMAKE_CURRENT_SOURCE_DIR}/rendering/vulkan/shaders/*.vert"
+            "${CMAKE_CURRENT_SOURCE_DIR}/rendering/vulkan/shaders/*.frag")
+    add_custom_command(
+            OUTPUT "${CELLULARITY_HOST_SHADER_DIR}/vulkan/shaders/.stamp"
+            COMMAND ${CMAKE_COMMAND}
+                    -DCELLULARITY_GLSL_SOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}/rendering/vulkan/shaders
+                    -DCELLULARITY_SHADER_CONTRACT=${CMAKE_CURRENT_SOURCE_DIR}/rendering/vulkan/vulkan-shader-contract.json
+                    -DCELLULARITY_SHADER_OUTPUT_DIR=${CELLULARITY_HOST_SHADER_DIR}
+                    -DCELLULARITY_GLSLC=${CELLULARITY_GLSLC}
+                    -DCELLULARITY_SPIRV_VAL=${CELLULARITY_SPIRV_VAL}
+                    -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/CompileVulkanShaders.cmake"
+            COMMAND ${CMAKE_COMMAND} -E touch
+                    "${CELLULARITY_HOST_SHADER_DIR}/vulkan/shaders/.stamp"
+            DEPENDS
+                    "${CMAKE_CURRENT_SOURCE_DIR}/cmake/CompileVulkanShaders.cmake"
+                    "${CMAKE_CURRENT_SOURCE_DIR}/rendering/vulkan/vulkan-shader-contract.json"
+                    ${CELLULARITY_HOST_SHADER_SOURCES}
+            COMMENT "Compiling and validating the Vulkan shader inventory")
+    add_custom_target(cellularity_vulkan_shaders
+            DEPENDS "${CELLULARITY_HOST_SHADER_DIR}/vulkan/shaders/.stamp")
+
     add_library(cellularity_vulkan_host STATIC
             render/backend/vulkan/AndroidVulkanClearFrameSession.cpp
             render/backend/vulkan/NativeVulkanSurface.cpp
@@ -865,6 +920,7 @@ if(WIN32)
             render/backend/vulkan/VulkanResult.cpp
     )
     cellularity_configure_source_target(cellularity_vulkan_host)
+    add_dependencies(cellularity_vulkan_host cellularity_vulkan_shaders)
     target_compile_definitions(cellularity_vulkan_host PRIVATE
             CELLULARITY_ENABLE_VULKAN_PROFILING=$<BOOL:${CELLULARITY_ENABLE_VULKAN_PROFILING}>
             "$<$<CONFIG:Debug>:CELLULARITY_VULKAN_VALIDATION=1>"
