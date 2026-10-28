@@ -59,7 +59,7 @@ fun main() = application {
 
         val configuration = runningSimulation
         if (configuration != null) {
-            DesktopMicroscopeScreen(
+            DesktopPlayScreen(
                 configuration = configuration,
                 onExit = { runningSimulation = null },
                 modifier = Modifier.fillMaxSize()

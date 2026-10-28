@@ -1,4 +1,4 @@
-package com.cytarch.cellularity.platform.simulation
+package com.cytarch.cellularity.shared.simulation
 
 import com.cytarch.cellularity.shared.model.EnvironmentContract
 import com.cytarch.cellularity.shared.model.ScalarFieldType

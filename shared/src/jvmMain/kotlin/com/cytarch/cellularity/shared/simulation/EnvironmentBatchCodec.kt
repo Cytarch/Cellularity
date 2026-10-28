@@ -1,4 +1,4 @@
-package com.cytarch.cellularity.platform.simulation
+package com.cytarch.cellularity.shared.simulation
 
 import com.cytarch.cellularity.shared.model.EnvironmentContract
 import com.cytarch.cellularity.shared.model.EnvironmentSnapshot
@@ -6,23 +6,25 @@ import com.cytarch.cellularity.shared.model.ScalarFieldSnapshot
 import com.cytarch.cellularity.shared.model.ScalarFieldType
 import com.cytarch.cellularity.shared.model.VectorFieldSnapshot
 import com.cytarch.cellularity.shared.model.VectorFieldType
-import com.cytarch.cellularity.shared.simulation.ApplyResult
-import com.cytarch.cellularity.shared.simulation.EnvironmentChange
-import com.cytarch.cellularity.shared.simulation.EnvironmentPatch
-import com.cytarch.cellularity.shared.simulation.EnvironmentPatchRejection
-import com.cytarch.cellularity.shared.simulation.EnvironmentPatchRejectionReason
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.io.DataInputStream
 import java.io.DataOutputStream
 import java.io.IOException
 
-/** The only Android wire mapping for the versioned native environment contract. */
-internal object EnvironmentBatchCodec {
-    internal const val STATE_MAGIC = 0x43455653 // CEVS
-    internal const val PATCH_MAGIC = 0x43455650 // CEVP
-    internal const val RESULT_MAGIC = 0x43455652 // CEVR
-    internal const val MAX_WIRE_BYTES = 64 * 1024
+/**
+ * The only wire mapping for the versioned native environment contract.
+ *
+ * It lives here rather than beside either caller because there are two of them now: the
+ * Android backend reads the same document from the same native code, and a second
+ * implementation would be a second chance to disagree with the native writer about a
+ * field order that fails silently when it is wrong.
+ */
+object EnvironmentBatchCodec {
+    const val STATE_MAGIC = 0x43455653 // CEVS
+    const val PATCH_MAGIC = 0x43455650 // CEVP
+    const val RESULT_MAGIC = 0x43455652 // CEVR
+    const val MAX_WIRE_BYTES = 64 * 1024
 
     private const val CHANGE_BOOLEAN = 1
     private const val CHANGE_SCALAR = 2
@@ -294,7 +296,7 @@ internal object EnvironmentBatchCodec {
     }
 }
 
-internal class EnvironmentContractException(
+class EnvironmentContractException(
     message: String,
     cause: Throwable? = null
 ) : RuntimeException(message, cause)

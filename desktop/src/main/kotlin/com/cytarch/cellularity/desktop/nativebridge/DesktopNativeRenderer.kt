@@ -157,6 +157,50 @@ internal object DesktopNativeRenderer {
 
     external fun nativeCellCount(sessionHandle: Long): Long
 
+    /**
+     * The environment as one wire document, or null when there is nothing to read.
+     *
+     * The document is handed over whole and undecoded because the schema belongs to one
+     * place. Parsing it here as well as in the editor would make a second reader that the
+     * next schema change has to be told about, and a reader that silently disagrees with
+     * the writer is the failure this shape avoids.
+     *
+     * This is a request round-trip to the simulation thread rather than a field read, so it
+     * waits for the runtime to service it and is not something to call once per frame.
+     */
+    external fun nativeReadEnvironment(sessionHandle: Long): ByteArray?
+
+    /**
+     * Applies a patch document and returns the result document the runtime wrote for it.
+     *
+     * A null means the exchange did not happen at all. A patch that was refused still
+     * returns a document, because the refusal carries which change was rejected and why,
+     * and that account is the only thing a caller can act on.
+     */
+    external fun nativeApplyEnvironmentPatch(
+        sessionHandle: Long,
+        patchBytes: ByteArray
+    ): ByteArray?
+
+    /**
+     * The runtime's status as ten longs: revision, worldEpoch, completedUpdateCount,
+     * cellCount, foodWholeUnits, simulationTimeMillis, temperatureMode, toolOrdinal,
+     * selectedCellId and a failed flag.
+     *
+     * It is one array rather than ten calls because the runtime publishes these as a single
+     * snapshot; read separately they would describe different moments and a status line
+     * could show a cell count from before an update beside a revision from after it.
+     */
+    external fun nativeReadStats(sessionHandle: Long): LongArray?
+
+    /**
+     * One cell as a wire document, or null when the runtime has no such cell.
+     *
+     * A cell that died after the call that named it is the ordinary reason for the null, so
+     * callers must treat it as a stale reference rather than as a failure to report.
+     */
+    external fun nativeInspectCell(sessionHandle: Long, cellId: Int): ByteArray?
+
     external fun nativeStopSession(sessionHandle: Long): Int
 
     external fun nativeDestroyWindow(windowHandle: Long): Int

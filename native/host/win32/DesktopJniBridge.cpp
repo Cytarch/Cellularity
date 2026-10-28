@@ -9,6 +9,11 @@
 // JNI entry points. It links the same libraries the standalone host links, so the
 // two front doors run one renderer rather than two similar ones.
 //
+// A third shape of caller is served as well: inspection. The entry points at the bottom of
+// this file hand the managed side the wire documents the runtime already writes and reads
+// the status it already publishes, so that the editor's model of the environment and the
+// simulation's are one schema rather than two that have to be kept in agreement by hand.
+//
 // ## Symbol names
 //
 // The JVM binds an `external fun` to a C++ symbol named
@@ -67,13 +72,17 @@
 #include <jni.h>
 
 #include <chrono>
+#include <cmath>
 #include <cstdint>
+#include <limits>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
+#include <vector>
 
 #include "app/NativeCellularityController.h"
 // microscopeRuntimeSnapshot() returns this by value, so the controller's forward
@@ -295,6 +304,92 @@ void registerChildWindow(HWND window) {
     output.assign(chars);
     env->ReleaseStringUTFChars(value, chars);
     return true;
+}
+
+// Copies a native byte vector into a freshly allocated Java array. Null means the JVM
+// refused to allocate it, and the OutOfMemoryError it raised is left pending so the
+// caller returns immediately rather than stacking a second failure on top of it.
+//
+// The bytes are copied verbatim and are never interpreted here. The documents that
+// travel through this bridge are written big-endian (ByteWriter in io/NativeByteStream.h
+// shifts the most significant byte out first), and the decoder lives in the managed
+// application; a second reader on this side would be a second schema to keep in step.
+[[nodiscard]] jbyteArray toJavaByteArray(
+        JNIEnv* env, const std::vector<std::uint8_t>& bytes) noexcept {
+    // A vector longer than a Java array can describe is refused rather than truncated.
+    // Every document on this path is bounded by EnvironmentBatch::MAX_WIRE_BYTES, so
+    // this cannot happen for a real one; a silently shortened document would be worse
+    // than a null, because the decoder would report a schema fault instead of a failure
+    // to copy.
+    if (bytes.size()
+            > static_cast<std::size_t>(std::numeric_limits<jsize>::max())) {
+        return nullptr;
+    }
+    const jsize length = static_cast<jsize>(bytes.size());
+    jbyteArray result = env->NewByteArray(length);
+    if (result == nullptr) {
+        return nullptr;
+    }
+    if (length > 0) {
+        env->SetByteArrayRegion(result, 0, length,
+                reinterpret_cast<const jbyte*>(bytes.data()));
+    }
+    return result;
+}
+
+// Reads a Java byte array into a std::vector, verbatim. False means the argument was
+// null, or the copy could not be made, and the caller answers null rather than throwing:
+// the managed side sends a patch as bytes, and a malformed argument is a refusal, not a
+// stack trace. The bytes are not validated here for the same reason they are not
+// validated on the way out -- the schema's one reader is the native side of the patch,
+// which reports a rejection document rather than an exception.
+[[nodiscard]] bool readJavaByteArray(
+        JNIEnv* env, jbyteArray source, std::vector<std::uint8_t>& output) {
+    output.clear();
+    if (source == nullptr) {
+        return false;
+    }
+    const jsize length = env->GetArrayLength(source);
+    if (length < 0) {
+        return false;
+    }
+    try {
+        output.resize(static_cast<std::size_t>(length));
+    } catch (...) {
+        return false;
+    }
+    if (length > 0) {
+        env->GetByteArrayRegion(source, 0, length,
+                reinterpret_cast<jbyte*>(output.data()));
+        // The length check above makes an out-of-range copy impossible, but a pending
+        // exception would mean the vector is partly filled and the JVM expects the
+        // caller to stop, so the refusal is explicit rather than assumed.
+        if (env->ExceptionCheck() != JNI_FALSE) {
+            return false;
+        }
+    }
+    return true;
+}
+
+// Rounds a native double to the whole number the managed status vector carries, which
+// has one jlong per value. Non-finite values saturate instead of trapping, because this
+// runs on a path whose contract is that nothing throws: a NaN round-tripped into a
+// status readout would otherwise be undefined behaviour rather than a readout.
+[[nodiscard]] jlong roundedToWhole(double value) noexcept {
+    constexpr double kMaximumWhole =
+            static_cast<double>(std::numeric_limits<std::int64_t>::max());
+    constexpr double kMinimumWhole =
+            static_cast<double>(std::numeric_limits<std::int64_t>::min());
+    if (std::isnan(value)) {
+        return 0;
+    }
+    if (value >= kMaximumWhole) {
+        return std::numeric_limits<jlong>::max();
+    }
+    if (value <= kMinimumWhole) {
+        return std::numeric_limits<jlong>::min();
+    }
+    return static_cast<jlong>(std::llround(value));
 }
 
 [[nodiscard]] std::int64_t currentUnixMillis() noexcept {
@@ -836,6 +931,193 @@ Java_com_cytarch_cellularity_desktop_nativebridge_DesktopNativeRenderer_nativeCe
         return static_cast<jlong>(controller->microscopeRuntimeSnapshot().cellCount);
     } catch (...) {
         return 0;
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Inspection
+// ---------------------------------------------------------------------------
+//
+// The four calls below are request round-trips rather than reads. Each one goes through
+// the controller's owner-request queue and waits for the runtime thread to service it,
+// because the world they describe is owned by that thread and the queue is the only way
+// to look at it without racing it. They are consequently not frame-loop calls: a caller
+// that polls one every frame adds the runtime's service latency to every frame.
+//
+// None of them can report a status code, because their return value is the payload. A
+// refusal is a null, so a caller that needs to tell "no such session" from "nothing to
+// report" has to ask a status-returning call instead. Null is also what a runtime that
+// is not running produces: these requests require an active runtime and the controller
+// reports that refusal by throwing, which the catch below turns into the same null.
+
+// Reads the environment as one CEVS document (magic, schema version, revision, the six
+// boolean switches, the three field descriptors, the 23 scalar doubles, the gene pool and
+// the mutation weights), or null when the handle is not a live session or the read
+// failed.
+//
+// This is the whole document rather than a chosen subset because the managed side owns
+// the decode: the wire schema and the editor's model are one thing, and slicing it here
+// would mean a second definition of it in C++ that the next schema change would have to
+// remember to update. The bytes are copied unchanged, most significant byte first, which
+// is how the native writer emits them.
+extern "C" JNIEXPORT jbyteArray JNICALL
+Java_com_cytarch_cellularity_desktop_nativebridge_DesktopNativeRenderer_nativeReadEnvironment(
+        JNIEnv* env, jclass, jlong sessionHandle) {
+    const std::shared_ptr<DesktopSession> session = findSession(sessionHandle);
+    if (!session) {
+        return nullptr;
+    }
+    try {
+        const std::shared_ptr<NativeCellularityController> controller =
+                liveController(session);
+        if (!controller) {
+            return nullptr;
+        }
+        const std::vector<std::uint8_t> document =
+                controller->inspectMicroscopeEnvironment();
+        // An empty document is a failure of the read rather than a valid answer: every
+        // successful inspection writes the fixed header above, so a zero-length result
+        // would only reach the decoder as a schema fault.
+        if (document.empty()) {
+            return nullptr;
+        }
+        return toJavaByteArray(env, document);
+    } catch (...) {
+        return nullptr;
+    }
+}
+
+// Applies a CEVP patch document and returns the CEVR result document the runtime wrote
+// for it, or null when the handle is not a live session or the exchange failed.
+//
+// A null here is not the same as a refused patch. The runtime answers a patch it will not
+// apply with a result document carrying the rejection list, and that document is what
+// this returns: the managed side needs to know which change was rejected and why, so
+// swallowing a rejection into a null would throw away the only account of it.
+extern "C" JNIEXPORT jbyteArray JNICALL
+Java_com_cytarch_cellularity_desktop_nativebridge_DesktopNativeRenderer_nativeApplyEnvironmentPatch(
+        JNIEnv* env, jclass, jlong sessionHandle, jbyteArray patchBytes) {
+    const std::shared_ptr<DesktopSession> session = findSession(sessionHandle);
+    if (!session) {
+        return nullptr;
+    }
+    try {
+        const std::shared_ptr<NativeCellularityController> controller =
+                liveController(session);
+        if (!controller) {
+            return nullptr;
+        }
+        std::vector<std::uint8_t> bytes;
+        if (!readJavaByteArray(env, patchBytes, bytes)) {
+            return nullptr;
+        }
+        // The controller returns the result document by value and has already turned a
+        // malformed patch into a rejection document, so there is nothing left to check
+        // except the shape of the answer: an empty one is the failure case, because
+        // every result carries at least the magic, the version and the revision.
+        const std::vector<std::uint8_t> result =
+                controller->applyMicroscopeEnvironmentPatch(std::move(bytes));
+        if (result.empty()) {
+            return nullptr;
+        }
+        return toJavaByteArray(env, result);
+    } catch (...) {
+        return nullptr;
+    }
+}
+
+// Reads the runtime's status as ten longs, in this order: revision, worldEpoch,
+// completedUpdateCount, cellCount, foodAsWholeUnits, simulationTimeMillis,
+// temperatureMode, toolOrdinal, selectedCellId, failedFlag. Null when the handle is not
+// a live session.
+//
+// One array rather than ten calls, because the runtime publishes these fields as one
+// snapshot: ten readings would be ten different moments, and a status line assembled from
+// them would show a cell count from before an update next to a revision from after it.
+//
+// Two of the ten are conversions, and both are done here rather than by each caller. The
+// snapshot reports food as a total mass, which is the only food figure it carries -- there
+// is no food count in it -- and it is rounded to whole units so that a plate with food on
+// it does not read as zero. Simulation time is fractional seconds and is reported as whole
+// milliseconds, which is the resolution a status line can show.
+extern "C" JNIEXPORT jlongArray JNICALL
+Java_com_cytarch_cellularity_desktop_nativebridge_DesktopNativeRenderer_nativeReadStats(
+        JNIEnv* env, jclass, jlong sessionHandle) {
+    const std::shared_ptr<DesktopSession> session = findSession(sessionHandle);
+    if (!session) {
+        return nullptr;
+    }
+    try {
+        const std::shared_ptr<NativeCellularityController> controller =
+                liveController(session);
+        if (!controller) {
+            return nullptr;
+        }
+        const cellularity::microscope::NativeMicroscopeRuntimeSnapshot snapshot =
+                controller->microscopeRuntimeSnapshot();
+        // A negative simulation time cannot be shown as a duration and is reported as
+        // zero; a negative food mass is equally meaningless and is left to the rounding
+        // below, which preserves its sign rather than hiding it.
+        const jlong simulationTimeMillis = snapshot.simulationTime > 0.0
+                ? roundedToWhole(snapshot.simulationTime * 1000.0)
+                : 0;
+        const jlong foodWholeUnits = roundedToWhole(snapshot.foodMass);
+        const jlong values[] = {
+                static_cast<jlong>(snapshot.revision),
+                static_cast<jlong>(snapshot.worldEpoch),
+                static_cast<jlong>(snapshot.completedUpdateCount),
+                static_cast<jlong>(snapshot.cellCount),
+                foodWholeUnits,
+                simulationTimeMillis,
+                static_cast<jlong>(snapshot.temperatureMode),
+                static_cast<jlong>(snapshot.toolOrdinal),
+                static_cast<jlong>(snapshot.selectedCellId),
+                // The managed declaration reads this as a flag, so a runtime that has
+                // failed reports 1 rather than the C++ bool's byte.
+                snapshot.failed ? 1 : 0,
+        };
+        constexpr jsize kValueCount =
+                static_cast<jsize>(sizeof(values) / sizeof(values[0]));
+        jlongArray result = env->NewLongArray(kValueCount);
+        if (result == nullptr) {
+            return nullptr;
+        }
+        env->SetLongArrayRegion(result, 0, kValueCount, values);
+        return result;
+    } catch (...) {
+        return nullptr;
+    }
+}
+
+// Reads one cell as a document the managed side decodes, or null when the handle is not a
+// live session, the runtime has no such cell, or the read failed.
+//
+// The empty case is a real answer and not an error: a cell that has died since the call
+// that named it is the ordinary way this returns nothing, which is why the controller
+// hands back an optional rather than an empty vector, and why the null is passed on
+// instead of being turned into a zero-length array that a decoder would have to
+// distinguish from a real document.
+extern "C" JNIEXPORT jbyteArray JNICALL
+Java_com_cytarch_cellularity_desktop_nativebridge_DesktopNativeRenderer_nativeInspectCell(
+        JNIEnv* env, jclass, jlong sessionHandle, jint cellId) {
+    const std::shared_ptr<DesktopSession> session = findSession(sessionHandle);
+    if (!session) {
+        return nullptr;
+    }
+    try {
+        const std::shared_ptr<NativeCellularityController> controller =
+                liveController(session);
+        if (!controller) {
+            return nullptr;
+        }
+        const std::optional<std::vector<std::uint8_t>> document =
+                controller->inspectMicroscopeCell(static_cast<int>(cellId));
+        if (!document.has_value() || document->empty()) {
+            return nullptr;
+        }
+        return toJavaByteArray(env, *document);
+    } catch (...) {
+        return nullptr;
     }
 }
 

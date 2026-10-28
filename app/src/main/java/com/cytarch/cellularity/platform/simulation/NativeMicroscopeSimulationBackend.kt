@@ -1,5 +1,6 @@
 package com.cytarch.cellularity.platform.simulation
 
+import com.cytarch.cellularity.shared.simulation.EnvironmentBatchCodec
 import com.cytarch.cellularity.NativeSimulationFacade
 import com.cytarch.cellularity.platform.logging.AppLog
 import com.cytarch.cellularity.shared.model.CellInspectionSnapshot
