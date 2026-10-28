@@ -29,7 +29,7 @@ import java.nio.file.Path
  * thread the native side starts; only drawing and input come back through here, which is
  * what makes a single calling thread sufficient rather than merely convenient.
  */
-internal object DesktopNativeRenderer {
+object DesktopNativeRenderer {
 
     /**
      * Loads the library, or records why it could not be loaded.

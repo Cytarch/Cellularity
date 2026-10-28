@@ -73,6 +73,19 @@ fun DesktopPlayScreen(
     var failure by remember { mutableStateOf<String?>(null) }
     val assetRoots = remember { DesktopAssetRoots.resolve() }
 
+    // The session handle, published by the surface once the renderer has made one. The
+    // gateway needs the same session the viewport draws, because the substrate panel must
+    // edit the world on screen rather than a second one behind it.
+    var sessionHandle by remember { mutableStateOf(0L) }
+    var gateway by remember { mutableStateOf<DesktopSimulationGateway?>(null) }
+    LaunchedEffect(sessionHandle) {
+        val handle = sessionHandle
+        if (handle == 0L) return@LaunchedEffect
+        val created = DesktopSimulationGateway(sessionHandle = handle)
+        gateway = created
+        created.start()
+    }
+
     // A mode or tool change in the interface becomes an instruction to the simulation.
     LaunchedEffect(microscopeState.selectedTemperature) {
         queueInput(SurfaceInputEvent.Temperature(microscopeState.selectedTemperature.nativeMode))
@@ -148,16 +161,50 @@ fun DesktopPlayScreen(
                     onPlateActionClick = onPlateActionClick,
                     onAction = { action -> microscopeStore.dispatch(action) },
                     onCellCount = { count -> cellCount = count },
-                    onFailure = { message -> failure = message }
+                    onFailure = { message -> failure = message },
+                    onSessionReady = { handle -> sessionHandle = handle }
                 )
             },
             substrateContent = { isVisible, onPlateActionClick ->
-                SubstrateTab(
-                    isVisible = isVisible,
-                    onPlateActionClick = onPlateActionClick
-                )
+                val current = gateway
+                if (current == null) {
+                    SubstrateTabUnavailable(isVisible)
+                } else {
+                    SubstrateTab(
+                        gateway = current,
+                        isVisible = isVisible,
+                        plateRadius = configuration.radius,
+                        selectedTemperature = microscopeState.selectedTemperature.nativeMode,
+                        onTemperatureSelected = { mode ->
+                            MicroscopeTemperature.fromNativeMode(mode)?.let { temperature ->
+                                microscopeStore.dispatch(
+                                    MicroscopeAction.SelectTemperature(temperature)
+                                )
+                            }
+                        },
+                        onPlateActionClick = onPlateActionClick
+                    )
+                }
             },
             genomeContent = { GenomeTab() }
+        )
+    }
+}
+
+/**
+ * Shown until the renderer has a session for the panel to read.
+ *
+ * The window between opening a plate and the first frame is short, but the panel has no
+ * environment to show during it, and building it against one that does not exist yet
+ * would mean reading a world nobody has created.
+ */
+@Composable
+private fun SubstrateTabUnavailable(isVisible: Boolean) {
+    if (!isVisible) return
+    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        Text(
+            text = "Waiting for the simulation to start.",
+            modifier = Modifier.padding(24.dp)
         )
     }
 }

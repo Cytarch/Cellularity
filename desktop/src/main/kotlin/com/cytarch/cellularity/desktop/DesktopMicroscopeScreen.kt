@@ -43,7 +43,8 @@ fun MicroscopeTab(
     onPlateActionClick: () -> Unit,
     onAction: (MicroscopeAction) -> Unit,
     onCellCount: (Long) -> Unit,
-    onFailure: (String) -> Unit
+    onFailure: (String) -> Unit,
+    onSessionReady: (Long) -> Unit
 ) {
     MicroscopeScreen(
         state = state,
@@ -61,6 +62,7 @@ fun MicroscopeTab(
                 inputEvents = pendingInput,
                 onCellCount = onCellCount,
                 onFailure = onFailure,
+                onSessionReady = onSessionReady,
                 modifier = Modifier.fillMaxSize()
             )
             // A quiet readout: the phone puts these behind a diagnostics screen, but on

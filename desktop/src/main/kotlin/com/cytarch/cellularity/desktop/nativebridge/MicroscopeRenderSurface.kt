@@ -72,6 +72,7 @@ fun MicroscopeRenderSurface(
     inputEvents: List<SurfaceInputEvent>,
     onCellCount: (Long) -> Unit,
     onFailure: (String) -> Unit,
+    onSessionReady: (Long) -> Unit = { },
     modifier: Modifier = Modifier
 ) {    if (!DesktopNativeRenderer.isAvailable || assetRoots == null) {
         RendererUnavailable(
@@ -99,7 +100,8 @@ fun MicroscopeRenderSurface(
             shaderRoot = assetRoots.shaderRoot.toString(),
             textureRoot = assetRoots.textureRoot.toString(),
             onCellCount = onCellCount,
-            onFailure = onFailure
+            onFailure = onFailure,
+            onSessionReady = onSessionReady
         )
     }
 
@@ -164,7 +166,8 @@ private class SurfaceHolder(
     private val shaderRoot: String,
     private val textureRoot: String,
     private val onCellCount: (Long) -> Unit,
-    private val onFailure: (String) -> Unit
+    private val onFailure: (String) -> Unit,
+    private val onSessionReady: (Long) -> Unit
 ) {
     private var canvas: Canvas? = null
     private var windowHandle: Long = 0L
@@ -323,6 +326,10 @@ private class SurfaceHolder(
             )
             if (sessionHandle == 0L) {
                 failOnce("The simulation could not be started.")
+            } else {
+                // Reported once, from the thread AWT called us on. Callers treat it as a
+                // publication rather than a callback they may block in.
+                onSessionReady(sessionHandle)
             }
         }
     }
