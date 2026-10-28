@@ -210,6 +210,11 @@ private class SurfaceHolder(
         surface.addMouseMotionListener(surfaceMouseHandler(surface))
         surface.addMouseWheelListener(surfaceMouseHandler(surface))
         canvas = surface
+        // The listeners above only fire on a change. A canvas that Swing has already
+        // laid out was resized before they were attached, so waiting for the event would
+        // wait forever and the renderer would never get a window. Asking once here covers
+        // that case; the listener covers every later one.
+        onSizeChanged(surface)
         return surface
     }
 
@@ -285,17 +290,26 @@ private class SurfaceHolder(
         if (released) return
         val newWidth = component.width
         val newHeight = component.height
-        if (newWidth <= 0 || newHeight <= 0) return
-        if (newWidth == width && newHeight == height && windowHandle != 0L) return
 
+        if (newWidth <= 0 || newHeight <= 0) return
+
+        // There is deliberately no "size unchanged" guard here. The session is created
+        // with the extent the window had when it was made, and that moment can precede
+        // the layout that settles the final size, so the surface has to be told the size
+        // every time it is offered rather than only when it differs from the last one
+        // this listener saw. Skipping the call leaves the session presenting at its
+        // creation extent, which looks like a stretched or cropped picture rather than
+        // like a missed resize.
         val ownerHandle = nativeWindowHandleOf(component)
         if (ownerHandle == 0L) {
             // Not an error yet: AWT realises the peer asynchronously, and the listener
-            // is called again once it has.
+            // calls back once it has. It stays an error if it never does, which is why
+            // the screen reports that the renderer is unavailable rather than nothing.
             return
         }
 
         if (windowHandle == 0L) {
+
             windowHandle = DesktopNativeRenderer.nativeCreateWindow(
                 ownerHandle,
                 0,
@@ -303,11 +317,12 @@ private class SurfaceHolder(
                 newWidth,
                 newHeight
             )
+
             if (windowHandle == 0L) {
                 failOnce("The renderer could not create its window.")
                 return
             }
-        } else {
+        } else if (width != newWidth || height != newHeight) {
             DesktopNativeRenderer.nativeResizeWindow(windowHandle, newWidth, newHeight)
         }
         width = newWidth
@@ -340,6 +355,13 @@ private class SurfaceHolder(
         val pending = pendingInput.getAndSet(emptyList())
         for (event in pending) {
             apply(event)
+        }
+        if (sessionHandle == 0L) {
+            // The canvas may have been laid out after attachCanvas asked, so the attempt
+            // is repeated here until it succeeds. Without this a late layout leaves the
+            // screen waiting for a window that will never be created, and waiting is
+            // indistinguishable from rendering nothing.
+            canvas?.let { onSizeChanged(it) }
         }
         if (sessionHandle == 0L) {
             // Still waiting for the canvas to be realised and the session to start.

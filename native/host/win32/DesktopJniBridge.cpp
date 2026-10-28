@@ -71,6 +71,7 @@
 
 #include <jni.h>
 
+#include <atomic>
 #include <chrono>
 #include <cmath>
 #include <cstdint>
@@ -199,6 +200,22 @@ struct DesktopSession final {
     // be read without the lock below.
     HWND window = nullptr;
 
+    // The extent the window has been given but the surface has not taken yet. The
+    // window can be resized from any thread -- the managed side does it from the one
+    // that lays out its interface -- while the surface can only be resized from the
+    // thread that presents, which is the one calling renderFrame. Recording the
+    // request here and applying it at the top of a frame is what keeps the two apart
+    // without a lock around the backend, and it also means a refused resize is simply
+    // retried on the next frame rather than being lost.
+    std::atomic<int> pendingSurfaceWidth{0};
+    std::atomic<int> pendingSurfaceHeight{0};
+
+    // The extent the surface was last told about. Only the thread that presents touches
+    // these, which is what makes them readable without a lock while the pending values
+    // above are written from whichever thread resized the window.
+    int appliedSurfaceWidth = 0;
+    int appliedSurfaceHeight = 0;
+
     // The backend session is the same object the standalone host creates. It is what
     // owns the device and the swapchain, and it is the object that must be closed on
     // the thread that created it.
@@ -247,6 +264,19 @@ void registerChildWindow(HWND window) {
     }
     std::lock_guard<std::mutex> lock(gStateMutex);
     return gChildWindows.find(window) != gChildWindows.end();
+}
+
+[[nodiscard]] std::shared_ptr<DesktopSession> findSessionByWindow(HWND window) {
+    if (window == nullptr) {
+        return nullptr;
+    }
+    std::lock_guard<std::mutex> lock(gStateMutex);
+    for (const auto& entry : gSessions) {
+        if (entry.second && entry.second->window == window) {
+            return entry.second;
+        }
+    }
+    return nullptr;
 }
 
 [[nodiscard]] std::shared_ptr<DesktopSession> findSession(jlong handle) {
@@ -513,6 +543,16 @@ Java_com_cytarch_cellularity_desktop_nativebridge_DesktopNativeRenderer_nativeRe
                 == 0) {
             return kStatusFailed;
         }
+        // The window is the new size now but the surface is not, and the surface may
+        // only be resized from the thread that presents. The request is recorded for the
+        // next frame to pick up, which also means a refusal is retried rather than lost.
+        // A window with no session yet has nothing to resize: its session takes its
+        // extent from the window at the moment it is created.
+        if (const std::shared_ptr<DesktopSession> session =
+                    findSessionByWindow(window)) {
+            session->pendingSurfaceWidth.store(width, std::memory_order_release);
+            session->pendingSurfaceHeight.store(height, std::memory_order_release);
+        }
         return kStatusOk;
     } catch (...) {
         return kStatusFailed;
@@ -605,6 +645,8 @@ Java_com_cytarch_cellularity_desktop_nativebridge_DesktopNativeRenderer_nativeDe
 
         std::shared_ptr<VulkanBackendSession> session;
         std::shared_ptr<NativeCellularityController> controller;
+        int appliedSurfaceWidth = 0;
+        int appliedSurfaceHeight = 0;
         try {
             // The backend is a separate library, so it is obtained through the same
             // v1 entry point a client uses rather than by linking its internals.
@@ -654,6 +696,8 @@ Java_com_cytarch_cellularity_desktop_nativebridge_DesktopNativeRenderer_nativeDe
             // coordinates through. It has to be the child window's client area, which
             // for a window with no border is exactly the size it was created with.
             controller->setViewportSurfaceSize(width, height);
+            appliedSurfaceWidth = width;
+            appliedSurfaceHeight = height;
             controller->setMicroscopeTemperatureMode(1);
             controller->startMicroscopeRuntime();
         } catch (...) {
@@ -679,6 +723,10 @@ Java_com_cytarch_cellularity_desktop_nativebridge_DesktopNativeRenderer_nativeDe
         handle->window = window;
         handle->session = std::move(session);
         handle->controller = std::move(controller);
+        // The extent the session was created with, so the frame loop does not re-apply
+        // it. Only the presenting thread touches these.
+        handle->appliedSurfaceWidth = appliedSurfaceWidth;
+        handle->appliedSurfaceHeight = appliedSurfaceHeight;
 
         try {
             std::lock_guard<std::mutex> lock(gStateMutex);
@@ -744,6 +792,30 @@ Java_com_cytarch_cellularity_desktop_nativebridge_DesktopNativeRenderer_nativeRe
         if (!controller) {
             return kStatusInvalidHandle;
         }
+
+        // A resize asked for since the last frame is applied here, because this is the
+        // thread that owns the surface. It is applied whenever the request disagrees with
+        // the extent the viewport is actually presenting at, not only when it first
+        // arrives, so a resize the surface refused while the window was minimized or
+        // mid-drag is retried on later frames instead of leaving the picture stretched
+        // for the rest of the session.
+        //
+        // The viewport is told as well: the extent the simulation projects into and
+        // converts taps through has to be the client area, or input lands somewhere other
+        // than the cursor.
+        const int pendingWidth =
+                session->pendingSurfaceWidth.load(std::memory_order_acquire);
+        const int pendingHeight =
+                session->pendingSurfaceHeight.load(std::memory_order_acquire);
+        if (pendingWidth > 0 && pendingHeight > 0
+                && (pendingWidth != session->appliedSurfaceWidth
+                        || pendingHeight != session->appliedSurfaceHeight)) {
+            controller->setViewportSurfaceSize(pendingWidth, pendingHeight);
+            controller->invalidateMicroscopeFrameData();
+            session->appliedSurfaceWidth = pendingWidth;
+            session->appliedSurfaceHeight = pendingHeight;
+        }
+
         const RenderFrameOutcome outcome =
                 controller->drawMicroscopeForCurrentMode().outcome;
         if (outcome == RenderFrameOutcome::Failed

@@ -61,6 +61,13 @@ if (nativeOutputDirectory.isDirectory()) {
         environment 'CELLULARITY_NATIVE_DIR', nativeOutputDirectory.absolutePath
         environment 'PATH', "${nativeOutputDirectory.absolutePath};${System.getenv('PATH')}"
     }
+
+    dependencies {
+        // The launcher's own integration tests build the interface on a real AWT frame,
+        // which needs the window and the test harness rather than only the JVM target.
+        testImplementation compose.desktop.currentOs
+        testImplementation compose.uiTestJUnit4
+    }
 }
 
 // AWT keeps the native window handle behind a package-private field, and the package is
@@ -93,6 +100,21 @@ if (existingJavaOptions == null || !existingJavaOptions.contains('java.desktop/j
                 ? requiredOpens
                 : "${existingJavaOptions} ${requiredOpens}"
     }
+}
+
+// Runs the play screen in a window so it can be watched while it draws. This is not a
+// test: it is the last step of the port that no assertion covers, because the journey
+// from the menu into a running plate is something only a window can show. Keeping it as a
+// task rather than a test means the suite stays free of a ten-minute sleep.
+tasks.register('runPlayScreen', JavaExec) {
+    group = 'verification'
+    description = 'Opens the desktop play screen on a live simulation, for observation.'
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'com.cytarch.cellularity.desktop.PlayScreenProbeKt'
+    environment 'JDK_JAVA_OPTIONS', "${existingJavaOptions ?: ''} ${requiredOpens}".trim()
+    systemProperty 'java.library.path', nativeOutputDirectory.absolutePath
+    environment 'CELLULARITY_NATIVE_DIR', nativeOutputDirectory.absolutePath
+    environment 'PATH', "${nativeOutputDirectory.absolutePath};${System.getenv('PATH')}"
 }
 
 compose.desktop {

@@ -126,6 +126,14 @@ class DesktopSimulationGatewayIntegrationTest {
                 val stats = gateway.stats.value
                 assertTrue("the world reported no cells: $stats", stats.cellCount > 0)
                 assertTrue("the world reported no elapsed time: $stats", stats.time > 0.0)
+                // Printed as well as asserted, so a run leaves a record of what the
+                // running world actually contained rather than only that it was non-zero.
+                println(
+                    "GATEWAY cells=${stats.cellCount} time=${stats.time} " +
+                        "updates=${stats.updateCount} revision=${environment.revision} " +
+                        "genePool=${environment.genePool.size} " +
+                        "weights=${environment.mutationWeights.size}"
+                )
 
                 // The panel maps the snapshot before showing it; doing that here is what
                 // catches a field the mapper needs and the document does not carry.
@@ -164,6 +172,10 @@ class DesktopSimulationGatewayIntegrationTest {
                     "an accepted change did not advance the revision: " +
                         "${after?.revision} was $baselineRevision",
                     (after?.revision ?: 0L) > baselineRevision
+                )
+                println(
+                    "GATEWAY change accepted: revision $baselineRevision -> ${after?.revision}, " +
+                        "aging=${after?.aging}"
                 )
 
                 // A change against a revision the world has left behind must be refused,
