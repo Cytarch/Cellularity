@@ -15,11 +15,11 @@ import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.io.DataInputStream
 import java.io.DataOutputStream
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
-import org.junit.Assert.assertThrows
-import org.junit.Assert.assertTrue
-import org.junit.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertFailsWith
+import kotlin.test.assertTrue
+import kotlin.test.Test
 
 class EnvironmentBatchCodecTest {
     @Test
@@ -149,10 +149,10 @@ class EnvironmentBatchCodecTest {
         val wrongSchema = stateBytes(schemaVersion = EnvironmentContract.SCHEMA_VERSION + 1)
         val wrongGenePoolCount = stateBytes(genePoolCount = EnvironmentContract.GENE_POOL_SIZE - 1)
 
-        assertThrows(EnvironmentContractException::class.java) {
+        assertFailsWith<EnvironmentContractException> {
             EnvironmentBatchCodec.decodeSnapshot(wrongSchema)
         }
-        assertThrows(EnvironmentContractException::class.java) {
+        assertFailsWith<EnvironmentContractException> {
             EnvironmentBatchCodec.decodeSnapshot(wrongGenePoolCount)
         }
     }
@@ -162,10 +162,10 @@ class EnvironmentBatchCodecTest {
         val nonFinite = stateBytes(firstScalar = Double.NaN)
         val trailing = stateBytes() + byteArrayOf(1)
 
-        assertThrows(EnvironmentContractException::class.java) {
+        assertFailsWith<EnvironmentContractException> {
             EnvironmentBatchCodec.decodeSnapshot(nonFinite)
         }
-        assertThrows(EnvironmentContractException::class.java) {
+        assertFailsWith<EnvironmentContractException> {
             EnvironmentBatchCodec.decodeSnapshot(trailing)
         }
     }
@@ -184,23 +184,23 @@ class EnvironmentBatchCodecTest {
         val unknownIndex = rawResultBytes(applied = false, revision = 1, changeIndex = 8, reason = 9)
         val unknownReason = rawResultBytes(applied = false, revision = 1, changeIndex = 0, reason = 99)
 
-        assertThrows(EnvironmentContractException::class.java) {
+        assertFailsWith<EnvironmentContractException> {
             EnvironmentBatchCodec.decodeApplyResult(inconsistent, patch)
         }
-        assertThrows(EnvironmentContractException::class.java) {
+        assertFailsWith<EnvironmentContractException> {
             EnvironmentBatchCodec.decodeApplyResult(unknownIndex, patch)
         }
-        assertThrows(EnvironmentContractException::class.java) {
+        assertFailsWith<EnvironmentContractException> {
             EnvironmentBatchCodec.decodeApplyResult(unknownReason, patch)
         }
     }
 
     @Test
     fun patchEnforcesNonEmptyBoundedOwnedChangeList() {
-        assertThrows(IllegalArgumentException::class.java) {
+        assertFailsWith<IllegalArgumentException> {
             EnvironmentPatch(baseRevision = 0, changes = emptyList())
         }
-        assertThrows(IllegalArgumentException::class.java) {
+        assertFailsWith<IllegalArgumentException> {
             EnvironmentPatch(
                 baseRevision = 0,
                 changes = List(EnvironmentContract.MAX_PATCH_CHANGES + 1) {
