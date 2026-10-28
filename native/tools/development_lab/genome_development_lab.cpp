@@ -22,6 +22,12 @@
 
 namespace {
 
+// MSVC does not define PI from <cmath> unless _USE_MATH_DEFINES is set before
+// the include. Project code already spells this constant out locally elsewhere
+// (core/Environment.h, core/CellData.cpp), so follow that convention rather than
+// depending on a compiler-specific macro.
+constexpr double PI = 3.14159265358979323846;
+
 using cellularity::GeneBuilder;
 using cellularity::GeneIndex;
 using cellularity::GeneView;
@@ -420,7 +426,7 @@ std::array<GeneData, CellData::MAX_GENES_COUNT> createTwoCellSwimmerGenome() {
     editGene(founder).setSplitRatio(0.45f);
     editGene(founder).setSplitAngle(0.0f);
     editGene(founder).setChild1Angle(0.0f);
-    editGene(founder).setChild2Angle(static_cast<float>(M_PI));
+    editGene(founder).setChild2Angle(static_cast<float>(PI));
     editGene(founder).setChild1GeneIndex(GeneIndex(kSwimmerAdultBodyGene));
     editGene(founder).setChild2GeneIndex(GeneIndex(kSwimmerFlagellocyteGene));
     editGene(founder).setMakesLink(true);
@@ -456,7 +462,7 @@ std::array<GeneData, CellData::MAX_GENES_COUNT> createTwoCellSwimmerGenome() {
     Gene adultBody = builderGene(CellType::PHAGOCYTE, 0.20f, 0.66f, 0.95f);
     editGene(adultBody).setSplitMass(CellData::MAX_SPLIT_MASS * 0.92f);
     editGene(adultBody).setSplitRatio(0.58f);
-    editGene(adultBody).setSplitAngle(static_cast<float>(M_PI * 0.5));
+    editGene(adultBody).setSplitAngle(static_cast<float>(PI * 0.5));
     editGene(adultBody).setChild1Angle(0.0f);
     editGene(adultBody).setChild2Angle(0.0f);
     editGene(adultBody).setChild1GeneIndex(GeneIndex(kSwimmerAdultBodyGene));
@@ -477,7 +483,7 @@ std::array<GeneData, CellData::MAX_GENES_COUNT> createTwoCellSwimmerGenome() {
     editGene(juvenileBody).setSplitRatio(0.45f);
     editGene(juvenileBody).setSplitAngle(0.0f);
     editGene(juvenileBody).setChild1Angle(0.0f);
-    editGene(juvenileBody).setChild2Angle(static_cast<float>(M_PI));
+    editGene(juvenileBody).setChild2Angle(static_cast<float>(PI));
     editGene(juvenileBody).setChild1GeneIndex(GeneIndex(kSwimmerAdultBodyGene));
     editGene(juvenileBody).setChild2GeneIndex(GeneIndex(kSwimmerFlagellocyteGene));
     editGene(juvenileBody).setMakesLink(true);
@@ -601,7 +607,7 @@ std::array<GeneData, CellData::MAX_GENES_COUNT> createRsh0ReferenceGenome() {
     Gene leftReserve = terminalGene(CellType::LIPOCYTE, 0.92f, 0.52f, 0.20f);
     editGene(leftReserve).setSplitMass(0.077400f);
     editGene(leftReserve).setSplitRatio(0.5f);
-    editGene(leftReserve).setSplitAngle(static_cast<float>(M_PI * 0.5));
+    editGene(leftReserve).setSplitAngle(static_cast<float>(PI * 0.5));
     editGene(leftReserve).setChild1Angle(5.4978f);
     editGene(leftReserve).setChild2Angle(5.4978f);
     editGene(leftReserve).setMassFlowPriority(1.0f);
@@ -733,7 +739,7 @@ std::array<GeneData, CellData::MAX_GENES_COUNT> createWormReferenceGenome() {
     editGene(root).setInitialCompatibilityFlag(true);
     editGene(root).setSplitMass(0.140400f);
     editGene(root).setSplitRatio(0.5f);
-    editGene(root).setChild1Angle(static_cast<float>(M_PI * 0.5));
+    editGene(root).setChild1Angle(static_cast<float>(PI * 0.5));
     editGene(root).setChild2Angle(0.0f);
     editGene(root).setMassFlowPriority(3.831f);
     editGene(root).setChild1GeneIndex(GeneIndex(kStemLeft));
@@ -755,8 +761,8 @@ std::array<GeneData, CellData::MAX_GENES_COUNT> createWormReferenceGenome() {
 
     Gene reserve = makeOldTerminal(CellType::LIPOCYTE, 0.92f, 0.56f, 0.20f);
     editGene(reserve).setSplitMass(0.064800f);
-    editGene(reserve).setChild1Angle(static_cast<float>(M_PI * 0.5));
-    editGene(reserve).setChild2Angle(static_cast<float>(M_PI * 0.5));
+    editGene(reserve).setChild1Angle(static_cast<float>(PI * 0.5));
+    editGene(reserve).setChild2Angle(static_cast<float>(PI * 0.5));
     editGene(reserve).setChild1GeneIndex(GeneIndex(kLightBuilder));
     editGene(reserve).setChild2GeneIndex(GeneIndex(kStemRight));
     setLinkBuilderDefaults(reserve);
@@ -764,7 +770,7 @@ std::array<GeneData, CellData::MAX_GENES_COUNT> createWormReferenceGenome() {
 
     Gene lightBuilder = makeOldTerminal(CellType::PHOTOCYTE, 0.42f, 0.95f, 0.66f);
     editGene(lightBuilder).setSplitMass(0.354600f);
-    editGene(lightBuilder).setChild1Angle(static_cast<float>(M_PI * 0.5));
+    editGene(lightBuilder).setChild1Angle(static_cast<float>(PI * 0.5));
     editGene(lightBuilder).setChild2Angle(0.0f);
     editGene(lightBuilder).setChild1GeneIndex(GeneIndex(kTailReserve));
     editGene(lightBuilder).setChild2GeneIndex(GeneIndex(kSegmentReserve));
@@ -808,7 +814,7 @@ std::array<GeneData, CellData::MAX_GENES_COUNT> createWormReferenceGenome() {
     Gene repeater = makeOldTerminal(CellType::PHAGOCYTE, 0.24f, 0.70f, 0.96f);
     editGene(repeater).setSplitMass(0.064800f);
     editGene(repeater).setChild1Angle(0.0f);
-    editGene(repeater).setChild2Angle(static_cast<float>(M_PI * 1.5));
+    editGene(repeater).setChild2Angle(static_cast<float>(PI * 1.5));
     editGene(repeater).setChild1GeneIndex(GeneIndex(kLightRepeater));
     editGene(repeater).setChild2GeneIndex(GeneIndex(kRoot));
     editGene(repeater).setChild1KeepsLinks(true);
@@ -862,7 +868,7 @@ std::array<GeneData, CellData::MAX_GENES_COUNT> createWormReferenceGenome() {
     Gene lightSeed = makeOldTerminal(CellType::PHOTOCYTE, 0.48f, 0.95f, 0.72f);
     editGene(lightSeed).setSplitMass(0.354600f);
     editGene(lightSeed).setChild1Angle(0.0f);
-    editGene(lightSeed).setChild2Angle(static_cast<float>(M_PI * 1.5));
+    editGene(lightSeed).setChild2Angle(static_cast<float>(PI * 1.5));
     editGene(lightSeed).setChild1GeneIndex(GeneIndex(kLightSeed));
     editGene(lightSeed).setChild2GeneIndex(GeneIndex(kRoot));
     editGene(lightSeed).setChild1KeepsLinks(true);
@@ -955,7 +961,7 @@ std::array<GeneData, CellData::MAX_GENES_COUNT> createKiteSeedSwimmerGenome() {
     Gene leftBuilder = terminalGene(CellType::PHAGOCYTE, 0.30f, 0.74f, 0.96f);
     editGene(leftBuilder).setSplitMass(0.077400f);
     editGene(leftBuilder).setSplitRatio(0.5f);
-    editGene(leftBuilder).setSplitAngle(static_cast<float>(M_PI * 0.5));
+    editGene(leftBuilder).setSplitAngle(static_cast<float>(PI * 0.5));
     editGene(leftBuilder).setChild1Angle(5.4978f);
     editGene(leftBuilder).setChild2Angle(5.4978f);
     editGene(leftBuilder).setMassFlowPriority(1.0f);
@@ -1010,9 +1016,9 @@ std::array<GeneData, CellData::MAX_GENES_COUNT> createKiteSeedSwimmerGenome() {
     Gene budBuilder = terminalGene(CellType::PHAGOCYTE, 0.42f, 0.86f, 0.98f);
     editGene(budBuilder).setSplitMass(0.230000f);
     editGene(budBuilder).setSplitRatio(0.52f);
-    editGene(budBuilder).setSplitAngle(static_cast<float>(M_PI));
+    editGene(budBuilder).setSplitAngle(static_cast<float>(PI));
     editGene(budBuilder).setChild1Angle(0.0f);
-    editGene(budBuilder).setChild2Angle(static_cast<float>(M_PI));
+    editGene(budBuilder).setChild2Angle(static_cast<float>(PI));
     editGene(budBuilder).setMassFlowPriority(1.0f);
     editGene(budBuilder).setChild1GeneIndex(GeneIndex(kFreeSeed));
     editGene(budBuilder).setChild2GeneIndex(GeneIndex(kRearMotor));
@@ -1077,7 +1083,7 @@ std::array<GeneData, CellData::MAX_GENES_COUNT> createOutriggerSwimmerGenome() {
     editGene(seed).setSplitRatio(0.50f);
     editGene(seed).setSplitAngle(0.0f);
     editGene(seed).setChild1Angle(0.0f);
-    editGene(seed).setChild2Angle(static_cast<float>(M_PI));
+    editGene(seed).setChild2Angle(static_cast<float>(PI));
     editGene(seed).setMassFlowPriority(2.0f);
     editGene(seed).setChild1GeneIndex(GeneIndex(kBodyBuilder));
     editGene(seed).setChild2GeneIndex(GeneIndex(kLeftMotor));
@@ -1095,9 +1101,9 @@ std::array<GeneData, CellData::MAX_GENES_COUNT> createOutriggerSwimmerGenome() {
     Gene bodyBuilder = terminalGene(CellType::PHAGOCYTE, 0.26f, 0.72f, 0.96f);
     editGene(bodyBuilder).setSplitMass(0.230000f);
     editGene(bodyBuilder).setSplitRatio(0.48f);
-    editGene(bodyBuilder).setSplitAngle(static_cast<float>(M_PI * 0.5));
+    editGene(bodyBuilder).setSplitAngle(static_cast<float>(PI * 0.5));
     editGene(bodyBuilder).setChild1Angle(0.0f);
-    editGene(bodyBuilder).setChild2Angle(static_cast<float>(M_PI));
+    editGene(bodyBuilder).setChild2Angle(static_cast<float>(PI));
     editGene(bodyBuilder).setMassFlowPriority(2.0f);
     editGene(bodyBuilder).setChild1GeneIndex(GeneIndex(kBody));
     editGene(bodyBuilder).setChild2GeneIndex(GeneIndex(kRightMotor));
@@ -1121,9 +1127,9 @@ std::array<GeneData, CellData::MAX_GENES_COUNT> createOutriggerSwimmerGenome() {
     Gene body = terminalGene(CellType::PHAGOCYTE, 0.20f, 0.68f, 0.96f);
     editGene(body).setSplitMass(0.330000f);
     editGene(body).setSplitRatio(0.55f);
-    editGene(body).setSplitAngle(static_cast<float>(M_PI));
+    editGene(body).setSplitAngle(static_cast<float>(PI));
     editGene(body).setChild1Angle(0.0f);
-    editGene(body).setChild2Angle(static_cast<float>(M_PI));
+    editGene(body).setChild2Angle(static_cast<float>(PI));
     editGene(body).setMassFlowPriority(3.0f);
     editGene(body).setChild1GeneIndex(GeneIndex(kBody));
     editGene(body).setChild2GeneIndex(GeneIndex(kReproductiveSeed));
@@ -1188,7 +1194,7 @@ std::array<GeneData, CellData::MAX_GENES_COUNT> createLarvalGliderGenome() {
     editGene(root).setSplitRatio(0.50f);
     editGene(root).setSplitAngle(0.0f);
     editGene(root).setChild1Angle(0.0f);
-    editGene(root).setChild2Angle(static_cast<float>(M_PI));
+    editGene(root).setChild2Angle(static_cast<float>(PI));
     editGene(root).setMassFlowPriority(2.0f);
     editGene(root).setChild1GeneIndex(GeneIndex(kSpineBuilder));
     editGene(root).setChild2GeneIndex(GeneIndex(kBallast));
@@ -1202,9 +1208,9 @@ std::array<GeneData, CellData::MAX_GENES_COUNT> createLarvalGliderGenome() {
     Gene spineBuilder = terminalGene(CellType::PHAGOCYTE, 0.20f, 0.68f, 0.96f);
     editGene(spineBuilder).setSplitMass(0.130000f);
     editGene(spineBuilder).setSplitRatio(0.48f);
-    editGene(spineBuilder).setSplitAngle(static_cast<float>(M_PI * 0.5));
+    editGene(spineBuilder).setSplitAngle(static_cast<float>(PI * 0.5));
     editGene(spineBuilder).setChild1Angle(0.0f);
-    editGene(spineBuilder).setChild2Angle(static_cast<float>(M_PI));
+    editGene(spineBuilder).setChild2Angle(static_cast<float>(PI));
     editGene(spineBuilder).setMassFlowPriority(2.5f);
     editGene(spineBuilder).setChild1GeneIndex(GeneIndex(kBody));
     editGene(spineBuilder).setChild2GeneIndex(GeneIndex(kMotorBud));
@@ -1352,8 +1358,8 @@ std::array<GeneData, CellData::MAX_GENES_COUNT> createFeatherFanShapeGenome() {
     editGene(root).setSplitRatio(0.50f);
     editGene(root).setChild1GeneIndex(GeneIndex(kSpineLeft));
     editGene(root).setChild2GeneIndex(GeneIndex(kRootPad));
-    editGene(root).setChild1Angle(static_cast<float>(M_PI * 0.5));
-    editGene(root).setChild2Angle(static_cast<float>(-M_PI * 0.5));
+    editGene(root).setChild1Angle(static_cast<float>(PI * 0.5));
+    editGene(root).setChild2Angle(static_cast<float>(-PI * 0.5));
     editGene(root).setChild2KeepsLinks(false);
     genome[kRoot] = root;
 
@@ -1362,7 +1368,7 @@ std::array<GeneData, CellData::MAX_GENES_COUNT> createFeatherFanShapeGenome() {
     editGene(spineLeft).setSplitRatio(0.50f);
     editGene(spineLeft).setChild1GeneIndex(GeneIndex(kSpineRight));
     editGene(spineLeft).setChild2GeneIndex(GeneIndex(kRibLeft));
-    editGene(spineLeft).setChild1Angle(static_cast<float>(M_PI * 0.5));
+    editGene(spineLeft).setChild1Angle(static_cast<float>(PI * 0.5));
     editGene(spineLeft).setChild2Angle(0.0f);
     editGene(spineLeft).setChild2KeepsLinks(false);
     genome[kSpineLeft] = spineLeft;
@@ -1371,8 +1377,8 @@ std::array<GeneData, CellData::MAX_GENES_COUNT> createFeatherFanShapeGenome() {
     setColor(spineRight, 0.22f, 0.84f, 0.96f);
     editGene(spineRight).setChild1GeneIndex(GeneIndex(kSpineLeft));
     editGene(spineRight).setChild2GeneIndex(GeneIndex(kRibRight));
-    editGene(spineRight).setChild1Angle(static_cast<float>(M_PI * 0.5));
-    editGene(spineRight).setChild2Angle(static_cast<float>(M_PI));
+    editGene(spineRight).setChild1Angle(static_cast<float>(PI * 0.5));
+    editGene(spineRight).setChild2Angle(static_cast<float>(PI));
     genome[kSpineRight] = spineRight;
 
     Gene ribLeft = structuralBuilder(CellType::PHAGOCYTE, 0.30f, 0.88f, 0.72f);
@@ -1389,8 +1395,8 @@ std::array<GeneData, CellData::MAX_GENES_COUNT> createFeatherFanShapeGenome() {
     Gene ribRight(ribLeft);
     setColor(ribRight, 0.28f, 0.78f, 0.96f);
     editGene(ribRight).setChild1GeneIndex(GeneIndex(kRibRight));
-    editGene(ribRight).setChild1Angle(static_cast<float>(M_PI));
-    editGene(ribRight).setChild2Angle(static_cast<float>(M_PI - 0.12));
+    editGene(ribRight).setChild1Angle(static_cast<float>(PI));
+    editGene(ribRight).setChild2Angle(static_cast<float>(PI - 0.12));
     genome[kRibRight] = ribRight;
 
     Gene photoNode = terminalGene(CellType::PHOTOCYTE, 0.80f, 0.96f, 0.42f);
@@ -1416,11 +1422,11 @@ std::array<GeneData, CellData::MAX_GENES_COUNT> createFeatherFanShapeGenome() {
     Gene rootPad = structuralBuilder(CellType::PHAGOCYTE, 0.18f, 0.62f, 0.42f);
     editGene(rootPad).setSplitMass(0.210f);
     editGene(rootPad).setSplitRatio(0.50f);
-    editGene(rootPad).setSplitAngle(static_cast<float>(-M_PI * 0.5));
+    editGene(rootPad).setSplitAngle(static_cast<float>(-PI * 0.5));
     editGene(rootPad).setChild1GeneIndex(GeneIndex(kRootPad));
     editGene(rootPad).setChild2GeneIndex(GeneIndex(kPhotoNode));
-    editGene(rootPad).setChild1Angle(static_cast<float>(-M_PI * 0.5));
-    editGene(rootPad).setChild2Angle(static_cast<float>(-M_PI * 0.5 + 0.10));
+    editGene(rootPad).setChild1Angle(static_cast<float>(-PI * 0.5));
+    editGene(rootPad).setChild2Angle(static_cast<float>(-PI * 0.5 + 0.10));
     editGene(rootPad).setChild2KeepsLinks(true);
     editGene(rootPad).setFloatValue(Gene::FloatType::CYTOSKELETON, 1.35f);
     editGene(rootPad).setIntegerValue(Gene::MAX_CONNECTION_COUNT_INDEX, 3);
@@ -1438,7 +1444,7 @@ std::array<GeneData, CellData::MAX_GENES_COUNT> createStarfishShapeGenome() {
     constexpr int kArmTip = 5;
     constexpr int kHubTerminal = 6;
 
-    constexpr float kTurn72 = static_cast<float>(M_PI * 2.0 / 5.0);
+    constexpr float kTurn72 = static_cast<float>(PI * 2.0 / 5.0);
 
     std::array<GeneData, CellData::MAX_GENES_COUNT> genome{};
     for (int i = 0; i < CellData::MAX_GENES_COUNT; i++) {
@@ -1491,7 +1497,7 @@ std::array<GeneData, CellData::MAX_GENES_COUNT> createStarfishShapeGenome() {
     editGene(root).setChild1GeneIndex(GeneIndex(kHubTerminal));
     editGene(root).setChild2GeneIndex(GeneIndex(kHubEmitter));
     editGene(root).setSplitAngle(0.0f);
-    editGene(root).setChild1Angle(static_cast<float>(M_PI));
+    editGene(root).setChild1Angle(static_cast<float>(PI));
     editGene(root).setChild2Angle(0.0f);
     editGene(root).setChild1KeepsLinks(true);
     editGene(root).setChild2KeepsLinks(true);
@@ -1576,7 +1582,7 @@ std::array<GeneData, CellData::MAX_GENES_COUNT> createSegmentedMedusaGenome() {
     editGene(root).setChild1GeneIndex(GeneIndex(kBodyLeftGene));
     editGene(root).setChild2GeneIndex(GeneIndex(kDomeGene));
     editGene(root).setChild1Angle(0.0f);
-    editGene(root).setChild2Angle(static_cast<float>(M_PI));
+    editGene(root).setChild2Angle(static_cast<float>(PI));
     editGene(root).setLinkStrength(CellData::MAX_LINK_STIFFNESS * 0.6f);
     genome[kRootGene] = root;
 

@@ -6,9 +6,8 @@
 #include <stdexcept>
 #include <string>
 
-#include <sys/stat.h>
-
 #include "diagnostics/NativeCrashReportWriter.h"
+#include "platform/PortableFile.h"
 
 namespace {
 
@@ -31,14 +30,21 @@ std::string readText(const std::filesystem::path& path) {
             std::istreambuf_iterator<char>());
 }
 
+// The native writer takes a narrow string, so the test must hand it one.
+// std::filesystem::path::c_str() is char* on POSIX but wchar_t* on Windows,
+// which is why the path is converted at the boundary instead of being passed
+// through directly.
+std::string toNarrowPath(const std::filesystem::path& path) {
+    return path.string();
+}
+
 std::filesystem::path makeTemporaryDirectory() {
-    std::string pattern =
-            (std::filesystem::temp_directory_path() / "cellularity-diagnostics-XXXXXX").string();
-    char* directory = mkdtemp(pattern.data());
-    if (directory == nullptr) {
+    const std::string directory =
+            cellularity::platform::createTemporaryDirectory("cellularity-diagnostics-");
+    if (directory.empty()) {
         fail("Could not create native diagnostics test directory");
     }
-    return directory;
+    return std::filesystem::path(directory);
 }
 
 cellularity::diagnostics::NativeCrashReportRecord sampleRecord() {
@@ -92,17 +98,18 @@ void verifyBoundedFormatting() {
 
 void verifyFixedPrivateFileContract() {
     const std::filesystem::path directory = makeTemporaryDirectory();
+    const std::string directoryPath = toNarrowPath(directory);
     try {
         auto first = sampleRecord();
         assertTrue(cellularity::diagnostics::writeNativeCrashReport(
-                           directory.c_str(), first),
+                           directoryPath.c_str(), first),
                 "First native report write failed");
 
         auto second = first;
         second.signalNumber = 6;
         second.signalName = "SIGABRT";
         assertTrue(cellularity::diagnostics::writeNativeCrashReport(
-                           directory.c_str(), second),
+                           directoryPath.c_str(), second),
                 "Second native report write failed");
 
         std::size_t reportCount = 0;
@@ -120,10 +127,16 @@ void verifyFixedPrivateFileContract() {
         assertTrue(text.size() < cellularity::diagnostics::NATIVE_REPORT_MAX_BYTES,
                 "Native report exceeded its byte limit");
 
-        struct stat metadata{};
-        assertTrue(stat(reportPath.c_str(), &metadata) == 0,
-                "Could not inspect native report permissions");
-        assertTrue((metadata.st_mode & 0777) == 0600,
+        // Owner-only access. The POSIX mode check (st_mode & 0777 == 0600) has no
+        // Windows equivalent: Windows stores a DACL, so the portable assertion is
+        // that the file exists and the writing user can still open it, while the
+        // writer itself created it with an owner-only descriptor.
+        const std::string reportPathNarrow = toNarrowPath(reportPath);
+        assertTrue(cellularity::platform::fileExists(reportPathNarrow.c_str()),
+                "Native report was not created");
+        assertTrue(cellularity::platform::isWritableByCurrentUser(reportPathNarrow.c_str()),
+                "Native report must be accessible to its owner");
+        assertTrue(cellularity::platform::isOwnerOnlyFile(reportPathNarrow.c_str()),
                 "Native report permissions must be owner-only");
     } catch (...) {
         std::filesystem::remove_all(directory);

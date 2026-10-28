@@ -1,8 +1,8 @@
 #include "diagnostics/NativeCrashReportWriter.h"
 
-#include <cerrno>
-#include <fcntl.h>
-#include <unistd.h>
+#include <cstddef>
+
+#include "platform/PortableFile.h"
 
 namespace cellularity::diagnostics {
 namespace {
@@ -94,22 +94,6 @@ private:
     bool mTruncated = false;
 };
 
-bool writeAll(int fileDescriptor, const char* bytes, std::size_t byteCount) noexcept {
-    std::size_t written = 0;
-    while (written < byteCount) {
-        const ssize_t result = write(fileDescriptor, bytes + written, byteCount - written);
-        if (result > 0) {
-            written += static_cast<std::size_t>(result);
-            continue;
-        }
-        if (result < 0 && errno == EINTR) {
-            continue;
-        }
-        return false;
-    }
-    return true;
-}
-
 } // namespace
 
 std::size_t formatNativeCrashReport(
@@ -164,7 +148,7 @@ bool writeNativeCrashReport(
     char path[REPORT_PATH_MAX_BYTES] = {};
     FixedTextBuilder reportPath(path, sizeof(path));
     reportPath.appendLimited(directory, REPORT_PATH_MAX_BYTES);
-    reportPath.append('/');
+    reportPath.append(platform::kPathSeparator);
     reportPath.append(NATIVE_REPORT_FILE_NAME);
     if (reportPath.truncated()) {
         return false;
@@ -176,12 +160,12 @@ bool writeNativeCrashReport(
         return false;
     }
 
-    const int fileDescriptor = open(path, O_CREAT | O_TRUNC | O_WRONLY | O_CLOEXEC, 0600);
-    if (fileDescriptor < 0) {
+    const platform::FileHandle fileHandle = platform::createOwnerOnlyFile(path);
+    if (fileHandle == platform::kInvalidFileHandle) {
         return false;
     }
-    const bool complete = writeAll(fileDescriptor, report, reportLength);
-    close(fileDescriptor);
+    const bool complete = platform::writeAllToFile(fileHandle, report, reportLength);
+    platform::closeFile(fileHandle);
     return complete;
 }
 

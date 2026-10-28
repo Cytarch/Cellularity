@@ -14,6 +14,29 @@ project("cellularity")
 
 find_package(Threads REQUIRED)
 
+# Symbol inspection for the archive isolation tests. GNU toolchains provide nm
+# through CMAKE_NM; MSVC has no nm, so dumpbin is located from the compiler path.
+# tests/cmake/ArchiveSymbols.cmake understands both.
+set(CELLULARITY_SYMBOL_TOOL "${CMAKE_NM}")
+if(MSVC AND (NOT CELLULARITY_SYMBOL_TOOL OR CELLULARITY_SYMBOL_TOOL STREQUAL "CELLULARITY_SYMBOL_TOOL-NOTFOUND"))
+    get_filename_component(_cellularity_compiler_dir "${CMAKE_CXX_COMPILER}" DIRECTORY)
+    find_program(CELLULARITY_DUMPBIN
+            NAMES dumpbin
+            HINTS "${_cellularity_compiler_dir}"
+            NO_DEFAULT_PATH)
+    if(CELLULARITY_DUMPBIN)
+        set(CELLULARITY_SYMBOL_TOOL "${CELLULARITY_DUMPBIN}")
+    endif()
+    unset(_cellularity_compiler_dir)
+endif()
+
+# zlib backs the gzip streams of legacy substrate decoding and the save
+# container codec. A bare `z` resolves against the system zlib on Linux, but
+# there is no such library name on Windows, and a vcpkg-provided zlib is not on
+# the include path unless it is found as a package. Resolve it explicitly and
+# link ZLIB::ZLIB everywhere; this keeps Linux behaviour identical.
+find_package(ZLIB REQUIRED)
+
 option(CELLULARITY_ENABLE_NATIVE_PROFILE "Enable native profiling counters in non-Android host builds" ON)
 option(CELLULARITY_ENABLE_RENDER_TIMELINE "Enable local input-to-presentation timeline collection" OFF)
 option(CELLULARITY_ENABLE_PERFORMANCE_HUD "Build the native microscope performance HUD" OFF)
@@ -560,8 +583,13 @@ cellularity_optimize_target(cellularity_formats)
 target_link_libraries(cellularity_formats PRIVATE
         cellularity_simulation
         zstd_vendor
-        z
 )
+# zlib is a PUBLIC dependency on purpose. Public headers of this layer reach
+# <zlib.h> through tests/support/FormatTestData.h, so every consumer needs the
+# include path, not just this library's own translation units. With PRIVATE,
+# cellularity_formats_parity_tests and cellularity_format_malformed_tests fail
+# with "Cannot open include file: 'zlib.h'" on Windows.
+target_link_libraries(cellularity_formats PUBLIC ZLIB::ZLIB)
 
 add_library(cellularity_interaction STATIC ${CELLULARITY_INTERACTION_SOURCES})
 cellularity_configure_source_target(cellularity_interaction)
@@ -994,7 +1022,7 @@ if(NOT ANDROID)
     target_link_libraries(cellularity_formats_semantic PRIVATE
             cellularity_simulation_semantic
             zstd_vendor
-            z
+            ZLIB::ZLIB
     )
 
     add_executable(cellularity_semantic_contract_tests
@@ -1024,7 +1052,7 @@ if(NOT ANDROID)
     add_test(
             NAME cellularity_semantic_trace_isolation
             COMMAND ${CMAKE_COMMAND}
-                    -DNM_TOOL=${CMAKE_NM}
+                    -DNM_TOOL=${CELLULARITY_SYMBOL_TOOL}
                     -DPUBLIC_ARCHIVE=$<TARGET_FILE:cellularity_simulation>
                     -DVERIFICATION_ARCHIVE=$<TARGET_FILE:cellularity_simulation_semantic>
                     -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/semantic/VerifySemanticTraceIsolation.cmake
@@ -1109,7 +1137,7 @@ if(NOT ANDROID)
     add_test(
             NAME cellularity_vulkan_backend_client_isolation
             COMMAND ${CMAKE_COMMAND}
-                    -DNM_TOOL=${CMAKE_NM}
+                    -DNM_TOOL=${CELLULARITY_SYMBOL_TOOL}
                     -DCLIENT_ARCHIVE=$<TARGET_FILE:cellularity_vulkan_backend_client>
                     -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/VerifyVulkanBackendClientIsolation.cmake
     )
@@ -1492,6 +1520,12 @@ if(NOT ANDROID)
             diagnostics/NativeCrashReportWriter.cpp
     )
     cellularity_configure_source_target(cellularity_native_diagnostics_tests)
+    if(WIN32)
+        # The report writer creates its file with an owner-only security
+        # descriptor and the test verifies that descriptor, both through
+        # GetNamedSecurityInfoA, which only advapi32 exports.
+        target_link_libraries(cellularity_native_diagnostics_tests PRIVATE advapi32)
+    endif()
     add_test(
             NAME cellularity_native_diagnostics_tests
             COMMAND cellularity_native_diagnostics_tests
@@ -1524,7 +1558,10 @@ if(NOT ANDROID)
             tests/fixtures/FormatFixtureCorpus.cpp
     )
     cellularity_configure_source_target(cellularity_format_test_support)
-    target_link_libraries(cellularity_format_test_support PRIVATE cellularity_stable_digest z)
+    target_link_libraries(cellularity_format_test_support PRIVATE
+            cellularity_stable_digest
+            ZLIB::ZLIB
+    )
 
     add_executable(cellularity_format_fixture_tool
             tests/fixtures/format_fixture_tool.cpp

@@ -228,7 +228,13 @@ public:
     ControllerRebindTicket(const ControllerRebindTicket&) = delete;
     ControllerRebindTicket& operator=(const ControllerRebindTicket&) = delete;
     ControllerRebindTicket(ControllerRebindTicket&& other) noexcept;
-    ControllerRebindTicket& operator=(ControllerRebindTicket&&) = delete;
+    // Move assignment is provided rather than deleted. std::promise<T>::set_value
+    // requires T to be move-assignable (the rvalue overload is what a temporary
+    // selects), and MSVC enforces this where libstdc++ happens to compile.
+    // Single-use protection is unaffected: the assignment releases whatever this
+    // ticket still owned, exactly as the destructor does, and the source is
+    // consumed, so a ticket never grants two rebinds.
+    ControllerRebindTicket& operator=(ControllerRebindTicket&& other) noexcept;
     ~ControllerRebindTicket();
 
     [[nodiscard]] bool valid() const noexcept;
@@ -240,6 +246,9 @@ private:
             std::uint64_t transaction,
             std::uint64_t expectedControllerGeneration) noexcept;
     void consume() noexcept;
+    // Rolls the owner back from Rebinding to Open when this ticket still owns the
+    // transaction. Shared by the destructor and move assignment.
+    void releaseOwnedTransaction() noexcept;
 
     std::weak_ptr<NativeRenderAttachmentState> mOwner;
     std::uint64_t mTransaction = 0;

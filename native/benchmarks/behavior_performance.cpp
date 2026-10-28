@@ -4,7 +4,18 @@
 #include <string>
 #include <thread>
 
+#if defined(_WIN32)
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#include <windows.h>
+#include <psapi.h>
+#else
 #include <sys/resource.h>
+#endif
 
 #include "PerfJson.h"
 #include "tests/baseline/BehaviorBaseline.h"
@@ -33,7 +44,39 @@ using Clock = std::chrono::steady_clock;
 #define CELLULARITY_SOURCE_DIRTY "unknown"
 #endif
 
+// Compiler identification for the report. MSVC does not define __VERSION__.
+#if defined(__VERSION__)
+#define CELLULARITY_COMPILER_VERSION __VERSION__
+#elif defined(_MSC_FULL_VER)
+#define CELLULARITY_STRINGIZE_IMPL(x) #x
+#define CELLULARITY_STRINGIZE(x) CELLULARITY_STRINGIZE_IMPL(x)
+#define CELLULARITY_COMPILER_VERSION \
+    "MSVC " CELLULARITY_STRINGIZE(_MSC_FULL_VER)
+#else
+#define CELLULARITY_COMPILER_VERSION "unknown"
+#endif
+
+// How peak RSS was obtained, so the report stays honest about its source.
+#if defined(_WIN32)
+#define CELLULARITY_PEAK_RSS_SOURCE \
+    "GetProcessMemoryInfo(PeakWorkingSetSize)"
+#else
+#define CELLULARITY_PEAK_RSS_SOURCE "getrusage(RUSAGE_SELF).ru_maxrss"
+#endif
+
+// Peak resident set size in KiB, or -1 when the platform cannot report it.
+// POSIX reads getrusage(RUSAGE_SELF); on Windows the closest equivalent is the
+// process memory counters, which report a peak working set in bytes.
 long long peakRssKiB() {
+#if defined(_WIN32)
+    PROCESS_MEMORY_COUNTERS counters{};
+    if (::GetProcessMemoryInfo(
+                ::GetCurrentProcess(), &counters, sizeof(counters))
+            == 0) {
+        return -1;
+    }
+    return static_cast<long long>(counters.PeakWorkingSetSize / 1024);
+#else
     rusage usage{};
     if (getrusage(RUSAGE_SELF, &usage) != 0) {
         return -1;
@@ -42,6 +85,7 @@ long long peakRssKiB() {
     return static_cast<long long>(usage.ru_maxrss / 1024);
 #else
     return static_cast<long long>(usage.ru_maxrss);
+#endif
 #endif
 }
 
@@ -106,7 +150,7 @@ int main(int argc, char** argv) {
                 {"peakRssKiB", peakRssKiB()},
                 {"scenario", {{"radius", 1.5}, {"cellCapacity", 256}, {"foodCapacity", 1600}, {"initialCellGrid", "14x14"}, {"initialFoodGrid", "30x30"}}},
                 {"state", {{"initialDigest", initial.digest}, {"measuredStartDigest", measuredStart.digest}, {"finalDigest", final.digest}, {"initialCells", initial.state.cells}, {"initialFoods", initial.state.foods}, {"finalCells", final.state.cells}, {"finalFoods", final.state.foods}, {"finalLinks", final.state.links}, {"finalMutations", final.state.mutations}, {"finiteState", final.finiteState}}},
-                {"metadata", {{"buildType", CELLULARITY_BUILD_TYPE}, {"system", CELLULARITY_SYSTEM_NAME}, {"processor", CELLULARITY_SYSTEM_PROCESSOR}, {"compiler", compilerName()}, {"compilerVersion", __VERSION__}, {"cplusplus", __cplusplus}, {"hardwareThreads", std::thread::hardware_concurrency()}, {"timer", "std::chrono::steady_clock"}, {"peakRssSource", "getrusage(RUSAGE_SELF).ru_maxrss"}, {"peakRssUnit", "KiB"}, {"sourceRevision", CELLULARITY_SOURCE_REVISION}, {"sourceDirty", CELLULARITY_SOURCE_DIRTY}, {"simulationBroadphase", "sweep"}}}
+                {"metadata", {{"buildType", CELLULARITY_BUILD_TYPE}, {"system", CELLULARITY_SYSTEM_NAME}, {"processor", CELLULARITY_SYSTEM_PROCESSOR}, {"compiler", compilerName()}, {"compilerVersion", CELLULARITY_COMPILER_VERSION}, {"cplusplus", __cplusplus}, {"hardwareThreads", std::thread::hardware_concurrency()}, {"timer", "std::chrono::steady_clock"}, {"peakRssSource", CELLULARITY_PEAK_RSS_SOURCE}, {"peakRssUnit", "KiB"}, {"sourceRevision", CELLULARITY_SOURCE_REVISION}, {"sourceDirty", CELLULARITY_SOURCE_DIRTY}, {"simulationBroadphase", "sweep"}}}
         };
         writePerfJsonReport(report, outputPath);
         return 0;
