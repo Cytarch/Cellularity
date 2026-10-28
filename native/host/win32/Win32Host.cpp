@@ -30,6 +30,7 @@
 // Windows keeps separate from windows.h to make the signed conversion explicit.
 #include <windowsx.h>
 
+#include <algorithm>
 #include <array>
 #include <chrono>
 #include <cstdint>
@@ -41,52 +42,36 @@
 #include <thread>
 #include <vector>
 
+#include "app/NativeCellularityController.h"
 #include "app/interaction/NativeViewport.h"
+#include "app/microscope/NativeMicroscopeRuntime.h"
 #include "host/win32/Win32HostCamera.h"
-#include "app/render/NativeRenderFrameSource.h"
-#include "app/render/sources/VulkanDemoFrameProducer.h"
 #include "app/RenderStateSnapshots.h"
+#include "core/Environment.h"
+#include "formats/DecodedWorldValidation.h"
 #include "render/backend/RenderSurfaceSession.h"
 #include "render/backend/abi/VulkanBackendSession.h"
 #include "render/backend/abi/VulkanRenderSurfaceSessionAdapter.h"
-#include "render/backend/vulkan/VulkanBasicCellFrame.h"
+#include "render/frame/PreparedRenderFrame.h"
 
 namespace {
 
-using cellularity::app::render_worker::sources::VulkanDemoFrameProducer;
 using cellularity::render::abi::VulkanBackendAssetSource;
 using cellularity::render::abi::VulkanBackendSession;
 
 using cellularity::host::win32::kBackgroundColor;
 using cellularity::host::win32::kCameraRadius;
-using cellularity::host::win32::projectionMatrixFor;
 
-// Builds the presentation the renderer consumes from the live camera.
-//
-// The viewport's own snapshot helper is deliberately not used: it recomputes the
-// matrix from an identity surface matrix and discards the one it is given, so the
-// camera would have no effect on the frame at all.
-[[nodiscard]] cellularity::render::RenderPresentationState presentationFrom(
-        const NativeViewport& viewport) {
-    using cellularity::render::RenderPresentationState;
+// The same configuration the Android app opens a substrate with, so a desktop run
+// and a phone run are the same simulation rather than two similar ones.
+constexpr int kMaxCellCount = 1000;
+constexpr int kMaxFoodCount = 3500;
+constexpr double kDishRadius = 1.0;
 
-    RenderPresentationState presentation;
-    presentation.viewport.revision = viewport.revision();
-    presentation.viewport.coverageRevision = viewport.revision();
-    presentation.viewport.visibleBounds =
-            cellularity::app::toRenderBounds(viewport.viewBounds(0.0F));
-    presentation.viewport.coverageBounds = presentation.viewport.visibleBounds;
-    presentation.viewport.mvpMatrix = projectionMatrixFor(viewport);
-    presentation.viewport.cameraX = viewport.cameraX();
-    presentation.viewport.cameraY = viewport.cameraY();
-    presentation.viewport.zoom = viewport.zoom();
-    presentation.viewport.viewWidth = viewport.viewWidth();
-    presentation.viewport.viewHeight = viewport.viewHeight();
-    presentation.viewport.surfaceWidth = viewport.surfaceWidth();
-    presentation.viewport.surfaceHeight = viewport.surfaceHeight();
-    presentation.backgroundColor = kBackgroundColor;
-    return presentation;
-}
+// How long a capture waits for the simulation to produce a drawable frame. At the
+// step rate below this is several seconds of simulated world, which is far more than
+// a fresh substrate needs to show cells.
+constexpr int kMaximumCaptureAttempts = 900;
 
 // The window procedure is a C callback, so the state it needs to hand back lives
 // at file scope rather than being threaded through a user-data pointer.
@@ -95,17 +80,28 @@ int gPendingWidth = 0;
 int gPendingHeight = 0;
 
 // Input is collected from window messages and applied by the frame loop, for the
-// same reason resizes are: the session and the viewport must only be touched on the
-// thread that owns them, and a message dispatch is not that place.
+// same reason resizes are: the session and the simulation must only be touched on
+// the thread that owns them, and a message dispatch is not that place.
+//
+// Screen coordinates here are client-area pixels with the origin at the top left,
+// which is the space the simulation expects. It converts them to world coordinates
+// through its own viewport at the moment the event is queued, so the extent the host
+// reports to the controller has to be the client area or taps land in the wrong place.
 bool gDragging = false;
 int gLastPointerX = 0;
 int gLastPointerY = 0;
+bool gPointerMoved = false;
 float gPendingPanX = 0.0F;
 float gPendingPanY = 0.0F;
 float gPendingZoomFactor = 1.0F;
 float gPendingZoomX = 0.0F;
 float gPendingZoomY = 0.0F;
 bool gResetCameraRequested = false;
+float gPendingTapX = 0.0F;
+float gPendingTapY = 0.0F;
+bool gTapRequested = false;
+int gPendingTemperature = -1;
+int gPendingTool = -1;
 
 LRESULT CALLBACK hostWindowProc(
         HWND window, UINT message, WPARAM wParam, LPARAM lParam) {
@@ -136,6 +132,7 @@ LRESULT CALLBACK hostWindowProc(
         return 1;
     case WM_LBUTTONDOWN: {
         gDragging = true;
+        gPointerMoved = false;
         gLastPointerX = static_cast<int>(LOWORD(lParam));
         gLastPointerY = static_cast<int>(HIWORD(lParam));
         ::SetCapture(window);
@@ -145,6 +142,14 @@ LRESULT CALLBACK hostWindowProc(
         if (gDragging) {
             gDragging = false;
             ::ReleaseCapture();
+            // A press that never turned into a drag is a click, and a click is the
+            // gesture that selects a cell or places one. Recording it here rather
+            // than dispatching it keeps the simulation off the message thread.
+            if (!gPointerMoved) {
+                gPendingTapX = static_cast<float>(LOWORD(lParam));
+                gPendingTapY = static_cast<float>(HIWORD(lParam));
+                gTapRequested = true;
+            }
         }
         return 0;
     }
@@ -154,8 +159,13 @@ LRESULT CALLBACK hostWindowProc(
         if (gDragging) {
             // Dragging moves the world with the pointer, which is what a map-like
             // view is expected to do.
-            gPendingPanX += static_cast<float>(x - gLastPointerX);
-            gPendingPanY += static_cast<float>(y - gLastPointerY);
+            const float deltaX = static_cast<float>(x - gLastPointerX);
+            const float deltaY = static_cast<float>(y - gLastPointerY);
+            if (deltaX != 0.0F || deltaY != 0.0F) {
+                gPointerMoved = true;
+            }
+            gPendingPanX += deltaX;
+            gPendingPanY += deltaY;
         }
         gLastPointerX = x;
         gLastPointerY = y;
@@ -181,6 +191,16 @@ LRESULT CALLBACK hostWindowProc(
         }
         if (wParam == 'R') {
             gResetCameraRequested = true;
+            return 0;
+        }
+        // The simulation's own controls, so the desktop host can drive every mode
+        // the touch UI can rather than only the camera.
+        if (wParam >= '1' && wParam <= '5') {
+            gPendingTemperature = static_cast<int>(wParam - '1');
+            return 0;
+        }
+        if (wParam >= '6' && wParam <= '9') {
+            gPendingTool = static_cast<int>(wParam - '6');
             return 0;
         }
         break;
@@ -309,77 +329,319 @@ void reportCaptureStatistics(const std::vector<std::uint8_t>& rgba) {
               << static_cast<int>(maximum[2]) << std::endl;
 }
 
-// Renders one frame into an off-screen target and writes it out. This is the same
-// draw the interactive path performs, aimed at a readback image instead of the
-// swapchain, so a capture is evidence about the renderer rather than about a
-// separate screenshot path.
+} // namespace
+
+namespace cellularity::render {
+
+// A surface session that draws the simulation's presentation into an off-screen
+// target instead of the swapchain.
 //
-// With useCamera set, the presentation comes from a viewport after the given pan
-// and zoom exactly as the interactive loop would apply them, so a capture can show
-// that input moves the view without a human at the window.
+// The simulation decides when to draw and hands its own presentation to the session
+// it was given, so the only way to aim a live frame at a readback image is to be that
+// session. Everything except the microscope draw is forwarded unchanged, which keeps
+// the off-screen target the single thing this differs by.
+//
+// The frame cannot be stored for a later draw: PreparedRenderFrame is move-only, and
+// the reference it arrives by is only valid for the call. So the off-screen draw
+// happens inside presentMicroscope, on the frame that is live at that moment, and
+// the host arms the capture for the one step it wants a still of.
+class CaptureSurfaceSession final : public RenderSurfaceSession {
+public:
+    CaptureSurfaceSession(std::shared_ptr<VulkanBackendSession> session, int width,
+            int height)
+        : mSession(std::move(session)), mAdapter(mSession), mWidth(width),
+          mHeight(height) {
+    }
+
+    // Arms the capture and starts the off-screen transaction. Called once, after the
+    // warm-up, so the still is of the world at the end of the warm-up rather than of
+    // whichever step happened to be drawn first.
+    void armCapture() {
+        mCaptureArmed = true;
+        mAdapter.beginOffscreenRgba(OffscreenRenderTarget::SubstratePreview, mWidth,
+                mHeight);
+    }
+
+    // True once the host has armed the capture and the target has been drawn into.
+    [[nodiscard]] bool captureDrawn() const noexcept {
+        return mCaptureArmed;
+    }
+
+    [[nodiscard]] std::uint64_t presentedCalls() const noexcept {
+        return mPresentedCalls;
+    }
+
+    [[nodiscard]] std::uint64_t clearedCalls() const noexcept {
+        return mClearedCalls;
+    }
+
+    [[nodiscard]] RenderPassStatus capturedPassStatus() const noexcept {
+        return mCapturedPassStatus;
+    }
+
+    void cancel() noexcept {
+        mAdapter.cancelOffscreenRgba(OffscreenRenderTarget::SubstratePreview);
+    }
+
+    [[nodiscard]] std::vector<std::uint8_t> finish() {
+        return mAdapter.finishOffscreenRgba(OffscreenRenderTarget::SubstratePreview);
+    }
+
+    [[nodiscard]] RenderBackendKind kind() const noexcept override {
+        return mAdapter.kind();
+    }
+
+    [[nodiscard]] const void* bindingIdentity() const noexcept override {
+        return mAdapter.bindingIdentity();
+    }
+
+    [[nodiscard]] bool hasResources() const noexcept override {
+        return mAdapter.hasResources();
+    }
+
+    [[nodiscard]] bool hasGpuBuffers() const noexcept override {
+        return mAdapter.hasGpuBuffers();
+    }
+
+    void attachSurface(bool previewMode, const NativeRenderAssets& assets,
+            NativeRenderTextureLoader& textureLoader) override {
+        mAdapter.attachSurface(previewMode, assets, textureLoader);
+    }
+
+    void resizeSurface(int width, int height) override {
+        mAdapter.resizeSurface(width, height);
+    }
+
+    void detachSurface() override {
+        mAdapter.detachSurface();
+    }
+
+    void abandonSurface() noexcept override {
+        mAdapter.abandonSurface();
+    }
+
+    [[nodiscard]] RenderFrameResult presentMicroscope(
+            const RenderPresentationState& presentation,
+            const PreparedRenderFrame& frame,
+            const cellularity::microscope::MicroscopeDebugHudTelemetry*
+                    debugHudTelemetry) override {
+        (void)debugHudTelemetry;
+        ++mPresentedCalls;
+        mCapturedPassStatus =
+                mAdapter.drawMicroscopeOffscreenPass(presentation, frame);
+        // The capture redirects the draw rather than replacing it, so the frame really
+        // was drawn -- it went to the readback image instead of a window. That makes
+        // this a genuine primary presentation, which is what the caller validates: a
+        // Presented outcome has to carry exactly that flag and no other.
+        return makeRenderFrameResult(
+                RenderFrameOutcome::Presented, kPrimaryContentPresented);
+    }
+
+    [[nodiscard]] RenderPassStatus drawMicroscopeOffscreenPass(
+            const RenderPresentationState& presentation,
+            const PreparedRenderFrame& frame) override {
+        return mAdapter.drawMicroscopeOffscreenPass(presentation, frame);
+    }
+
+    [[nodiscard]] RenderFrameResult clearSurface(
+            const RenderViewportState& viewport,
+            const std::array<float, 4>& color) override {
+        ++mClearedCalls;
+        return mAdapter.clearSurface(viewport, color);
+    }
+
+    [[nodiscard]] RenderFrameResult drawEnvironmentFieldPreview(
+            const EnvironmentFieldPreviewCommand& command) override {
+        return mAdapter.drawEnvironmentFieldPreview(command);
+    }
+
+    void beginGenomePreviewFrame(int width, int height,
+            bool fullyTransparentClear) override {
+        mAdapter.beginGenomePreviewFrame(width, height, fullyTransparentClear);
+    }
+
+    void drawGenomePreviewGrid(const GenomePreviewGridCommand& command) override {
+        mAdapter.drawGenomePreviewGrid(command);
+    }
+
+    void drawGenomePreviewTree(const RenderPresentationState& presentation,
+            const PreparedRenderFrame& frame, const std::array<float, 16>& matrix,
+            const std::vector<float>& lineVertices,
+            const GenomePreviewDrawOptions& options) override {
+        mAdapter.drawGenomePreviewTree(
+                presentation, frame, matrix, lineVertices, options);
+    }
+
+    void drawGenomePreview(const RenderPresentationState& presentation,
+            const PreparedRenderFrame& frame,
+            const GenomePreviewDrawOptions& options) override {
+        mAdapter.drawGenomePreview(presentation, frame, options);
+    }
+
+    [[nodiscard]] RenderFrameResult endGenomePreviewFrame() override {
+        return mAdapter.endGenomePreviewFrame();
+    }
+
+    [[nodiscard]] RenderPassStatus endGenomePreviewOffscreenPass() override {
+        return mAdapter.endGenomePreviewOffscreenPass();
+    }
+
+    void cancelGenomePreviewFrame() noexcept override {
+        mAdapter.cancelGenomePreviewFrame();
+    }
+
+    void beginOffscreenRgba(OffscreenRenderTarget target, int width,
+            int height) override {
+        mAdapter.beginOffscreenRgba(target, width, height);
+    }
+
+    [[nodiscard]] std::vector<std::uint8_t> finishOffscreenRgba(
+            OffscreenRenderTarget target) override {
+        return mAdapter.finishOffscreenRgba(target);
+    }
+
+    void cancelOffscreenRgba(OffscreenRenderTarget target) noexcept override {
+        mAdapter.cancelOffscreenRgba(target);
+    }
+
+private:
+    std::shared_ptr<VulkanBackendSession> mSession;
+    abi::VulkanRenderSurfaceSessionAdapter mAdapter;
+    int mWidth = 0;
+    int mHeight = 0;
+    std::uint64_t mPresentedCalls = 0;
+    std::uint64_t mClearedCalls = 0;
+    bool mCaptureArmed = false;
+    RenderPassStatus mCapturedPassStatus = RenderPassStatus::Failed;
+};
+
+} // namespace cellularity::render
+
+namespace {
+
+// Renders one frame of the live simulation into an off-screen target and writes it
+// out. This is the same draw the interactive path performs, aimed at a readback image
+// instead of the swapchain, so a capture is evidence about the renderer and the
+// simulation rather than about a separate screenshot path.
+//
+// The runtime drives the world exactly as it does in the window, because the
+// alternative -- stepping the world by hand from this thread -- is a different
+// execution path that does not advance the world at all in the renderable stages,
+// which makes it useless as evidence about the window. So capture starts the runtime,
+// waits for the simulation to publish a frame, and reads that frame back.
 int captureFrame(const std::shared_ptr<VulkanBackendSession>& session,
         const std::string& outputPath, int width, int height, bool useCamera,
-        float panX, float panY, float zoomFactor) {
-    using cellularity::render::OffscreenRenderTarget;
-    using cellularity::render::PreparedRenderFrame;
-    using cellularity::render::abi::VulkanRenderSurfaceSessionAdapter;
+        float panX, float panY, float zoomFactor, int temperatureMode,
+        int warmupFrames) {
+    using cellularity::render::CaptureSurfaceSession;
 
     try {
-        VulkanRenderSurfaceSessionAdapter adapter(session);
-        adapter.beginOffscreenRgba(
-                OffscreenRenderTarget::SubstratePreview, width, height);
+        Environment environment = Environment::constructDefaultEnvironment(
+                kMaxCellCount, kMaxFoodCount, kDishRadius);
+        // A fresh world is empty of cells unless the environment seeds them, so a
+        // capture of a run that has not been played yet would show food and nothing
+        // else.
+        environment.addRandom = true;
+        cellularity::snapshot_codec::validateEnvironmentForAllocation(environment);
 
-        const PreparedRenderFrame frame =
-                cellularity::render::vulkan::makeVulkanBasicCellDemoFrame();
+        auto controller = std::make_shared<NativeCellularityController>(
+                false, environment);
+        {
+            auto access = controller->writeWorld();
+            access.world().mCreatedAtUnixMillis =
+                    std::chrono::duration_cast<std::chrono::milliseconds>(
+                            std::chrono::system_clock::now().time_since_epoch())
+                            .count();
+            cellularity::snapshot_codec::preserveEnvironmentRuntimeFields(
+                    access.world(), environment);
+        }
 
-        cellularity::render::RenderPresentationState presentation;
+        auto captureSession =
+                std::make_unique<CaptureSurfaceSession>(session, width, height);
+        CaptureSurfaceSession* capture = captureSession.get();
+        // Every draw goes into the off-screen target, so the target has to be open
+        // before the runtime starts publishing frames.
+        capture->armCapture();
+        controller->installRenderSurfaceSession(std::move(captureSession));
+        controller->setViewportSurfaceSize(width, height);
+        // Defaults to the opening view the interactive host shows, so a capture is
+        // evidence about what the user sees rather than about a different view.
+        controller->setViewportCamera(0.0F, 0.0F, 1.0F / kDishRadius);
+        controller->setMicroscopeTemperatureMode(temperatureMode);
+
         if (useCamera) {
-            NativeViewport viewport(kCameraRadius);
-            // Bounds off, matching the window path and production; see the note there.
-            viewport.setCameraBoundsEnabled(false);
-            viewport.setSurfaceSize(width, height);
-            // The capture opens where the window opens, so a capture is evidence
-            // about what the user sees rather than about a different view.
-            viewport.setCamera(0.0F, 0.0F, 1.0F / kCameraRadius);
             if (panX != 0.0F || panY != 0.0F) {
-                viewport.moveByScreenDelta(panX, panY);
+                controller->moveViewportByScreenDelta(panX, panY);
             }
             if (zoomFactor != 1.0F) {
                 // --capture-zoom is relative to the opening view, matching the way
                 // the wheel multiplies the current zoom rather than setting it.
-                viewport.zoomAt(zoomFactor, static_cast<float>(width) / 2.0F,
+                controller->zoomViewportAt(zoomFactor,
+                        static_cast<float>(width) / 2.0F,
                         static_cast<float>(height) / 2.0F);
             }
-            presentation = presentationFrom(viewport);
+            const std::array<float, 7> state = controller->viewportState();
             std::cout << "camera_applied pan=" << panX << "," << panY
                       << " zoom_factor=" << zoomFactor
-                      << " camera=" << viewport.cameraX() << ","
-                      << viewport.cameraY() << " zoom=" << viewport.zoom()
-                      << " view=" << viewport.viewWidth() << "x"
-                      << viewport.viewHeight() << std::endl;
-        } else {
-            presentation =
-                    cellularity::render::vulkan::makeVulkanBasicCellDemoPresentation(
-                            width, height);
+                      << " camera=" << state[0] << "," << state[1]
+                      << " zoom=" << state[2] << " view=" << state[3] << "x"
+                      << state[4] << " scale=" << state[5] << std::endl;
         }
 
-        const auto passStatus =
-                adapter.drawMicroscopeOffscreenPass(presentation, frame);
-        if (passStatus != cellularity::render::RenderPassStatus::Completed) {
-            adapter.cancelOffscreenRgba(OffscreenRenderTarget::SubstratePreview);
-            reportFailure("drawMicroscopeOffscreenPass",
-                    "the off-screen pass did not complete");
+        controller->startMicroscopeRuntime();
+
+        // Draw until the simulation has published a frame, then keep going for the
+        // warm-up so the still is of a world that has run rather than of the empty
+        // one it started as.
+        const int totalDraws = std::max(1, warmupFrames);
+        for (int draw = 0; draw < totalDraws; ++draw) {
+            controller->drawMicroscopeForCurrentMode();
+            std::this_thread::sleep_for(std::chrono::milliseconds(8));
+        }
+
+        // A fresh world has nothing to show until cells have appeared, so if no frame
+        // has been published yet, keep drawing rather than reporting success on an
+        // image of the background.
+        int captureAttempts = 0;
+        while (captureAttempts < kMaximumCaptureAttempts
+                && capture->presentedCalls() == 0) {
+            controller->drawMicroscopeForCurrentMode();
+            std::this_thread::sleep_for(std::chrono::milliseconds(8));
+            ++captureAttempts;
+        }
+        if (capture->presentedCalls() == 0) {
+            const auto stalled = controller->viewportState();
+            std::cerr << "cellularity host: capture stalled after " << captureAttempts
+                      << " draws (view=" << stalled[3] << "x" << stalled[4]
+                      << " scale=" << stalled[5]
+                      << " clears=" << capture->clearedCalls() << ")" << std::endl;
+        }
+
+        if (capture->presentedCalls() == 0
+                || capture->capturedPassStatus()
+                        != cellularity::render::RenderPassStatus::Completed) {
+            capture->cancel();
+            reportFailure("simulation capture",
+                    "the simulation never drew a frame into the off-screen target, "
+                    "so there was nothing to read back");
+            session->detachSurface();
             return 1;
         }
 
-        const std::vector<std::uint8_t> frameBytes = adapter.finishOffscreenRgba(
-                OffscreenRenderTarget::SubstratePreview);
+        const auto snapshot = controller->microscopeRuntimeSnapshot();
+        std::cout << "simulation_world cells=" << snapshot.cellCount
+                  << " updates=" << snapshot.completedUpdateCount
+                  << " simulated_time=" << snapshot.simulationTime << std::endl;
+
+        const std::vector<std::uint8_t> frameBytes = capture->finish();
         reportCaptureStatistics(frameBytes);
         if (!writePpm(outputPath, width, height, frameBytes)) {
+            session->detachSurface();
             return 1;
         }
         std::cout << "capture_written=" << outputPath << " size=" << width << "x"
                   << height << std::endl;
+        session->detachSurface();
         return 0;
     } catch (const std::exception& failure) {
         reportFailure("frame capture", failure.what());
@@ -402,6 +664,8 @@ int main(int argc, char** argv) {
     float capturePanX = 0.0F;
     float capturePanY = 0.0F;
     float captureZoomFactor = 1.0F;
+    int captureTemperature = 1;
+    int captureWarmup = 90;
     std::vector<std::string> positional;
     for (int index = 1; index < argc; ++index) {
         const std::string argument = argv[index];
@@ -414,8 +678,8 @@ int main(int argc, char** argv) {
             captureWidth = std::atoi(argv[++index]);
             captureHeight = std::atoi(argv[++index]);
         } else if (argument == "--capture-camera") {
-            // Exercises the interactive path: the presentation comes from a
-            // viewport rather than the fixed fixture.
+            // Exercises the interactive path: the presentation comes from the
+            // simulation's own viewport rather than a fixed opening view.
             captureWithCamera = true;
         } else if (argument == "--capture-pan" && index + 2 < argc) {
             capturePanX = static_cast<float>(std::atof(argv[++index]));
@@ -425,6 +689,10 @@ int main(int argc, char** argv) {
         } else if (argument == "--capture-zoom" && index + 1 < argc) {
             captureZoomFactor = static_cast<float>(std::atof(argv[++index]));
             captureWithCamera = true;
+        } else if (argument == "--capture-temperature" && index + 1 < argc) {
+            captureTemperature = std::atoi(argv[++index]);
+        } else if (argument == "--capture-warmup" && index + 1 < argc) {
+            captureWarmup = std::atoi(argv[++index]);
         } else {
             positional.push_back(argument);
         }
@@ -520,7 +788,7 @@ int main(int argc, char** argv) {
         // but nothing is ever shown because the frame is drawn off-screen.
         const int result = captureFrame(session, capturePath, captureWidth,
                 captureHeight, captureWithCamera, capturePanX, capturePanY,
-                captureZoomFactor);
+                captureZoomFactor, captureTemperature, captureWarmup);
         session->detachSurface();
         try {
             session->closeOnOwnerThread();
@@ -530,35 +798,49 @@ int main(int argc, char** argv) {
         return result;
     }
 
-    VulkanDemoFrameProducer producer;
-    if (producer.bindBackend(session)
-            != cellularity::app::render_worker::SourceSurfaceResult::Applied) {
-        reportFailure("bindBackend", "the frame producer did not bind");
-        return 1;
-    }
-    if (producer.onSurfaceAttached(1, kInitialWidth, kInitialHeight)
-            != cellularity::app::render_worker::SourceSurfaceResult::Applied) {
-        reportFailure("onSurfaceAttached", "the frame producer refused the extent");
+    // The live simulation. The world, the camera and the frame cadence all belong to
+    // the controller, so the host neither steps the world nor builds a presentation:
+    // it owns the window, the surface and the input, and draws whatever the
+    // simulation has ready.
+    std::shared_ptr<NativeCellularityController> controller;
+    try {
+        Environment environment = Environment::constructDefaultEnvironment(
+                kMaxCellCount, kMaxFoodCount, kDishRadius);
+        // A fresh substrate with no cells is a valid world but a poor first
+        // impression, and the app's own "new substrate" path seeds life the same way.
+        environment.addRandom = true;
+        cellularity::snapshot_codec::validateEnvironmentForAllocation(environment);
+
+        controller =
+                std::make_shared<NativeCellularityController>(
+                        false, environment);
+        {
+            auto access = controller->writeWorld();
+            access.world().mCreatedAtUnixMillis =
+                    std::chrono::duration_cast<std::chrono::milliseconds>(
+                            std::chrono::system_clock::now().time_since_epoch())
+                            .count();
+            cellularity::snapshot_codec::preserveEnvironmentRuntimeFields(
+                    access.world(), environment);
+        }
+        controller->installRenderSurfaceSession(
+                std::make_unique<
+                        cellularity::render::abi::VulkanRenderSurfaceSessionAdapter>(
+                        session));
+        controller->setViewportSurfaceSize(kInitialWidth, kInitialHeight);
+        // Observe is the mode that runs the world at a watchable speed.
+        controller->setMicroscopeTemperatureMode(1);
+        controller->startMicroscopeRuntime();
+    } catch (const std::exception& failure) {
+        reportFailure("simulation startup", failure.what());
         return 1;
     }
 
     int surfaceWidth = kInitialWidth;
     int surfaceHeight = kInitialHeight;
     std::uint64_t presented = 0;
+    std::uint64_t skipped = 0;
     std::uint64_t failedFrames = 0;
-
-    // The camera is the production viewport, so panning and zoom anchoring behave
-    // exactly as they do on Android rather than being reimplemented here.
-    //
-    // Camera bounds are turned off explicitly. The viewport enables them by default and
-    // production turns them off in its own session viewport; leaving the default in
-    // place pins the camera along whichever axis the opening view exactly fills, which
-    // in a landscape window is the vertical one, so a vertical drag would do nothing at
-    // all while a horizontal one moved.
-    NativeViewport viewport(kCameraRadius);
-    viewport.setCameraBoundsEnabled(false);
-    viewport.setSurfaceSize(surfaceWidth, surfaceHeight);
-    viewport.setCamera(0.0F, 0.0F, 1.0F / kCameraRadius);
 
     while (gRunning) {
         // Pump without blocking so a frame is still drawn when the user is not
@@ -590,66 +872,89 @@ int main(int argc, char** argv) {
                 std::cerr << "cellularity host: surface resize to " << surfaceWidth
                           << "x" << surfaceHeight << " was refused\n";
             }
-            if (producer.onSurfaceResized(surfaceWidth, surfaceHeight)
-                    != cellularity::app::render_worker::SourceSurfaceResult::Applied) {
-                std::cerr << "cellularity host: frame producer refused the resize\n";
-            }
-            viewport.setSurfaceSize(surfaceWidth, surfaceHeight);
+            // The extent the simulation projects into and converts taps through has
+            // to be the client area, or input lands somewhere other than the cursor.
+            controller->setViewportSurfaceSize(surfaceWidth, surfaceHeight);
+            controller->invalidateMicroscopeFrameData();
         }
 
         // Input collected from window messages is applied here, on the thread that
-        // owns the viewport and the session.
+        // owns the simulation. These calls only enqueue: the simulation resolves
+        // them against its own camera at the moment it can safely apply them.
         if (gResetCameraRequested) {
             gResetCameraRequested = false;
-            viewport.setCamera(0.0F, 0.0F, 1.0F / kCameraRadius);
+            // A reset returns the view as well as the world, which is what the
+            // key promises.
+            controller->resetMicroscopeWorld();
         }
         if (gPendingPanX != 0.0F || gPendingPanY != 0.0F) {
-            viewport.moveByScreenDelta(gPendingPanX, gPendingPanY);
+            controller->queueMicroscopePan(gPendingPanX, gPendingPanY);
             gPendingPanX = 0.0F;
             gPendingPanY = 0.0F;
         }
         if (gPendingZoomFactor != 1.0F) {
-            viewport.zoomAt(gPendingZoomFactor, gPendingZoomX, gPendingZoomY);
+            controller->queueMicroscopeZoom(
+                    gPendingZoomFactor, gPendingZoomX, gPendingZoomY);
             gPendingZoomFactor = 1.0F;
+        }
+        if (gTapRequested) {
+            gTapRequested = false;
+            // A tap with no genome selects or deselects whatever is under the
+            // cursor, which is the whole of what clicking a plate does.
+            controller->queueMicroscopeTap(gPendingTapX, gPendingTapY, nullptr);
+        }
+        if (gPendingTemperature >= 0) {
+            controller->setMicroscopeTemperatureMode(gPendingTemperature);
+            gPendingTemperature = -1;
+        }
+        if (gPendingTool >= 0) {
+            controller->setMicroscopeToolOrdinal(gPendingTool);
+            gPendingTool = -1;
         }
 
         // A minimized window has no client area, so there is nothing to present to and
         // no valid extent to project into. Skipping the frame keeps the loop alive and
         // keeps the console free of a resize complaint per iteration; the window sends
-        // another size message when it is restored. The camera is deliberately left
-        // untouched, so restoring the window returns to the view the user had.
+        // another size message when it is restored.
         if (surfaceWidth <= 0 || surfaceHeight <= 0) {
             std::this_thread::sleep_for(std::chrono::milliseconds(16));
             continue;
         }
 
-        // The presentation is rebuilt from the live camera every frame, so a drag or
-        // a wheel event shows up in the next frame without any other plumbing.
-        producer.setPresentationOverride(presentationFrom(viewport));
-
-        const auto frame = producer.renderFrame();
-        if (frame.status
-                == cellularity::app::render_worker::SourceFrameStatus::Failed) {
+        // The simulation owns the world on its own thread, so the host never steps
+        // it; it draws the newest frame the simulation has captured.
+        const auto frame = controller->drawMicroscopeForCurrentMode();
+        using cellularity::render::RenderFrameOutcome;
+        if (frame.outcome == RenderFrameOutcome::Failed
+                || frame.outcome == RenderFrameOutcome::SurfaceLost) {
             ++failedFrames;
             std::cerr << "cellularity host: frame " << presented
-                      << " failed to render\n";
+                      << " failed to render (outcome "
+                      << static_cast<int>(frame.outcome) << ")\n";
             if (failedFrames >= 3) {
                 reportFailure("render loop",
                         "three consecutive frames failed; stopping so the cause is "
                         "visible instead of repeating");
                 break;
             }
-        } else {
+        } else if (frame.outcome == RenderFrameOutcome::Presented) {
             ++presented;
             failedFrames = 0;
             // Report progress periodically. The output is flushed explicitly
             // because a redirected stream is block-buffered, and a host that is
             // running but silent is indistinguishable from one that is stuck.
-            if (presented % 120 == 0) {
+            if (presented % 300 == 0) {
+                const auto snapshot = controller->microscopeRuntimeSnapshot();
                 std::cout << "cellularity host: presented " << presented
                           << " frames at " << surfaceWidth << "x" << surfaceHeight
-                          << std::endl;
+                          << " cells=" << snapshot.cellCount
+                          << " updates=" << snapshot.completedUpdateCount
+                          << " simulated=" << snapshot.simulationTime << std::endl;
             }
+        } else {
+            // Deferred and SkippedNotReady are the normal state while the simulation
+            // is between captures, so they are counted but never treated as faults.
+            ++skipped;
         }
 
         // The session presents as part of the frame call, so there is nothing to
@@ -658,17 +963,21 @@ int main(int argc, char** argv) {
         std::this_thread::sleep_for(std::chrono::milliseconds(1));
     }
 
-    std::cout << "cellularity host: presented " << presented << " frames\n";
+    std::cout << "cellularity host: presented " << presented << " frames, skipped "
+              << skipped << std::endl;
 
-    // Shutdown order matters. The frame producer releases its reference to the
-    // session first, then the surface is detached, and only then is the session
-    // closed. closeOnOwnerThread is the explicit teardown: the destructor refuses
-    // to release backend resources because it cannot prove it is running on the
-    // thread that owns them, and leaks them instead. Calling it here is what makes
-    // the host exit cleanly.
-    producer.onSurfaceDetached(
-            cellularity::app::render_worker::SurfaceDetachReason::Ordinary);
-    producer.unbindBackend();
+    // Shutdown order matters. The simulation is stopped first, because it owns a
+    // thread that writes the world the renderer reads. Then the surface is detached
+    // and only then is the session closed. closeOnOwnerThread is the explicit
+    // teardown: the destructor refuses to release backend resources because it
+    // cannot prove it is running on the thread that owns them, and leaks them
+    // instead. Calling it here is what makes the host exit cleanly.
+    try {
+        controller->stopMicroscopeRuntime();
+    } catch (const std::exception& failure) {
+        reportFailure("stopMicroscopeRuntime", failure.what());
+    }
+    controller.reset();
     session->detachSurface();
     try {
         session->closeOnOwnerThread();

@@ -934,12 +934,21 @@ if(WIN32)
     # the same frame producer the Android worker uses. It is the piece that makes
     # the port usable rather than merely testable, so it links the production
     # rendering library rather than drawing anything itself.
+    #
+    # cellularity_interaction is named directly, not merely reached through
+    # cellularity_rendering. Its public compile definitions change the layout of
+    # types the host constructs by value -- the controller holds a simulation owner
+    # by value, and that owner's simulation state gains members under the scheduler
+    # option. Those definitions are PUBLIC but the intermediate libraries link
+    # PRIVATE, so without this line the host translation unit would be compiled
+    # against a smaller layout than the library that constructs and destroys it.
     add_executable(cellularity_win32_host host/win32/Win32Host.cpp)
     cellularity_configure_source_target(cellularity_win32_host)
     cellularity_optimize_target(cellularity_win32_host)
     add_dependencies(cellularity_win32_host cellularity_vulkan_shaders)
     target_link_libraries(cellularity_win32_host PRIVATE
             cellularity_win32_host_camera
+            cellularity_interaction
             cellularity_rendering
             cellularity_vulkan_host
             cellularity_vulkan_frame_contract
