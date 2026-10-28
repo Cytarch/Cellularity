@@ -127,7 +127,18 @@ foreach(pair IN LISTS compilePairs)
     list(GET fields 1 relativeOutput)
     set(output "${CELLULARITY_SHADER_OUTPUT_DIR}/${assetDirectory}/${relativeOutput}")
 
-    # --target-env, -O and -Werror match the Android build exactly.
+    # --target-env, -O and -Werror match the Android build exactly, and both builds
+    # read the same contract, so the two compile the same source the same way.
+    #
+    # They do not produce the same bytes, and that is expected rather than a defect.
+    # This build uses glslc from the host toolchain while the Android build uses the
+    # one inside the NDK, and two shaderc releases differ in their encoded generator
+    # version and in the ids they assign; measured over this inventory, the modules
+    # differ from byte 8 onwards and about a fifth of the bytes differ in total. The
+    # contract therefore guarantees one source, one target environment and one set of
+    # flags, not one byte image. Making the bytes match would mean compiling both
+    # platforms with a single pinned shaderc, which is a decision about the toolchain
+    # rather than about this file.
     execute_process(
             COMMAND "${CELLULARITY_GLSLC}" "--target-env=${targetEnvironment}" -O
                     -Werror "${source}" -o "${output}"
