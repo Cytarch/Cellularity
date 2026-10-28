@@ -787,7 +787,6 @@ if(ANDROID)
             platform/android/vulkan/AndroidVulkanCapabilityProbe.cpp
             render/backend/vulkan/AndroidVulkanClearFrameSession.cpp
             render/backend/vulkan/NativeVulkanSurface.cpp
-            render/backend/vulkan/NativeVulkanWindowAndroid.cpp
             render/backend/vulkan/VulkanBackendAbiExports.cpp
             render/backend/vulkan/VulkanBackendJniExports.cpp
             render/backend/vulkan/VulkanBasicCellRenderer.cpp
@@ -848,11 +847,18 @@ if(WIN32)
     else()
         find_library(CELLULARITY_HOST_VULKAN_LIBRARY NAMES vulkan-1 vulkan REQUIRED)
     endif()
+    # vcpkg places the Vulkan headers outside the default include path, and a
+    # STATIC library does not forward its own include directories, so the test
+    # target needs them explicitly.
+    get_target_property(CELLULARITY_HOST_VULKAN_INCLUDE_DIRS
+            ${CELLULARITY_HOST_VULKAN_LIBRARY} INTERFACE_INCLUDE_DIRECTORIES)
+    if(NOT CELLULARITY_HOST_VULKAN_INCLUDE_DIRS)
+        set(CELLULARITY_HOST_VULKAN_INCLUDE_DIRS "")
+    endif()
 
     add_library(cellularity_vulkan_host STATIC
             render/backend/vulkan/AndroidVulkanClearFrameSession.cpp
             render/backend/vulkan/NativeVulkanSurface.cpp
-            render/backend/vulkan/NativeVulkanWindowWin32.cpp
             render/backend/vulkan/VulkanBackendAbiExports.cpp
             render/backend/vulkan/VulkanBasicCellRenderer.cpp
             render/backend/vulkan/VulkanResourceFoundation.cpp
@@ -1171,6 +1177,22 @@ if(NOT ANDROID)
             cellularity_vulkan_backend_client
             Threads::Threads
     )
+    # The Windows windowing seam: the window abstraction, the platform surface
+    # call, and presentation support on the live driver. The window is created but
+    # never shown, so this needs no interactive desktop session. Only a Windows
+    # build has the Win32 surface implementation to test.
+    if(WIN32)
+        cellularity_add_host_test(
+                cellularity_win32_vulkan_surface_tests
+                tests/win32_vulkan_surface_tests.cpp
+                vulkan_backend_abi
+                cellularity_vulkan_host
+                ${CELLULARITY_HOST_VULKAN_LIBRARY}
+        )
+        target_include_directories(cellularity_win32_vulkan_surface_tests PRIVATE
+                ${CELLULARITY_HOST_VULKAN_INCLUDE_DIRS}
+        )
+    endif()
     cellularity_add_host_test(
             cellularity_native_vulkan_render_worker_tests
             tests/native_vulkan_render_worker_tests.cpp

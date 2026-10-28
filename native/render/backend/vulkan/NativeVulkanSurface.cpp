@@ -28,11 +28,22 @@ VkResult createPlatformVulkanSurface(VkInstance instance,
         return VK_ERROR_INITIALIZATION_FAILED;
     }
 
+    // The instance a Win32 surface is created against must be the HINSTANCE that
+    // owns the window class, not the executable's module handle. The driver uses
+    // it to resolve the window's owning module when it builds the presentation
+    // path, and passing the wrong one yields a surface that is created
+    // successfully but that no physical device reports as presentable.
+    const HINSTANCE windowInstance =
+            reinterpret_cast<HINSTANCE>(::GetWindowLongPtrW(hwnd, GWLP_HINSTANCE));
+    const HINSTANCE moduleInstance = ::GetModuleHandleW(nullptr);
+    const HINSTANCE owner =
+            windowInstance != nullptr ? windowInstance : moduleInstance;
+
     const VkWin32SurfaceCreateInfoKHR createInfo{
             VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR,
             nullptr,
             0,
-            ::GetModuleHandleW(nullptr),
+            owner,
             hwnd,
     };
     return vkCreateWin32SurfaceKHR(instance, &createInfo, nullptr, surface);

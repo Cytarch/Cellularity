@@ -30,6 +30,18 @@
 #define CELLULARITY_VULKAN_SURFACE_EXTENSION_NAME ""
 #endif
 
+#if defined(__ANDROID__)
+#include <android/native_window.h>
+#elif defined(_WIN32)
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#include <windows.h>
+#endif
+
 namespace cellularity::render::vulkan {
 
 class NativeVulkanWindow;
@@ -65,16 +77,86 @@ protected:
 /**
  * Adopts one ANativeWindow reference. The caller must already own it, typically
  * from ANativeWindow_fromSurface().
+ *
+ * Defined here rather than in a translation unit: the factory is small, and a
+ * session linked from a static library must not depend on the caller also pulling
+ * in the platform window object file.
  */
 [[nodiscard]] inline NativeVulkanWindowReference createNativeVulkanWindow(
-        struct ANativeWindow* window) noexcept;
+        ANativeWindow* window) noexcept {
+    if (window == nullptr) {
+        return nullptr;
+    }
+    class AndroidWindow final : public NativeVulkanWindow {
+    public:
+        explicit AndroidWindow(ANativeWindow* owned) noexcept
+                : mWindow(owned) {}
+
+        ~AndroidWindow() override {
+            if (mWindow != nullptr) {
+                ANativeWindow_release(mWindow);
+            }
+        }
+
+        [[nodiscard]] int width() const noexcept override {
+            return mWindow != nullptr ? ANativeWindow_getWidth(mWindow) : 0;
+        }
+
+        [[nodiscard]] int height() const noexcept override {
+            return mWindow != nullptr ? ANativeWindow_getHeight(mWindow) : 0;
+        }
+
+        [[nodiscard]] void* nativeHandle() const noexcept override {
+            return mWindow;
+        }
+
+    private:
+        ANativeWindow* mWindow = nullptr;
+    };
+    return std::make_unique<AndroidWindow>(window);
+}
 #elif defined(_WIN32)
 /**
  * Borrows a window handle. HWNDs are not ref-counted, so the caller keeps
- * ownership and must keep the window alive for the session's lifetime.
+ * ownership and must keep the window alive for the session's lifetime. The client
+ * area size is only a fallback for diagnostics; the session receives its extent
+ * explicitly through attachWindow and resizeSurface.
  */
 [[nodiscard]] inline NativeVulkanWindowReference createNativeVulkanWindow(
-        void* hwnd) noexcept;
+        void* hwnd) noexcept {
+    if (hwnd == nullptr) {
+        return nullptr;
+    }
+    class Win32Window final : public NativeVulkanWindow {
+    public:
+        explicit Win32Window(HWND borrowed) noexcept
+                : mWindow(borrowed) {}
+
+        [[nodiscard]] int width() const noexcept override {
+            RECT client{};
+            if (mWindow != nullptr && ::GetClientRect(mWindow, &client) != 0) {
+                return static_cast<int>(client.right - client.left);
+            }
+            return 0;
+        }
+
+        [[nodiscard]] int height() const noexcept override {
+            RECT client{};
+            if (mWindow != nullptr && ::GetClientRect(mWindow, &client) != 0) {
+                return static_cast<int>(client.bottom - client.top);
+            }
+            return 0;
+        }
+
+        [[nodiscard]] void* nativeHandle() const noexcept override {
+            return mWindow;
+        }
+
+    private:
+        HWND mWindow = nullptr;
+    };
+    return std::make_unique<Win32Window>(static_cast<HWND>(hwnd));
+}
 #endif
 
 /**
