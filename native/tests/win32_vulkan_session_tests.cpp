@@ -18,12 +18,16 @@
 // requires no window and shows nothing.
 
 #include <algorithm>
+#include <cmath>
 #include <cstdint>
 #include <cstdlib>
 #include <iostream>
 #include <string>
+#include <utility>
 #include <vector>
 
+#include "app/interaction/NativeViewport.h"
+#include "host/win32/Win32HostCamera.h"
 #include "render/backend/abi/CellularityVulkanBackendAbi.h"
 #include "tests/support/TestAssertions.h"
 #include "tests/support/Win32ContractWindow.h"
@@ -199,10 +203,155 @@ void verifySessionInitializes(const std::string& assetRoot,
     std::cout << "session_initialized=1\n";
 }
 
+// The interactive camera's projection contract.
+//
+// An earlier version composed this matrix from the viewport's own world matrix and a
+// hand-calibrated scale, and it looked plausible while rendering the dish as an
+// ellipse. Nothing failed; the frame was simply wrong. These assertions pin the two
+// properties that were violated, and they need no driver, window or session.
+void verifyCameraProjectionKeepsWorldShape() {
+    using cellularity::host::win32::kCameraRadius;
+    using cellularity::host::win32::projectionMatrixFor;
+
+    // A dish of the fixture's radius, at the camera the fixture itself uses. The
+    // fixture frames this so that the radius reaches halfway up the surface, which is
+    // what makes the two projections comparable at all.
+    constexpr float kDishRadius = 0.24F;
+    constexpr int kWidth = 1280;
+    constexpr int kHeight = 800;
+
+    NativeViewport viewport(kCameraRadius);
+    viewport.setCameraBoundsEnabled(false);
+    viewport.setSurfaceSize(kWidth, kHeight);
+    viewport.setCamera(0.0F, 0.0F, 1.0F / kCameraRadius);
+
+    const std::array<float, 16> matrix = projectionMatrixFor(viewport);
+
+    // The world keeps its shape when one world distance covers the same number of
+    // pixels whichever axis it runs along. That is a claim about pixels, not about
+    // normalised coordinates: the normalised offsets of a round world are deliberately
+    // unequal on a non-square surface, which is exactly what makes it round on screen.
+    // An earlier version of this test asserted equality of the normalised offsets and so
+    // condemned a correct projection; the fixture's own dish measures 808 by 800 pixels,
+    // and this matrix reproduces the fixture's framing exactly, so equality of pixel
+    // extents is the property worth pinning.
+    const auto projectX = [&matrix](float worldX) {
+        return matrix[0] * worldX + matrix[12];
+    };
+    const auto projectY = [&matrix](float worldY) {
+        return matrix[5] * worldY + matrix[13];
+    };
+    const float worldExtent = kDishRadius;
+    const float normalisedX = projectX(worldExtent) - projectX(0.0F);
+    const float normalisedY = projectY(worldExtent) - projectY(0.0F);
+    assertTrue(normalisedX > 0.0F && normalisedY > 0.0F,
+            "A world offset must map away from the centre on both axes");
+
+    const float halfSurfaceWidth = static_cast<float>(kWidth) * 0.5F;
+    const float halfSurfaceHeight = static_cast<float>(kHeight) * 0.5F;
+    const float pixelsX = normalisedX * halfSurfaceWidth;
+    const float pixelsY = normalisedY * halfSurfaceHeight;
+    const float pixelRatio = pixelsX / pixelsY;
+    assertTrue(std::abs(pixelRatio - 1.0F) < 0.001F,
+            "A circle must stay round: one world distance must cover the same number of "
+            "pixels on both axes, got x/y=" + std::to_string(pixelRatio));
+
+    // The radius must also fit inside the shorter side, or the dish would be cropped.
+    const float shorterHalfExtent = std::min(halfSurfaceWidth, halfSurfaceHeight);
+    assertTrue(pixelsY > 0.0F && pixelsY <= shorterHalfExtent,
+            "The dish radius must fit within the surface's shorter half-extent, got "
+                    + std::to_string(pixelsY) + "px of "
+                    + std::to_string(shorterHalfExtent) + "px");
+
+    // A pan is a translation and nothing else. If it moved the scale, the image would
+    // zoom while being dragged.
+    constexpr float kPanPixelsX = 120.0F;
+    constexpr float kPanPixelsY = 90.0F;
+    viewport.moveByScreenDelta(kPanPixelsX, kPanPixelsY);
+    const std::array<float, 16> pannedOnce = projectionMatrixFor(viewport);
+    assertTrue(pannedOnce[0] == matrix[0] && pannedOnce[5] == matrix[5],
+            "A pan must not change the projection's scale");
+
+    // Dragging must reach both axes, each from its own starting camera so the expected
+    // shift is unambiguous. The camera bound is what defeated this before: it pins
+    // whichever axis the view exactly fills, so a drag along that axis did nothing while
+    // the other worked.
+    const float pixelsPerUnit = static_cast<float>(kHeight) / viewport.viewHeight();
+    constexpr float kDragPixels = 100.0F;
+    const float expectedShift = kDragPixels / pixelsPerUnit;
+
+    NativeViewport horizontal(kCameraRadius);
+    horizontal.setCameraBoundsEnabled(false);
+    horizontal.setSurfaceSize(kWidth, kHeight);
+    horizontal.setCamera(0.0F, 0.0F, 1.0F / kCameraRadius);
+    horizontal.moveByScreenDelta(kDragPixels, 0.0F);
+    assertTrue(std::abs(horizontal.cameraX() - (-expectedShift)) < 0.0005F,
+            "A horizontal drag must move the camera by the pixels it covered, got "
+                    + std::to_string(horizontal.cameraX()));
+    assertTrue(horizontal.cameraY() == 0.0F,
+            "A horizontal drag must not move the camera on the other axis");
+
+    NativeViewport vertical(kCameraRadius);
+    vertical.setCameraBoundsEnabled(false);
+    vertical.setSurfaceSize(kWidth, kHeight);
+    vertical.setCamera(0.0F, 0.0F, 1.0F / kCameraRadius);
+    vertical.moveByScreenDelta(0.0F, kDragPixels);
+    assertTrue(std::abs(vertical.cameraY() - expectedShift) < 0.0005F,
+            "A vertical drag must move the camera by the pixels it covered, got "
+                    + std::to_string(vertical.cameraY()));
+    assertTrue(vertical.cameraX() == 0.0F,
+            "A vertical drag must not move the camera on the other axis");
+
+    // Both axes keep the one scale after moving, so panning cannot distort the world.
+    const std::array<float, 16> panned = projectionMatrixFor(viewport);
+    assertTrue(panned[0] == matrix[0] && panned[5] == matrix[5],
+            "Panning must leave the projection's scale untouched");
+
+    // A drag that moves the camera has to move the image. This is the assertion that
+    // would have caught a camera which was applied and then discarded, which is the
+    // other failure this path had.
+    assertTrue(panned[12] != matrix[12] && panned[13] != matrix[13],
+            "A two-axis drag must move the projection's translation on both axes");
+
+    // Every window shape must keep the world round. The normalised scales differ by
+    // design on a non-square surface, so the check is again about pixels: the world
+    // distance that spans the shorter side must span the same number of pixels on both
+    // axes, at any shape and in either orientation.
+    for (const auto& extent : {std::pair<int, int>{800, 800},
+                 std::pair<int, int>{1280, 800}, std::pair<int, int>{800, 1280}}) {
+        NativeViewport shaped(kCameraRadius);
+        shaped.setCameraBoundsEnabled(false);
+        shaped.setSurfaceSize(extent.first, extent.second);
+        shaped.setCamera(0.0F, 0.0F, 1.0F / kCameraRadius);
+        const std::array<float, 16> shapedMatrix = projectionMatrixFor(shaped);
+        const float shapedPixelsX =
+                shapedMatrix[0] * worldExtent * static_cast<float>(extent.first) * 0.5F;
+        const float shapedPixelsY =
+                shapedMatrix[5] * worldExtent * static_cast<float>(extent.second) * 0.5F;
+        const float shapedRatio = shapedPixelsX / shapedPixelsY;
+        assertTrue(std::abs(shapedRatio - 1.0F) < 0.001F,
+                "A " + std::to_string(extent.first) + "x"
+                        + std::to_string(extent.second)
+                        + " window must keep the world round, got pixel x/y="
+                        + std::to_string(shapedRatio));
+
+        // And the camera must be able to move on both axes at every shape, which is
+        // what the bounds previously prevented on whichever axis the view filled.
+        NativeViewport pannedViewport = shaped;
+        pannedViewport.moveByScreenDelta(kPanPixelsX, kPanPixelsY);
+        assertTrue(pannedViewport.cameraX() != shaped.cameraX()
+                        && pannedViewport.cameraY() != shaped.cameraY(),
+                "A " + std::to_string(extent.first) + "x"
+                        + std::to_string(extent.second)
+                        + " window must let the camera pan on both axes");
+    }
+
+    std::cout << "camera_projection_verified=1\n";
+}
+
 } // namespace
 
-int main(int argc, char** argv) {
-    try {
+int main(int argc, char** argv) {    try {
         // The asset roots are passed in so the test does not have to guess where
         // the build put the generated SPIR-V or where the source textures live.
         std::string assetRoot = argc > 1 ? argv[1] : std::string();
@@ -224,6 +373,7 @@ int main(int argc, char** argv) {
         assertTrue(!assetRoot.empty(),
                 "The test needs the asset root holding vulkan/shaders/*.spv");
 
+        verifyCameraProjectionKeepsWorldShape();
         verifyApiTableIsReachable();
         verifySessionInitializes(assetRoot, assetRootSecondary);
         std::cout << "win32 vulkan session contract passed\n";

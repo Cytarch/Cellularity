@@ -917,6 +917,19 @@ if(WIN32)
     add_custom_target(cellularity_vulkan_shaders
             DEPENDS "${CELLULARITY_HOST_SHADER_DIR}/vulkan/shaders/.stamp")
 
+    # The interactive camera, as its own small library so the projection contract can be
+    # asserted by a test without dragging in a window, a session or a driver. It is a
+    # real seam rather than a test convenience: the projection is the part of this host
+    # that was wrong in a way that rendered without failing.
+    add_library(cellularity_win32_host_camera STATIC
+            host/win32/Win32HostCamera.cpp
+    )
+    cellularity_configure_source_target(cellularity_win32_host_camera)
+    cellularity_optimize_target(cellularity_win32_host_camera)
+    target_link_libraries(cellularity_win32_host_camera PRIVATE
+            cellularity_interaction
+    )
+
     # The desktop host: a Win32 window that renders through the same backend and
     # the same frame producer the Android worker uses. It is the piece that makes
     # the port usable rather than merely testable, so it links the production
@@ -926,6 +939,7 @@ if(WIN32)
     cellularity_optimize_target(cellularity_win32_host)
     add_dependencies(cellularity_win32_host cellularity_vulkan_shaders)
     target_link_libraries(cellularity_win32_host PRIVATE
+            cellularity_win32_host_camera
             cellularity_rendering
             cellularity_vulkan_host
             cellularity_vulkan_frame_contract
@@ -1273,6 +1287,7 @@ if(NOT ANDROID)
                 tests/win32_vulkan_session_tests.cpp
                 vulkan_backend_abi
                 cellularity_vulkan_host
+                cellularity_win32_host_camera
                 ${CELLULARITY_HOST_VULKAN_LIBRARY}
         )
         target_include_directories(cellularity_win32_vulkan_session_tests PRIVATE
