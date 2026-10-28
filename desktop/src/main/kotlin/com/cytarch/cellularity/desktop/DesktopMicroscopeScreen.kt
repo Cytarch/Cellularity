@@ -14,7 +14,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -53,20 +53,25 @@ fun DesktopMicroscopeScreen(
     val store = remember { MicroscopeStore() }
     val state by store.state.collectAsState()
 
-    // Input is accumulated as composition state and pushed into the renderer by the
-    // surface, so every native call happens on the composition thread rather than on
-    // whichever thread AWT dispatched the mouse event from.
-    val pendingInput = remember { mutableStateListOf<SurfaceInputEvent>() }
+    // Input is handed to the surface as an immutable list rather than appended to a
+    // mutable one. The surface republishes the queue whenever the list changes, and a
+    // list mutated in place would look unchanged to it, so the events would never be
+    // applied at all. Each change therefore allocates, which is cheap next to a frame and
+    // is what makes the change observable.
+    var pendingInput by remember { mutableStateOf<List<SurfaceInputEvent>>(emptyList()) }
+    val queueInput: (SurfaceInputEvent) -> Unit = { event ->
+        pendingInput = pendingInput + event
+    }
     var cellCount by remember { mutableStateOf(0L) }
     var failure by remember { mutableStateOf<String?>(null) }
     val assetRoots = remember { DesktopAssetRoots.resolve() }
 
     // A mode or tool change in the interface becomes an instruction to the simulation.
     LaunchedEffect(state.selectedTemperature) {
-        pendingInput.add(SurfaceInputEvent.Temperature(state.selectedTemperature.nativeMode))
+        queueInput(SurfaceInputEvent.Temperature(state.selectedTemperature.nativeMode))
     }
     LaunchedEffect(state.selectedTool) {
-        pendingInput.add(SurfaceInputEvent.Tool(state.selectedTool.nativeOrdinal))
+        queueInput(SurfaceInputEvent.Tool(state.selectedTool.nativeOrdinal))
     }
 
     Column(
@@ -85,7 +90,7 @@ fun DesktopMicroscopeScreen(
                     // The same keys the native host accepts, so a session is driven
                     // identically whether it runs here or standalone.
                     Key.R -> {
-                        pendingInput.add(SurfaceInputEvent.Reset)
+                        queueInput(SurfaceInputEvent.Reset)
                         true
                     }
 
@@ -115,7 +120,7 @@ fun DesktopMicroscopeScreen(
                     maxCellCount = configuration.maxCellCount,
                     maxFoodCount = configuration.maxFoodCount,
                     dishRadius = configuration.radius,
-                    inputEvents = pendingInput.toList(),
+                    inputEvents = pendingInput,
                     onCellCount = { count -> cellCount = count },
                     onFailure = { message -> failure = message },
                     modifier = Modifier.fillMaxSize()

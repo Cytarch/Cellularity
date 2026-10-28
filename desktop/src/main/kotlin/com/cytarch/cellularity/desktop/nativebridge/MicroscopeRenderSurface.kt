@@ -73,8 +73,7 @@ fun MicroscopeRenderSurface(
     onCellCount: (Long) -> Unit,
     onFailure: (String) -> Unit,
     modifier: Modifier = Modifier
-) {
-    if (!DesktopNativeRenderer.isAvailable || assetRoots == null) {
+) {    if (!DesktopNativeRenderer.isAvailable || assetRoots == null) {
         RendererUnavailable(
             reason = if (!DesktopNativeRenderer.isAvailable) {
                 DesktopNativeRenderer.failureDescription
@@ -116,12 +115,14 @@ fun MicroscopeRenderSurface(
         )
     }
 
-    // Input is pushed from the composition, which runs on the same thread that renders,
-    // so the renderer is only ever touched by one thread.
-    LaunchedEffect(holder, inputEvents) {
-        for (event in inputEvents) {
-            holder.apply(event)
-        }
+    // The queue is handed to the frame loop rather than drained by its own effect.
+    // A LaunchedEffect keyed on the input list would restart every time an event arrived
+    // and replay the whole list, so every pan would be applied once per event that
+    // followed it. The loop already runs once per frame; this makes it the single place
+    // that touches the renderer, which is also what the renderer requires.
+    DisposableEffect(holder, inputEvents) {
+        holder.hold(inputEvents)
+        onDispose { holder.clearHold(inputEvents) }
     }
 
     // The frame loop. Drawing is what presents, and the presenter blocks on the display
@@ -172,6 +173,10 @@ private class SurfaceHolder(
     private var height: Int = 0
     private var reported = false
     private var released = false
+
+    /** Input published by the composition, consumed by the frame loop. */
+    private val pendingInput =
+        java.util.concurrent.atomic.AtomicReference<List<SurfaceInputEvent>>(emptyList())
 
     /**
      * Creates the heavyweight canvas and, once AWT has realised it, the native window
@@ -322,9 +327,13 @@ private class SurfaceHolder(
         }
     }
 
-    /** Draws one frame. Returns false once the loop should stop. */
+    /** Draws one frame and applies whatever input has arrived since the last one. */
     fun renderOnce(): Boolean {
         if (released) return false
+        val pending = pendingInput.getAndSet(emptyList())
+        for (event in pending) {
+            apply(event)
+        }
         if (sessionHandle == 0L) {
             // Still waiting for the canvas to be realised and the session to start.
             Thread.sleep(8)
@@ -338,6 +347,22 @@ private class SurfaceHolder(
         }
         onCellCount(DesktopNativeRenderer.nativeCellCount(sessionHandle))
         return true
+    }
+
+    /**
+     * Publishes the queue this composition is using.
+     *
+     * The queue is rebuilt on every input event, so the reference is swapped rather than
+     * the list mutated: the frame loop always sees either the old list or the new one,
+     * never a list being written to while it is read.
+     */
+    fun hold(events: List<SurfaceInputEvent>) {
+        pendingInput.set(events)
+    }
+
+    /** Drops the queue, but only if it is still the one being cleared. */
+    fun clearHold(events: List<SurfaceInputEvent>) {
+        pendingInput.compareAndSet(events, emptyList())
     }
 
     fun apply(event: SurfaceInputEvent) {
