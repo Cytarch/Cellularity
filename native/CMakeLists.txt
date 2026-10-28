@@ -703,8 +703,14 @@ set_target_properties(cellularity_render_overlay_contract PROPERTIES
 
 # Packaged image decoding is backend-neutral and independent from Android.
 # GLES and Vulkan both consume the same validated RGBA8 texture payloads.
+#
+# FileRenderAssets is the host's NativeRenderAssets implementation: Android serves
+# assets from its asset manager, a desktop host reads them from disk. It belongs
+# here rather than in the Vulkan target because the interface it implements is
+# backend-neutral, and the Vulkan backend refers to it through that interface.
 add_library(cellularity_render_assets STATIC
         render/AssetRenderTextureLoader.cpp
+        render/FileRenderAssets.cpp
 )
 cellularity_configure_source_target(cellularity_render_assets)
 cellularity_optimize_target(cellularity_render_assets)
@@ -1247,6 +1253,26 @@ if(NOT ANDROID)
         )
         target_include_directories(cellularity_win32_vulkan_surface_tests PRIVATE
                 ${CELLULARITY_HOST_VULKAN_INCLUDE_DIRS}
+        )
+
+        # Stands the real session up on the live driver with the compiled shaders,
+        # so a module that failed to build or an asset path that resolves to
+        # nothing fails here instead of at the first frame.
+        cellularity_add_host_test(
+                cellularity_win32_vulkan_session_tests
+                tests/win32_vulkan_session_tests.cpp
+                vulkan_backend_abi
+                cellularity_vulkan_host
+                ${CELLULARITY_HOST_VULKAN_LIBRARY}
+        )
+        target_include_directories(cellularity_win32_vulkan_session_tests PRIVATE
+                ${CELLULARITY_HOST_VULKAN_INCLUDE_DIRS}
+        )
+        add_dependencies(cellularity_win32_vulkan_session_tests
+                cellularity_vulkan_shaders)
+        set_tests_properties(cellularity_win32_vulkan_session_tests PROPERTIES
+                ENVIRONMENT
+                "CELLULARITY_VULKAN_TEST_ASSET_ROOT=${CELLULARITY_HOST_SHADER_DIR};CELLULARITY_VULKAN_TEST_SECONDARY_ROOT=${CMAKE_CURRENT_SOURCE_DIR}/rendering/assets"
         )
     endif()
     cellularity_add_host_test(

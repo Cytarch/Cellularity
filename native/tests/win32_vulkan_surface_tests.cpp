@@ -35,6 +35,7 @@
 #include "render/backend/vulkan/NativeVulkanSurface.h"
 #include "render/backend/vulkan/NativeVulkanWindow.h"
 #include "tests/support/TestAssertions.h"
+#include "tests/support/Win32ContractWindow.h"
 
 namespace {
 
@@ -42,55 +43,7 @@ using cellularity::render::vulkan::createNativeVulkanWindow;
 using cellularity::render::vulkan::createPlatformVulkanSurface;
 using cellularity::render::vulkan::NativeVulkanWindowReference;
 using cellularity::tests::assertTrue;
-
-// Owns a real top-level window that is never shown. WS_OVERLAPPEDWINDOW is used
-// rather than WS_POPUP so the window has the client-area behaviour an ordinary
-// application window has, which is what the session's extent handling expects.
-class OffscreenWin32Window final {
-public:
-    OffscreenWin32Window() {
-        const HINSTANCE instance = ::GetModuleHandleW(nullptr);
-
-        WNDCLASSEXW windowClass{};
-        windowClass.cbSize = sizeof(windowClass);
-        windowClass.lpfnWndProc = &OffscreenWin32Window::windowProc;
-        windowClass.hInstance = instance;
-        windowClass.lpszClassName = L"CellularityVulkanContractWindow";
-        // Registering the same class twice fails with ERROR_CLASS_ALREADY_EXISTS,
-        // which is expected when the test runs more than once in a process.
-        ::RegisterClassExW(&windowClass);
-
-        mWindow = ::CreateWindowExW(0, windowClass.lpszClassName,
-                L"Cellularity Vulkan contract", WS_OVERLAPPEDWINDOW, 0, 0, 640,
-                480, nullptr, nullptr, instance, nullptr);
-        if (mWindow == nullptr) {
-            throw std::runtime_error(
-                    "Could not create the contract test window, error "
-                    + std::to_string(::GetLastError()));
-        }
-    }
-
-    ~OffscreenWin32Window() {
-        if (mWindow != nullptr) {
-            ::DestroyWindow(mWindow);
-        }
-    }
-
-    OffscreenWin32Window(const OffscreenWin32Window&) = delete;
-    OffscreenWin32Window& operator=(const OffscreenWin32Window&) = delete;
-
-    [[nodiscard]] HWND handle() const noexcept {
-        return mWindow;
-    }
-
-private:
-    static LRESULT CALLBACK windowProc(
-            HWND window, UINT message, WPARAM wParam, LPARAM lParam) {
-        return ::DefWindowProcW(window, message, wParam, lParam);
-    }
-
-    HWND mWindow = nullptr;
-};
+using cellularity::tests::OffscreenWin32Window;
 
 // A minimal Vulkan 1.0 instance carrying the surface extensions, which is all that
 // the surface and presentation queries require.
