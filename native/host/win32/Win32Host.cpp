@@ -26,7 +26,11 @@
 #define WIN32_LEAN_AND_MEAN
 #endif
 #include <windows.h>
+// GET_X_LPARAM and GET_Y_LPARAM live in the extended coordinate helpers, which
+// Windows keeps separate from windows.h to make the signed conversion explicit.
+#include <windowsx.h>
 
+#include <array>
 #include <chrono>
 #include <cstdint>
 #include <cstdlib>
@@ -37,8 +41,10 @@
 #include <thread>
 #include <vector>
 
+#include "app/interaction/NativeViewport.h"
 #include "app/render/NativeRenderFrameSource.h"
 #include "app/render/sources/VulkanDemoFrameProducer.h"
+#include "app/RenderStateSnapshots.h"
 #include "render/backend/RenderSurfaceSession.h"
 #include "render/backend/abi/VulkanBackendSession.h"
 #include "render/backend/abi/VulkanRenderSurfaceSessionAdapter.h"
@@ -50,11 +56,100 @@ using cellularity::app::render_worker::sources::VulkanDemoFrameProducer;
 using cellularity::render::abi::VulkanBackendAssetSource;
 using cellularity::render::abi::VulkanBackendSession;
 
-// The window procedure is a C callback, so the message it needs to hand back lives
+// The camera radius, in the same world units the demo fixture uses: the base-cell
+// shaders express nucleus and membrane widths in production world units, so the
+// camera has to be in that scale for those fixed-size details to stay visible.
+constexpr float kCameraRadius = 0.24F;
+
+// Matches the demo background so the interactive view and the fixture frame are
+// visually the same scene.
+constexpr std::array<float, 3> kBackgroundColor{0.73F, 0.70F, 0.95F};
+
+// How much world the viewport's normalised range spans. The value was found by
+// matching a capture's pixel statistics to the fixture frame's at 1280x800, which
+// is what makes the interactive view and a capture show the same scene at the same
+// size. It is not 1/radius because the viewport's normalised range is not shaped
+// like the fixture's projection; changing it alters only how large the scene
+// appears, never where the camera is.
+constexpr float kWorldScale = 1.49F;
+
+// The viewport composes its world matrix with a surface matrix. Two things have to
+// be reconciled for the interactive view to frame the scene the way the fixture
+// frame does.
+//
+// The first is overall scale: the viewport works in one world unit per normalised
+// unit, which is far wider than the fixture's framing, so kWorldScale above brings
+// the two together. Without it the view is several times too wide and the scene
+// appears shrunken in the middle of the frame.
+//
+// The second is aspect: the viewport derives its scale from the shorter side and
+// applies it to both axes, which stretches the world along the longer side. Dividing
+// the longer axis by the aspect ratio keeps the world square, so a square window
+// needs no correction and the dish stays round at any window shape.
+[[nodiscard]] std::array<float, 16> surfaceMatrixFor(int width, int height) {
+    const int shorter = std::min(width, height);
+    const int longer = std::max(width, height);
+    if (shorter <= 0 || longer <= 0) {
+        return {kWorldScale, 0.0F, 0.0F, 0.0F,
+                0.0F, kWorldScale, 0.0F, 0.0F,
+                0.0F, 0.0F, 1.0F, 0.0F,
+                0.0F, 0.0F, 0.0F, 1.0F};
+    }
+    const float aspect = static_cast<float>(shorter) / static_cast<float>(longer);
+    const float xScale = (width >= height ? aspect : 1.0F) * kWorldScale;
+    const float yScale = (height > width ? aspect : 1.0F) * kWorldScale;
+    return {
+            xScale, 0.0F, 0.0F, 0.0F,
+            0.0F, yScale, 0.0F, 0.0F,
+            0.0F, 0.0F, 1.0F, 0.0F,
+            0.0F, 0.0F, 0.0F, 1.0F};
+}
+
+// Builds the presentation the renderer consumes from the live camera. The viewport
+// snapshot helper is deliberately not used here: it recomputes the matrix from an
+// identity surface matrix and ignores the one it is given, which would discard both
+// the scale and the aspect correction above and leave the camera with no effect.
+[[nodiscard]] cellularity::render::RenderPresentationState presentationFrom(
+        const NativeViewport& viewport) {
+    using cellularity::render::RenderPresentationState;
+
+    RenderPresentationState presentation;
+    presentation.viewport.revision = viewport.revision();
+    presentation.viewport.coverageRevision = viewport.revision();
+    presentation.viewport.visibleBounds =
+            cellularity::app::toRenderBounds(viewport.viewBounds(0.0F));
+    presentation.viewport.coverageBounds = presentation.viewport.visibleBounds;
+    presentation.viewport.mvpMatrix = viewport.worldMatrix(
+            surfaceMatrixFor(viewport.surfaceWidth(), viewport.surfaceHeight()));
+    presentation.viewport.cameraX = viewport.cameraX();
+    presentation.viewport.cameraY = viewport.cameraY();
+    presentation.viewport.zoom = viewport.zoom();
+    presentation.viewport.viewWidth = viewport.viewWidth();
+    presentation.viewport.viewHeight = viewport.viewHeight();
+    presentation.viewport.surfaceWidth = viewport.surfaceWidth();
+    presentation.viewport.surfaceHeight = viewport.surfaceHeight();
+    presentation.backgroundColor = kBackgroundColor;
+    return presentation;
+}
+
+// The window procedure is a C callback, so the state it needs to hand back lives
 // at file scope rather than being threaded through a user-data pointer.
 bool gRunning = true;
 int gPendingWidth = 0;
 int gPendingHeight = 0;
+
+// Input is collected from window messages and applied by the frame loop, for the
+// same reason resizes are: the session and the viewport must only be touched on the
+// thread that owns them, and a message dispatch is not that place.
+bool gDragging = false;
+int gLastPointerX = 0;
+int gLastPointerY = 0;
+float gPendingPanX = 0.0F;
+float gPendingPanY = 0.0F;
+float gPendingZoomFactor = 1.0F;
+float gPendingZoomX = 0.0F;
+float gPendingZoomY = 0.0F;
+bool gResetCameraRequested = false;
 
 LRESULT CALLBACK hostWindowProc(
         HWND window, UINT message, WPARAM wParam, LPARAM lParam) {
@@ -83,10 +178,53 @@ LRESULT CALLBACK hostWindowProc(
         // Vulkan owns every pixel of the client area. Letting Windows paint a
         // background first would flicker on every resize.
         return 1;
+    case WM_LBUTTONDOWN: {
+        gDragging = true;
+        gLastPointerX = static_cast<int>(LOWORD(lParam));
+        gLastPointerY = static_cast<int>(HIWORD(lParam));
+        ::SetCapture(window);
+        return 0;
+    }
+    case WM_LBUTTONUP: {
+        if (gDragging) {
+            gDragging = false;
+            ::ReleaseCapture();
+        }
+        return 0;
+    }
+    case WM_MOUSEMOVE: {
+        const int x = static_cast<int>(LOWORD(lParam));
+        const int y = static_cast<int>(HIWORD(lParam));
+        if (gDragging) {
+            // Dragging moves the world with the pointer, which is what a map-like
+            // view is expected to do.
+            gPendingPanX += static_cast<float>(x - gLastPointerX);
+            gPendingPanY += static_cast<float>(y - gLastPointerY);
+        }
+        gLastPointerX = x;
+        gLastPointerY = y;
+        return 0;
+    }
+    case WM_MOUSEWHEEL: {
+        // The wheel delta is in the high word of wParam, in multiples of 120. The
+        // cursor position arrives in screen coordinates, so it is converted to the
+        // client area before it is used as a zoom anchor.
+        const int wheelDelta = GET_WHEEL_DELTA_WPARAM(wParam);
+        POINT anchor{GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam)};
+        ::ScreenToClient(window, &anchor);
+        gPendingZoomFactor *= (wheelDelta > 0) ? 1.1F : (1.0F / 1.1F);
+        gPendingZoomX = static_cast<float>(anchor.x);
+        gPendingZoomY = static_cast<float>(anchor.y);
+        return 0;
+    }
     case WM_KEYDOWN:
         if (wParam == VK_ESCAPE) {
             gRunning = false;
             ::DestroyWindow(window);
+            return 0;
+        }
+        if (wParam == 'R') {
+            gResetCameraRequested = true;
             return 0;
         }
         break;
@@ -219,8 +357,13 @@ void reportCaptureStatistics(const std::vector<std::uint8_t>& rgba) {
 // draw the interactive path performs, aimed at a readback image instead of the
 // swapchain, so a capture is evidence about the renderer rather than about a
 // separate screenshot path.
+//
+// With useCamera set, the presentation comes from a viewport after the given pan
+// and zoom exactly as the interactive loop would apply them, so a capture can show
+// that input moves the view without a human at the window.
 int captureFrame(const std::shared_ptr<VulkanBackendSession>& session,
-        const std::string& outputPath, int width, int height) {
+        const std::string& outputPath, int width, int height, bool useCamera,
+        float panX, float panY, float zoomFactor) {
     using cellularity::render::OffscreenRenderTarget;
     using cellularity::render::PreparedRenderFrame;
     using cellularity::render::abi::VulkanRenderSurfaceSessionAdapter;
@@ -232,9 +375,32 @@ int captureFrame(const std::shared_ptr<VulkanBackendSession>& session,
 
         const PreparedRenderFrame frame =
                 cellularity::render::vulkan::makeVulkanBasicCellDemoFrame();
-        const auto presentation =
-                cellularity::render::vulkan::makeVulkanBasicCellDemoPresentation(
-                        width, height);
+
+        cellularity::render::RenderPresentationState presentation;
+        if (useCamera) {
+            NativeViewport viewport(kCameraRadius);
+            viewport.setCameraBoundsEnabled(true);
+            viewport.setSurfaceSize(width, height);
+            viewport.setCamera(0.0F, 0.0F, 1.0F / kCameraRadius);
+            if (panX != 0.0F || panY != 0.0F) {
+                viewport.moveByScreenDelta(panX, panY);
+            }
+            if (zoomFactor != 1.0F) {
+                viewport.zoomAt(zoomFactor, static_cast<float>(width) / 2.0F,
+                        static_cast<float>(height) / 2.0F);
+            }
+            presentation = presentationFrom(viewport);
+            std::cout << "camera_applied pan=" << panX << "," << panY
+                      << " zoom_factor=" << zoomFactor
+                      << " camera=" << viewport.cameraX() << ","
+                      << viewport.cameraY() << " zoom=" << viewport.zoom()
+                      << " view=" << viewport.viewWidth() << "x"
+                      << viewport.viewHeight() << std::endl;
+        } else {
+            presentation =
+                    cellularity::render::vulkan::makeVulkanBasicCellDemoPresentation(
+                            width, height);
+        }
 
         const auto passStatus =
                 adapter.drawMicroscopeOffscreenPass(presentation, frame);
@@ -271,6 +437,10 @@ int main(int argc, char** argv) {
     std::string capturePath;
     int captureWidth = 1280;
     int captureHeight = 800;
+    bool captureWithCamera = false;
+    float capturePanX = 0.0F;
+    float capturePanY = 0.0F;
+    float captureZoomFactor = 1.0F;
     std::vector<std::string> positional;
     for (int index = 1; index < argc; ++index) {
         const std::string argument = argv[index];
@@ -282,6 +452,17 @@ int main(int argc, char** argv) {
         } else if (argument == "--capture-size" && index + 2 < argc) {
             captureWidth = std::atoi(argv[++index]);
             captureHeight = std::atoi(argv[++index]);
+        } else if (argument == "--capture-camera") {
+            // Exercises the interactive path: the presentation comes from a
+            // viewport rather than the fixed fixture.
+            captureWithCamera = true;
+        } else if (argument == "--capture-pan" && index + 2 < argc) {
+            capturePanX = static_cast<float>(std::atof(argv[++index]));
+            capturePanY = static_cast<float>(std::atof(argv[++index]));
+            captureWithCamera = true;
+        } else if (argument == "--capture-zoom" && index + 1 < argc) {
+            captureZoomFactor = static_cast<float>(std::atof(argv[++index]));
+            captureWithCamera = true;
         } else {
             positional.push_back(argument);
         }
@@ -375,8 +556,9 @@ int main(int argc, char** argv) {
     if (captureMode) {
         // The window is a real one, so the session has a device and a swapchain,
         // but nothing is ever shown because the frame is drawn off-screen.
-        const int result =
-                captureFrame(session, capturePath, captureWidth, captureHeight);
+        const int result = captureFrame(session, capturePath, captureWidth,
+                captureHeight, captureWithCamera, capturePanX, capturePanY,
+                captureZoomFactor);
         session->detachSurface();
         try {
             session->closeOnOwnerThread();
@@ -402,6 +584,14 @@ int main(int argc, char** argv) {
     int surfaceHeight = kInitialHeight;
     std::uint64_t presented = 0;
     std::uint64_t failedFrames = 0;
+
+    // The camera is the production viewport, so panning, zoom anchoring and the
+    // zoom clamp all behave exactly as they do on Android rather than being
+    // reimplemented here.
+    NativeViewport viewport(kCameraRadius);
+    viewport.setCameraBoundsEnabled(true);
+    viewport.setSurfaceSize(surfaceWidth, surfaceHeight);
+    viewport.setCamera(0.0F, 0.0F, 1.0F / kCameraRadius);
 
     while (gRunning) {
         // Pump without blocking so a frame is still drawn when the user is not
@@ -437,7 +627,28 @@ int main(int argc, char** argv) {
                     != cellularity::app::render_worker::SourceSurfaceResult::Applied) {
                 std::cerr << "cellularity host: frame producer refused the resize\n";
             }
+            viewport.setSurfaceSize(surfaceWidth, surfaceHeight);
         }
+
+        // Input collected from window messages is applied here, on the thread that
+        // owns the viewport and the session.
+        if (gResetCameraRequested) {
+            gResetCameraRequested = false;
+            viewport.setCamera(0.0F, 0.0F, 1.0F / kCameraRadius);
+        }
+        if (gPendingPanX != 0.0F || gPendingPanY != 0.0F) {
+            viewport.moveByScreenDelta(gPendingPanX, gPendingPanY);
+            gPendingPanX = 0.0F;
+            gPendingPanY = 0.0F;
+        }
+        if (gPendingZoomFactor != 1.0F) {
+            viewport.zoomAt(gPendingZoomFactor, gPendingZoomX, gPendingZoomY);
+            gPendingZoomFactor = 1.0F;
+        }
+
+        // The presentation is rebuilt from the live camera every frame, so a drag or
+        // a wheel event shows up in the next frame without any other plumbing.
+        producer.setPresentationOverride(presentationFrom(viewport));
 
         const auto frame = producer.renderFrame();
         if (frame.status

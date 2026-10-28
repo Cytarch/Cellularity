@@ -95,14 +95,23 @@ SourceFrameResult VulkanDemoFrameProducer::renderFrame() noexcept {
                             cellularity::render::RenderFrameOutcome::
                                     SkippedNotReady)};
         }
-        const auto presentation = cellularity::render::vulkan::
-                makeVulkanBasicCellDemoPresentation(mWidth, mHeight);
+        // An override carries the caller's camera, so an interactive host moves the
+        // view instead of showing the fixed fixture.
+        const auto presentation = mPresentationOverride.has_value()
+                ? *mPresentationOverride
+                : cellularity::render::vulkan::makeVulkanBasicCellDemoPresentation(
+                          mWidth, mHeight);
         return {SourceFrameStatus::Completed,
                 mAdapter->presentMicroscope(presentation, *mFrame,
                         mPerformanceHudEnabled ? mTelemetry.get() : nullptr)};
     } catch (...) {
         return {SourceFrameStatus::Failed, {}};
     }
+}
+
+void VulkanDemoFrameProducer::setPresentationOverride(
+        const cellularity::render::RenderPresentationState& presentation) noexcept {
+    mPresentationOverride = presentation;
 }
 
 } // namespace cellularity::app::render_worker::sources
