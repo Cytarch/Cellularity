@@ -1,5 +1,13 @@
 package com.cytarch.cellularity.ui.play_menu.screens.genome_editor
 
+import com.cytarch.cellularity.shared.ui.play.genome_editor.sections.GenomeCellSpecificSection
+import com.cytarch.cellularity.shared.ui.play.genome_editor.sections.GenomeEditorDropdownMenu
+import com.cytarch.cellularity.shared.ui.play.genome_editor.sections.GenomeEditorGestureCallbacks
+import com.cytarch.cellularity.shared.ui.play.genome_editor.sections.GenomeEditorSectionMessage
+import com.cytarch.cellularity.shared.ui.play.genome_editor.sections.GenomeGeneDropdown
+import com.cytarch.cellularity.shared.ui.play.genome_editor.sections.GenomeGeneralSection
+import com.cytarch.cellularity.shared.ui.play.genome_editor.sections.GenomeSignalsSection
+import com.cytarch.cellularity.shared.ui.play.genome_editor.sections.GenomeSplittingSection
 import com.cytarch.cellularity.shared.generated.resources.*
 import org.jetbrains.compose.resources.StringResource
 import org.jetbrains.compose.resources.getString
@@ -73,6 +81,11 @@ import com.cytarch.cellularity.shared.model.GenomeContract
 import com.cytarch.cellularity.shared.ui.components.CellularityAlertDialog
 import com.cytarch.cellularity.shared.ui.components.DefaultLabeledCheckbox
 import com.cytarch.cellularity.shared.ui.components.DefaultSlider
+import com.cytarch.cellularity.shared.ui.play.genome_editor.sections.GenomePreviewSurfaceGeometry
+import com.cytarch.cellularity.shared.ui.play.genome_editor.sections.constrainedPreviewExtent
+import com.cytarch.cellularity.shared.ui.play.genome_editor.sections.genomePreviewSurfaceGeometry
+import com.cytarch.cellularity.shared.ui.play.genome_editor.sections.resizedPreviewExtent
+import com.cytarch.cellularity.shared.ui.play.genome_editor.sections.useSideBySideGenomeEditorLayout
 import com.cytarch.cellularity.shared.ui.play.genome_editor.GeneIndex
 import com.cytarch.cellularity.shared.ui.play.genome_editor.GenomeEditorAction
 import com.cytarch.cellularity.shared.ui.play.genome_editor.GenomeEditorConfig
@@ -888,56 +901,6 @@ private class GenomePreviewHandle {
 private enum class PreviewResizeDirection {
     HEIGHT,
     WIDTH
-}
-
-internal fun useSideBySideGenomeEditorLayout(widthPx: Float, heightPx: Float): Boolean =
-    widthPx > heightPx
-
-internal data class GenomePreviewSurfaceGeometry(
-    val viewportWidth: Int,
-    val viewportHeight: Int,
-    val backingWidth: Int,
-    val backingHeight: Int
-)
-
-/**
- * Keeps the physical Vulkan Surface at the editor bounds while the divider
- * changes only the visible viewport. GLES ignores the explicit backing size
- * and keeps its established MATCH_PARENT child.
- */
-internal fun genomePreviewSurfaceGeometry(
-    visibleWidthPx: Float,
-    visibleHeightPx: Float,
-    parentWidthPx: Float,
-    parentHeightPx: Float
-): GenomePreviewSurfaceGeometry = GenomePreviewSurfaceGeometry(
-    viewportWidth = visibleWidthPx.roundToInt().coerceAtLeast(1),
-    viewportHeight = visibleHeightPx.roundToInt().coerceAtLeast(1),
-    backingWidth = parentWidthPx.roundToInt().coerceAtLeast(1),
-    backingHeight = parentHeightPx.roundToInt().coerceAtLeast(1)
-)
-
-internal fun resizedPreviewExtent(
-    currentExtentPx: Float,
-    deltaPx: Float,
-    minimumExtentPx: Float,
-    maximumExtentPx: Float
-): Float = (currentExtentPx + deltaPx).coerceIn(
-    minimumExtentPx,
-    maximumExtentPx.coerceAtLeast(minimumExtentPx)
-)
-
-internal fun constrainedPreviewExtent(
-    requestedExtentPx: Float,
-    parentExtentPx: Float,
-    minimumExtentPx: Float,
-    reservedSecondaryExtentPx: Float
-): Float {
-    if (parentExtentPx <= 0.0f) return requestedExtentPx.coerceAtLeast(minimumExtentPx)
-    val effectiveMinimumExtentPx = minimumExtentPx.coerceAtMost(parentExtentPx)
-    val maximumExtentPx = (parentExtentPx - reservedSecondaryExtentPx)
-        .coerceIn(effectiveMinimumExtentPx, parentExtentPx)
-    return requestedExtentPx.coerceIn(effectiveMinimumExtentPx, maximumExtentPx)
 }
 
 private const val UNSET_PREVIEW_EXTENT = -1.0f

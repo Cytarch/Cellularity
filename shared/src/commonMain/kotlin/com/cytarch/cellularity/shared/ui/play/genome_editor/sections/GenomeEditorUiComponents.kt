@@ -1,5 +1,8 @@
-package com.cytarch.cellularity.ui.play_menu.screens.genome_editor
+package com.cytarch.cellularity.shared.ui.play.genome_editor.sections
 
+import com.cytarch.cellularity.shared.ui.play.genome_editor.GeneIndex
+import com.cytarch.cellularity.shared.ui.play.genome_editor.GenomeGeneCatalog
+import com.cytarch.cellularity.shared.ui.play.genome_editor.GenomeGeneOption
 import com.cytarch.cellularity.shared.generated.resources.*
 import org.jetbrains.compose.resources.stringResource
 import org.jetbrains.compose.resources.stringArrayResource
@@ -50,9 +53,6 @@ import com.cytarch.cellularity.shared.ui.components.DefaultCard
 import com.cytarch.cellularity.shared.ui.components.DefaultLabeledRadioButton
 import com.cytarch.cellularity.shared.ui.components.SliderCard
 import com.cytarch.cellularity.shared.ui.components.SliderCardStrings
-import com.cytarch.cellularity.shared.ui.play.genome_editor.GeneIndex
-import com.cytarch.cellularity.shared.ui.play.genome_editor.GenomeGeneCatalog
-import com.cytarch.cellularity.shared.ui.play.genome_editor.GenomeGeneOption
 import com.cytarch.cellularity.shared.ui.theme.CellularityDimensions
 import java.util.Locale
 import kotlin.math.PI
@@ -62,36 +62,47 @@ import kotlin.math.round
 private const val DISPLAY_BOUNDARY_CANONICALIZATION_SCALE = 100_000.0
 private const val DISPLAY_FRACTION_SCALE = 1_000_000.0
 
-internal const val NANOGRAMS_PER_INTERNAL_MASS_UNIT = 10.0
-internal const val NANOGRAMS_PER_INTERNAL_STIFFNESS_UNIT = 10.0
-internal const val MICROMETRES_PER_MILLIMETRE = 1_000.0
-internal const val PERCENT_PER_FRACTION = 100.0
+const val NANOGRAMS_PER_INTERNAL_MASS_UNIT = 10.0
+const val NANOGRAMS_PER_INTERNAL_STIFFNESS_UNIT = 10.0
+const val MICROMETRES_PER_MILLIMETRE = 1_000.0
+const val PERCENT_PER_FRACTION = 100.0
 
 data class GenomeEditorGestureCallbacks(
     val onStarted: () -> Unit = {},
     val onFinished: () -> Unit = {}
 )
 
-internal fun formatGenomeSliderValue(value: Double): String =
-    String.format(Locale.getDefault(), "%1$,.6f", value)
-
-internal fun formatGenomeSliderInput(value: Double): String =
+// Both of these are deliberately locale-neutral, and deliberately so together.
+//
+// The displayed text and the text a user types into the same field have to agree on what
+// separates the fraction, because they are the same number in the same box. Formatting the
+// display through the default locale and parsing the input through a fixed one means a
+// value that is shown as 2,520000 is rejected when it is typed back, on any machine whose
+// locale uses a comma -- a round trip through the field that silently loses the edit.
+//
+// Fixing the locale also fixes the decimal count: the value is a physical quantity shown
+// to six places, not a user-facing number that wants grouping separators, and the grouped
+// form would break the parse that reads it back.
+fun formatGenomeSliderValue(value: Double): String =
     String.format(Locale.US, "%.6f", value)
 
-internal fun scaleGenomeEditorValue(value: Double, displayScale: Double): Double =
+fun formatGenomeSliderInput(value: Double): String =
+    String.format(Locale.US, "%.6f", value)
+
+fun scaleGenomeEditorValue(value: Double, displayScale: Double): Double =
     value * displayScale
 
-internal fun unscaleGenomeEditorValue(value: Double, displayScale: Double): Double =
+fun unscaleGenomeEditorValue(value: Double, displayScale: Double): Double =
     value / displayScale
 
-internal fun canonicalizeGenomeEditorDisplayBoundary(value: Double): Double =
+fun canonicalizeGenomeEditorDisplayBoundary(value: Double): Double =
     round(value * DISPLAY_BOUNDARY_CANONICALIZATION_SCALE) /
         DISPLAY_BOUNDARY_CANONICALIZATION_SCALE
 
-internal fun floorGenomeEditorDisplayBoundary(value: Double): Double =
+fun floorGenomeEditorDisplayBoundary(value: Double): Double =
     floor(value * DISPLAY_FRACTION_SCALE) / DISPLAY_FRACTION_SCALE
 
-internal fun formatGenomeUnitValue(
+fun formatGenomeUnitValue(
     value: Double,
     unit: String,
     separateUnit: Boolean
@@ -101,26 +112,26 @@ internal fun formatGenomeUnitValue(
     append(unit)
 }
 
-internal fun formatGenomeAngularStiffnessUnit(
+fun formatGenomeAngularStiffnessUnit(
     nanogramUnit: String,
     hourUnit: String
 ): String = "$nanogramUnit/$hourUnit²"
 
-internal fun angleRadiansToDegrees(radians: Double): Double = radians * 180.0 / PI
+fun angleRadiansToDegrees(radians: Double): Double = radians * 180.0 / PI
 
-internal fun angleDegreesToRadians(degrees: Double): Double = degrees * PI / 180.0
+fun angleDegreesToRadians(degrees: Double): Double = degrees * PI / 180.0
 
-internal fun angleRadiansToEditorDegrees(radians: Double): Double =
+fun angleRadiansToEditorDegrees(radians: Double): Double =
     angleRadiansToDegrees(radians).coerceIn(0.0, 360.0)
 
-internal fun formatGenomeAngleValue(degrees: Double): String =
+fun formatGenomeAngleValue(degrees: Double): String =
     String.format(Locale.getDefault(), "%1$,.6f°", degrees)
 
-internal fun formatGenomeAngleInput(degrees: Double): String =
+fun formatGenomeAngleInput(degrees: Double): String =
     String.format(Locale.US, "%.6f", degrees)
 
 @Composable
-internal fun GenomeEditorSlider(
+fun GenomeEditorSlider(
     label: String,
     value: Double,
     minimum: Double,
@@ -163,7 +174,7 @@ internal fun GenomeEditorSlider(
 }
 
 @Composable
-internal fun GenomeEditorScaledUnitSlider(
+fun GenomeEditorScaledUnitSlider(
     label: String,
     value: Double,
     minimum: Double,
@@ -203,7 +214,7 @@ internal fun GenomeEditorScaledUnitSlider(
 }
 
 @Composable
-internal fun GenomeEditorAngleSlider(
+fun GenomeEditorAngleSlider(
     label: String,
     radians: Double,
     steps: Int,
@@ -226,7 +237,7 @@ internal fun GenomeEditorAngleSlider(
 }
 
 @Composable
-internal fun GenomeEditorSectionMessage(text: String) {
+fun GenomeEditorSectionMessage(text: String) {
     DefaultCard {
         Text(
             text = text,
@@ -238,7 +249,7 @@ internal fun GenomeEditorSectionMessage(text: String) {
 }
 
 @Composable
-internal fun GenomeEditorDropdownMenu(
+fun GenomeEditorDropdownMenu(
     expanded: Boolean,
     onDismissRequest: () -> Unit,
     modifier: Modifier = Modifier,
@@ -258,7 +269,7 @@ internal fun GenomeEditorDropdownMenu(
 }
 
 @Composable
-internal fun GenomeEditorDropdownMenuItem(
+fun GenomeEditorDropdownMenuItem(
     text: String,
     selected: Boolean,
     onClick: () -> Unit,
@@ -297,7 +308,7 @@ internal fun GenomeEditorDropdownMenuItem(
 }
 
 @Composable
-internal fun GenomeEditorDropdownAnchor(
+fun GenomeEditorDropdownAnchor(
     text: String,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
@@ -335,7 +346,7 @@ internal fun GenomeEditorDropdownAnchor(
 }
 
 @Composable
-internal fun GenomeCellTypeDropdown(
+fun GenomeCellTypeDropdown(
     selectedType: CellType,
     onSelected: (CellType) -> Unit,
     modifier: Modifier = Modifier
@@ -367,7 +378,7 @@ internal fun GenomeCellTypeDropdown(
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-internal fun GenomeGeneDropdown(
+fun GenomeGeneDropdown(
     genes: GenomeGeneCatalog,
     selected: GeneIndex,
     onSelected: (GeneIndex) -> Unit,
@@ -597,7 +608,7 @@ private fun GenomeAddGeneTile(
 }
 
 @Composable
-internal fun GenomeIntegerDropdown(
+fun GenomeIntegerDropdown(
     label: String,
     selectedIndex: Int,
     names: List<String>,
@@ -645,7 +656,7 @@ internal fun GenomeIntegerDropdown(
 }
 
 @Composable
-internal fun GenomeChoiceRow(
+fun GenomeChoiceRow(
     label: String,
     selectedIndex: Int,
     options: List<String>,
@@ -655,7 +666,7 @@ internal fun GenomeChoiceRow(
 }
 
 @Composable
-internal fun GenomeRadioRow(
+fun GenomeRadioRow(
     label: String,
     selected: Boolean,
     onClick: () -> Unit

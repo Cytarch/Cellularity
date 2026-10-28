@@ -1,5 +1,13 @@
-package com.cytarch.cellularity.ui.play_menu.screens.genome_editor
+package com.cytarch.cellularity.shared.ui.play.genome_editor.sections
 
+import com.cytarch.cellularity.shared.ui.play.genome_editor.GeneIntegerId
+import com.cytarch.cellularity.shared.ui.play.genome_editor.GenomeBooleanField
+import com.cytarch.cellularity.shared.ui.play.genome_editor.GenomeChild
+import com.cytarch.cellularity.shared.ui.play.genome_editor.GenomeChildRulesSectionState
+import com.cytarch.cellularity.shared.ui.play.genome_editor.GenomeEditorAction
+import com.cytarch.cellularity.shared.ui.play.genome_editor.GenomeEditorConfig
+import com.cytarch.cellularity.shared.ui.play.genome_editor.GenomeScalarField
+import com.cytarch.cellularity.shared.ui.play.genome_editor.GenomeStructureSectionState
 import com.cytarch.cellularity.shared.generated.resources.*
 import org.jetbrains.compose.resources.stringResource
 
@@ -15,17 +23,9 @@ import com.cytarch.cellularity.shared.model.GenomeContract
 import com.cytarch.cellularity.shared.model.LinkConstants
 import com.cytarch.cellularity.shared.ui.components.DefaultCard
 import com.cytarch.cellularity.shared.ui.components.DefaultLabeledCheckbox
-import com.cytarch.cellularity.shared.ui.play.genome_editor.GeneIntegerId
-import com.cytarch.cellularity.shared.ui.play.genome_editor.GenomeBooleanField
-import com.cytarch.cellularity.shared.ui.play.genome_editor.GenomeChild
-import com.cytarch.cellularity.shared.ui.play.genome_editor.GenomeChildRulesSectionState
-import com.cytarch.cellularity.shared.ui.play.genome_editor.GenomeEditorAction
-import com.cytarch.cellularity.shared.ui.play.genome_editor.GenomeEditorConfig
-import com.cytarch.cellularity.shared.ui.play.genome_editor.GenomeScalarField
-import com.cytarch.cellularity.shared.ui.play.genome_editor.GenomeStructureSectionState
 
 @Composable
-internal fun GenomeSplittingSection(
+fun GenomeSplittingSection(
     state: GenomeStructureSectionState,
     childRules: GenomeChildRulesSectionState,
     gestures: GenomeEditorGestureCallbacks,

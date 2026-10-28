@@ -1,11 +1,22 @@
-package com.cytarch.cellularity.ui.play_menu.screens.genome_editor
+package com.cytarch.cellularity.shared.ui.play.genome_editor.sections
 
+import com.cytarch.cellularity.shared.ui.play.genome_editor.sections.canonicalizeGenomeEditorDisplayBoundary
+import com.cytarch.cellularity.shared.ui.play.genome_editor.sections.floorGenomeEditorDisplayBoundary
+import com.cytarch.cellularity.shared.ui.play.genome_editor.sections.formatGenomeAngularStiffnessUnit
+import com.cytarch.cellularity.shared.ui.play.genome_editor.sections.formatGenomeSliderInput
+import com.cytarch.cellularity.shared.ui.play.genome_editor.sections.formatGenomeUnitValue
+import com.cytarch.cellularity.shared.ui.play.genome_editor.sections.MICROMETRES_PER_MILLIMETRE
+import com.cytarch.cellularity.shared.ui.play.genome_editor.sections.NANOGRAMS_PER_INTERNAL_MASS_UNIT
+import com.cytarch.cellularity.shared.ui.play.genome_editor.sections.NANOGRAMS_PER_INTERNAL_STIFFNESS_UNIT
+import com.cytarch.cellularity.shared.ui.play.genome_editor.sections.PERCENT_PER_FRACTION
+import com.cytarch.cellularity.shared.ui.play.genome_editor.sections.scaleGenomeEditorValue
+import com.cytarch.cellularity.shared.ui.play.genome_editor.sections.unscaleGenomeEditorValue
 import com.cytarch.cellularity.shared.model.CellDataConstants
 import com.cytarch.cellularity.shared.model.GeneFloatType
 import com.cytarch.cellularity.shared.model.GenomeContract
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertTrue
-import org.junit.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertTrue
+import kotlin.test.Test
 
 class GenomeEditorUnitPresentationTest {
     @Test

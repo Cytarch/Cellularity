@@ -1,5 +1,9 @@
-package com.cytarch.cellularity.ui.play_menu.screens.genome_editor
+package com.cytarch.cellularity.shared.ui.play.genome_editor.sections
 
+import com.cytarch.cellularity.shared.ui.play.genome_editor.GenomeCellSpecificParameter
+import com.cytarch.cellularity.shared.ui.play.genome_editor.GenomeCellSpecificSectionState
+import com.cytarch.cellularity.shared.ui.play.genome_editor.GenomeCellSpecificValue
+import com.cytarch.cellularity.shared.ui.play.genome_editor.GenomeEditorAction
 import com.cytarch.cellularity.shared.generated.resources.*
 import org.jetbrains.compose.resources.stringResource
 
@@ -15,13 +19,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.cytarch.cellularity.shared.model.GenomeContract
 import com.cytarch.cellularity.shared.ui.components.DefaultCard
-import com.cytarch.cellularity.shared.ui.play.genome_editor.GenomeCellSpecificParameter
-import com.cytarch.cellularity.shared.ui.play.genome_editor.GenomeCellSpecificSectionState
-import com.cytarch.cellularity.shared.ui.play.genome_editor.GenomeCellSpecificValue
-import com.cytarch.cellularity.shared.ui.play.genome_editor.GenomeEditorAction
 
 @Composable
-internal fun GenomeCellSpecificSection(
+fun GenomeCellSpecificSection(
     state: GenomeCellSpecificSectionState,
     snapValues: Boolean,
     gestures: GenomeEditorGestureCallbacks,

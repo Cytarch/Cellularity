@@ -1,5 +1,9 @@
-package com.cytarch.cellularity.ui.play_menu.screens.genome_editor
+package com.cytarch.cellularity.shared.ui.play.genome_editor.sections
 
+import com.cytarch.cellularity.shared.ui.play.genome_editor.GenomeEditorConfig
+import com.cytarch.cellularity.shared.ui.play.genome_editor.GenomeParametricEditor
+import com.cytarch.cellularity.shared.ui.play.genome_editor.GenomeParametricEditorValues
+import com.cytarch.cellularity.shared.ui.play.genome_editor.GenomeParametricValueState
 import com.cytarch.cellularity.shared.generated.resources.*
 import org.jetbrains.compose.resources.stringResource
 
@@ -41,14 +45,10 @@ import com.cytarch.cellularity.shared.model.GenomeContract
 import com.cytarch.cellularity.shared.model.ParametricValueDraft
 import com.cytarch.cellularity.shared.ui.components.CellularityAlertDialog
 import com.cytarch.cellularity.shared.ui.components.DefaultCard
-import com.cytarch.cellularity.shared.ui.play.genome_editor.GenomeEditorConfig
-import com.cytarch.cellularity.shared.ui.play.genome_editor.GenomeParametricEditor
-import com.cytarch.cellularity.shared.ui.play.genome_editor.GenomeParametricEditorValues
-import com.cytarch.cellularity.shared.ui.play.genome_editor.GenomeParametricValueState
 import org.jetbrains.compose.resources.painterResource
 
 @Composable
-internal fun GenomeParametricValueEditor(
+fun GenomeParametricValueEditor(
     state: GenomeParametricValueState,
     label: String,
     snapValues: Boolean,

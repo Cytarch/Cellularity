@@ -1,5 +1,13 @@
-package com.cytarch.cellularity.ui.play_menu.screens.genome_editor
+package com.cytarch.cellularity.shared.ui.play.genome_editor.sections
 
+import com.cytarch.cellularity.shared.ui.play.genome_editor.GenomeEditorAction
+import com.cytarch.cellularity.shared.ui.play.genome_editor.GenomeEditorConfig
+import com.cytarch.cellularity.shared.ui.play.genome_editor.GenomeIntegerField
+import com.cytarch.cellularity.shared.ui.play.genome_editor.GenomeOscillatorPreset
+import com.cytarch.cellularity.shared.ui.play.genome_editor.GenomeOscillatorPresetConfiguration
+import com.cytarch.cellularity.shared.ui.play.genome_editor.GenomeOscillatorPresetSource
+import com.cytarch.cellularity.shared.ui.play.genome_editor.GenomeParametricValueState
+import com.cytarch.cellularity.shared.ui.play.genome_editor.GenomeSignalsSectionState
 import com.cytarch.cellularity.shared.generated.resources.*
 import org.jetbrains.compose.resources.stringResource
 import org.jetbrains.compose.resources.pluralStringResource
@@ -30,18 +38,10 @@ import com.cytarch.cellularity.shared.model.GeneFloatType
 import com.cytarch.cellularity.shared.model.GenomeContract
 import com.cytarch.cellularity.shared.ui.components.CellularityAlertDialog
 import com.cytarch.cellularity.shared.ui.components.DefaultCard
-import com.cytarch.cellularity.shared.ui.play.genome_editor.GenomeEditorAction
-import com.cytarch.cellularity.shared.ui.play.genome_editor.GenomeEditorConfig
-import com.cytarch.cellularity.shared.ui.play.genome_editor.GenomeIntegerField
-import com.cytarch.cellularity.shared.ui.play.genome_editor.GenomeOscillatorPreset
-import com.cytarch.cellularity.shared.ui.play.genome_editor.GenomeOscillatorPresetConfiguration
-import com.cytarch.cellularity.shared.ui.play.genome_editor.GenomeOscillatorPresetSource
-import com.cytarch.cellularity.shared.ui.play.genome_editor.GenomeParametricValueState
-import com.cytarch.cellularity.shared.ui.play.genome_editor.GenomeSignalsSectionState
 import java.util.Locale
 
 @Composable
-internal fun GenomeSignalsSection(
+fun GenomeSignalsSection(
     state: GenomeSignalsSectionState,
     snapValues: Boolean,
     gestures: GenomeEditorGestureCallbacks,

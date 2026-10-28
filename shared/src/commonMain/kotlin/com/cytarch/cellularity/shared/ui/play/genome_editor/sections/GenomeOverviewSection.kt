@@ -1,5 +1,12 @@
-package com.cytarch.cellularity.ui.play_menu.screens.genome_editor
+package com.cytarch.cellularity.shared.ui.play.genome_editor.sections
 
+import com.cytarch.cellularity.shared.ui.play.genome_editor.GenomeBooleanField
+import com.cytarch.cellularity.shared.ui.play.genome_editor.GenomeEditorAction
+import com.cytarch.cellularity.shared.ui.play.genome_editor.GenomeEditorConfig
+import com.cytarch.cellularity.shared.ui.play.genome_editor.GenomeEditorMath
+import com.cytarch.cellularity.shared.ui.play.genome_editor.GenomeOverviewSectionState
+import com.cytarch.cellularity.shared.ui.play.genome_editor.GenomeScalarField
+import com.cytarch.cellularity.shared.ui.play.genome_editor.GenomeStructureSectionState
 import com.cytarch.cellularity.shared.generated.resources.*
 import org.jetbrains.compose.resources.stringResource
 
@@ -44,19 +51,12 @@ import com.cytarch.cellularity.shared.ui.components.CellularityAlertDialog
 import com.cytarch.cellularity.shared.ui.components.DefaultCard
 import com.cytarch.cellularity.shared.ui.components.DefaultLabeledCheckbox
 import com.cytarch.cellularity.shared.ui.components.DefaultSlider
-import com.cytarch.cellularity.shared.ui.play.genome_editor.GenomeBooleanField
-import com.cytarch.cellularity.shared.ui.play.genome_editor.GenomeEditorAction
 import com.cytarch.cellularity.shared.ui.theme.cellularityOutlinedTextFieldColors
-import com.cytarch.cellularity.shared.ui.play.genome_editor.GenomeEditorConfig
-import com.cytarch.cellularity.shared.ui.play.genome_editor.GenomeEditorMath
-import com.cytarch.cellularity.shared.ui.play.genome_editor.GenomeOverviewSectionState
-import com.cytarch.cellularity.shared.ui.play.genome_editor.GenomeScalarField
-import com.cytarch.cellularity.shared.ui.play.genome_editor.GenomeStructureSectionState
 import java.util.Locale
 import kotlin.math.roundToInt
 
 @Composable
-internal fun GenomeGeneralSection(
+fun GenomeGeneralSection(
     overview: GenomeOverviewSectionState,
     structure: GenomeStructureSectionState,
     gestures: GenomeEditorGestureCallbacks,

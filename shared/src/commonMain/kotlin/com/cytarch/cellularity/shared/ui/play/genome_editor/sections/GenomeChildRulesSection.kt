@@ -1,5 +1,12 @@
-package com.cytarch.cellularity.ui.play_menu.screens.genome_editor
+package com.cytarch.cellularity.shared.ui.play.genome_editor.sections
 
+import com.cytarch.cellularity.shared.ui.play.genome_editor.GenomeBooleanField
+import com.cytarch.cellularity.shared.ui.play.genome_editor.GenomeChild
+import com.cytarch.cellularity.shared.ui.play.genome_editor.GenomeChildRulesSectionState
+import com.cytarch.cellularity.shared.ui.play.genome_editor.GenomeChildRuleState
+import com.cytarch.cellularity.shared.ui.play.genome_editor.GenomeEditorAction
+import com.cytarch.cellularity.shared.ui.play.genome_editor.GenomeEditorConfig
+import com.cytarch.cellularity.shared.ui.play.genome_editor.GenomeScalarField
 import com.cytarch.cellularity.shared.generated.resources.*
 import org.jetbrains.compose.resources.stringResource
 
@@ -17,16 +24,9 @@ import androidx.compose.ui.unit.dp
 import com.cytarch.cellularity.shared.model.GenomeContract
 import com.cytarch.cellularity.shared.ui.components.DefaultCard
 import com.cytarch.cellularity.shared.ui.components.DefaultLabeledCheckbox
-import com.cytarch.cellularity.shared.ui.play.genome_editor.GenomeBooleanField
-import com.cytarch.cellularity.shared.ui.play.genome_editor.GenomeChild
-import com.cytarch.cellularity.shared.ui.play.genome_editor.GenomeChildRuleState
-import com.cytarch.cellularity.shared.ui.play.genome_editor.GenomeChildRulesSectionState
-import com.cytarch.cellularity.shared.ui.play.genome_editor.GenomeEditorAction
-import com.cytarch.cellularity.shared.ui.play.genome_editor.GenomeEditorConfig
-import com.cytarch.cellularity.shared.ui.play.genome_editor.GenomeScalarField
 
 @Composable
-internal fun GenomeChildRulesSection(
+fun GenomeChildRulesSection(
     state: GenomeChildRulesSectionState,
     snapValues: Boolean,
     gestures: GenomeEditorGestureCallbacks,
