@@ -19,6 +19,7 @@ import com.cytarch.cellularity.shared.ui.main_menu.about.AboutScreen
 import com.cytarch.cellularity.shared.ui.main_menu.freezer.FreezerAction
 import com.cytarch.cellularity.shared.ui.main_menu.freezer.FreezerEffect
 import com.cytarch.cellularity.shared.ui.main_menu.freezer.FreezerScreen
+import com.cytarch.cellularity.shared.ui.main_menu.freezer.FreezerOpenRequest
 import com.cytarch.cellularity.shared.ui.main_menu.freezer.FreezerStore
 import com.cytarch.cellularity.shared.ui.main_menu.gene_bank.GeneBankAction
 import com.cytarch.cellularity.shared.ui.main_menu.gene_bank.GeneBankEffect
@@ -44,14 +45,16 @@ fun DesktopMainMenuPages(
     collectionRevision: Long,
     settings: CellularitySettings,
     environment: DesktopEnvironment,
-    scope: CoroutineScope
+    scope: CoroutineScope,
+    onOpenPlate: (FreezerOpenRequest) -> Unit
 ) {
     when (page) {
         MainMenuPage.EXPERIMENTS -> DesktopFreezerPage(
             collectionRevision = collectionRevision,
             settings = settings,
             environment = environment,
-            scope = scope
+            scope = scope,
+            onOpenPlate = onOpenPlate
         )
 
         MainMenuPage.GENE_BANK -> DesktopGeneBankPage(
@@ -74,20 +77,19 @@ private fun DesktopFreezerPage(
     collectionRevision: Long,
     settings: CellularitySettings,
     environment: DesktopEnvironment,
-    scope: CoroutineScope
+    scope: CoroutineScope,
+    onOpenPlate: (FreezerOpenRequest) -> Unit
 ) {
     val store = remember(environment) { FreezerStore(environment.fileRepository) }
     val state by store.state.collectAsState()
 
-    LaunchedEffect(store, environment, scope) {
+    LaunchedEffect(store) {
         store.effects.collect { effect ->
             when (effect) {
-                is FreezerEffect.OpenPlate -> environment.startSimulation()
-                    .onFailure { failure ->
-                        System.err.println(
-                            "cellularity: could not start the simulation: ${failure.message}"
-                        )
-                    }
+                // "Open this plate" is where the two halves meet: the freezer knows
+                // which substrate and with what allocation, and the launcher knows
+                // where the simulation is shown.
+                is FreezerEffect.OpenPlate -> onOpenPlate(effect.request)
 
                 // Sharing is the platform share sheet, which a desktop process has no
                 // equivalent of. The request is completed as "nothing can handle it"
