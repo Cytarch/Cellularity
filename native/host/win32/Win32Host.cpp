@@ -59,64 +59,56 @@ using cellularity::render::abi::VulkanBackendSession;
 // The camera radius, in the same world units the demo fixture uses: the base-cell
 // shaders express nucleus and membrane widths in production world units, so the
 // camera has to be in that scale for those fixed-size details to stay visible.
-constexpr float kCameraRadius = 0.24F;
-
-// How much world the viewport's normalised range spans, which is what decides how
-// large the scene appears and therefore the opening view.
 //
-// The viewport floors its zoom at one over the camera radius, so at that floor the
-// framing rests entirely on this constant. The viewport works in one world unit per
-// normalised unit, which frames the dish differently from the fixture; this value was
-// found by matching a capture's pixel statistics to the fixture frame's at 1280x800.
-// Changing it alters only how large the scene appears, never where the camera is,
-// because the camera is the viewport's and this is only its projection.
-constexpr float kWorldScale = 1.49F;
+// It is larger than the dish on purpose, and the camera bounds are why. The viewport
+// floors its zoom at one over this radius, so the opening view spans exactly this
+// radius either side of the camera, and the bounds let the camera move by whatever is
+// left once the dish is accounted for. At the dish's own radius nothing is left: the
+// view height equals the dish diameter, the bound evaluates to zero, and a vertical
+// drag does nothing in a landscape window while a horizontal one moves -- exactly how
+// it behaved. Half a unit spans the opening view exactly, so any radius above a
+// quarter leaves slack on both axes; half a unit shows the whole dish with room around
+// it and still lets the wheel zoom in past the dish.
+constexpr float kCameraRadius = 0.5F;
 
 // Matches the demo background so the interactive view and the fixture frame are
 // visually the same scene.
 constexpr std::array<float, 3> kBackgroundColor{0.73F, 0.70F, 0.95F};
 
-// The viewport composes its world matrix with a surface matrix. The viewport derives
-// one scale from the shorter side and applies it to both axes, so the world stretches
-// along the longer side; this matrix is where that is meant to be undone.
+// Projection matrix for the current camera: the world-to-normalised transform that
+// puts the visible world extent exactly across the surface and centres it on the
+// camera.
 //
-// The two axes are independent, which was measured rather than assumed: scaling x by
-// four multiplies a dish's width by four and leaves its height untouched, and the same
-// the other way round. A circle should therefore come out round when the two factors
-// stand in the same ratio as the two surface extents, with the factor on the longer
-// axis.
-//
-// That is not yet confirmed to achieve it. Captures at 1280x800 still show a dish
-// taller than it is wide, and how much of that is this projection rather than the
-// fixture frame itself has not been separated, because the dish centre is occupied by
-// cells, which defeats measuring the outline outwards from the middle. What is exact
-// is the camera: a pan shifts the matrix translation by the amount that many pixels
-// implies, and the default camera reproduces the fixture's framing to within three
-// levels per channel at 1280x800.
-[[nodiscard]] std::array<float, 16> surfaceMatrixFor(int width, int height) {
-    const int shorter = std::min(width, height);
-    const int longer = std::max(width, height);
-    if (shorter <= 0 || longer <= 0) {
-        return {kWorldScale, 0.0F, 0.0F, 0.0F,
-                0.0F, kWorldScale, 0.0F, 0.0F,
+// This is built here rather than taken from the viewport, because the viewport's own
+// world matrix normalises each axis by its own extent and so cannot express a view
+// that keeps the world's shape: it divides width by width and height by height in a
+// single scale taken from the shorter side, which stretches the scene along the longer
+// side. Deriving the matrix from the visible extent instead makes the two axes agree
+// by construction at any window shape, and it reproduces the fixture's projection
+// exactly at the default camera, because the fixture maps the same extent the same way.
+[[nodiscard]] std::array<float, 16> projectionMatrixFor(
+        const NativeViewport& viewport) {
+    const float halfWidth = viewport.viewWidth() * 0.5F;
+    const float halfHeight = viewport.viewHeight() * 0.5F;
+    if (!(halfWidth > 0.0F) || !(halfHeight > 0.0F)) {
+        return {1.0F, 0.0F, 0.0F, 0.0F,
+                0.0F, 1.0F, 0.0F, 0.0F,
                 0.0F, 0.0F, 1.0F, 0.0F,
                 0.0F, 0.0F, 0.0F, 1.0F};
     }
-    // The ratio belongs on whichever axis is longer; a square window needs none.
-    const float ratio = static_cast<float>(shorter) / static_cast<float>(longer);
-    const float xScale = (width > height ? ratio : 1.0F) * kWorldScale;
-    const float yScale = (height > width ? ratio : 1.0F) * kWorldScale;
     return {
-            xScale, 0.0F, 0.0F, 0.0F,
-            0.0F, yScale, 0.0F, 0.0F,
+            1.0F / halfWidth, 0.0F, 0.0F, 0.0F,
+            0.0F, 1.0F / halfHeight, 0.0F, 0.0F,
             0.0F, 0.0F, 1.0F, 0.0F,
-            0.0F, 0.0F, 0.0F, 1.0F};
+            -viewport.cameraX() / halfWidth, -viewport.cameraY() / halfHeight,
+            0.0F, 1.0F};
 }
 
-// Builds the presentation the renderer consumes from the live camera. The viewport
-// snapshot helper is deliberately not used here: it recomputes the matrix from an
-// identity surface matrix and ignores the one it is given, which would discard both
-// the scale and the aspect correction above and leave the camera with no effect.
+// Builds the presentation the renderer consumes from the live camera.
+//
+// The viewport's own snapshot helper is deliberately not used: it recomputes the
+// matrix from an identity surface matrix and discards the one it is given, so the
+// camera would have no effect on the frame at all.
 [[nodiscard]] cellularity::render::RenderPresentationState presentationFrom(
         const NativeViewport& viewport) {
     using cellularity::render::RenderPresentationState;
@@ -127,8 +119,7 @@ constexpr std::array<float, 3> kBackgroundColor{0.73F, 0.70F, 0.95F};
     presentation.viewport.visibleBounds =
             cellularity::app::toRenderBounds(viewport.viewBounds(0.0F));
     presentation.viewport.coverageBounds = presentation.viewport.visibleBounds;
-    presentation.viewport.mvpMatrix = viewport.worldMatrix(
-            surfaceMatrixFor(viewport.surfaceWidth(), viewport.surfaceHeight()));
+    presentation.viewport.mvpMatrix = projectionMatrixFor(viewport);
     presentation.viewport.cameraX = viewport.cameraX();
     presentation.viewport.cameraY = viewport.cameraY();
     presentation.viewport.zoom = viewport.zoom();
@@ -387,7 +378,8 @@ int captureFrame(const std::shared_ptr<VulkanBackendSession>& session,
         cellularity::render::RenderPresentationState presentation;
         if (useCamera) {
             NativeViewport viewport(kCameraRadius);
-            viewport.setCameraBoundsEnabled(true);
+            // Bounds off, matching the window path and production; see the note there.
+            viewport.setCameraBoundsEnabled(false);
             viewport.setSurfaceSize(width, height);
             // The capture opens where the window opens, so a capture is evidence
             // about what the user sees rather than about a different view.
@@ -598,11 +590,16 @@ int main(int argc, char** argv) {
     std::uint64_t presented = 0;
     std::uint64_t failedFrames = 0;
 
-    // The camera is the production viewport, so panning, zoom anchoring and the
-    // zoom clamp all behave exactly as they do on Android rather than being
-    // reimplemented here.
+    // The camera is the production viewport, so panning and zoom anchoring behave
+    // exactly as they do on Android rather than being reimplemented here.
+    //
+    // Camera bounds are turned off explicitly. The viewport enables them by default and
+    // production turns them off in its own session viewport; leaving the default in
+    // place pins the camera along whichever axis the opening view exactly fills, which
+    // in a landscape window is the vertical one, so a vertical drag would do nothing at
+    // all while a horizontal one moved.
     NativeViewport viewport(kCameraRadius);
-    viewport.setCameraBoundsEnabled(true);
+    viewport.setCameraBoundsEnabled(false);
     viewport.setSurfaceSize(surfaceWidth, surfaceHeight);
     viewport.setCamera(0.0F, 0.0F, 1.0F / kCameraRadius);
 
