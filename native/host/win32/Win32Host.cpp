@@ -61,31 +61,38 @@ using cellularity::render::abi::VulkanBackendSession;
 // camera has to be in that scale for those fixed-size details to stay visible.
 constexpr float kCameraRadius = 0.24F;
 
+// How much world the viewport's normalised range spans, which is what decides how
+// large the scene appears and therefore the opening view.
+//
+// The viewport floors its zoom at one over the camera radius, so at that floor the
+// framing rests entirely on this constant. The viewport works in one world unit per
+// normalised unit, which frames the dish differently from the fixture; this value was
+// found by matching a capture's pixel statistics to the fixture frame's at 1280x800.
+// Changing it alters only how large the scene appears, never where the camera is,
+// because the camera is the viewport's and this is only its projection.
+constexpr float kWorldScale = 1.49F;
+
 // Matches the demo background so the interactive view and the fixture frame are
 // visually the same scene.
 constexpr std::array<float, 3> kBackgroundColor{0.73F, 0.70F, 0.95F};
 
-// How much world the viewport's normalised range spans. The value was found by
-// matching a capture's pixel statistics to the fixture frame's at 1280x800, which
-// is what makes the interactive view and a capture show the same scene at the same
-// size. It is not 1/radius because the viewport's normalised range is not shaped
-// like the fixture's projection; changing it alters only how large the scene
-// appears, never where the camera is.
-constexpr float kWorldScale = 1.49F;
-
-// The viewport composes its world matrix with a surface matrix. Two things have to
-// be reconciled for the interactive view to frame the scene the way the fixture
-// frame does.
+// The viewport composes its world matrix with a surface matrix. The viewport derives
+// one scale from the shorter side and applies it to both axes, so the world stretches
+// along the longer side; this matrix is where that is meant to be undone.
 //
-// The first is overall scale: the viewport works in one world unit per normalised
-// unit, which is far wider than the fixture's framing, so kWorldScale above brings
-// the two together. Without it the view is several times too wide and the scene
-// appears shrunken in the middle of the frame.
+// The two axes are independent, which was measured rather than assumed: scaling x by
+// four multiplies a dish's width by four and leaves its height untouched, and the same
+// the other way round. A circle should therefore come out round when the two factors
+// stand in the same ratio as the two surface extents, with the factor on the longer
+// axis.
 //
-// The second is aspect: the viewport derives its scale from the shorter side and
-// applies it to both axes, which stretches the world along the longer side. Dividing
-// the longer axis by the aspect ratio keeps the world square, so a square window
-// needs no correction and the dish stays round at any window shape.
+// That is not yet confirmed to achieve it. Captures at 1280x800 still show a dish
+// taller than it is wide, and how much of that is this projection rather than the
+// fixture frame itself has not been separated, because the dish centre is occupied by
+// cells, which defeats measuring the outline outwards from the middle. What is exact
+// is the camera: a pan shifts the matrix translation by the amount that many pixels
+// implies, and the default camera reproduces the fixture's framing to within three
+// levels per channel at 1280x800.
 [[nodiscard]] std::array<float, 16> surfaceMatrixFor(int width, int height) {
     const int shorter = std::min(width, height);
     const int longer = std::max(width, height);
@@ -95,9 +102,10 @@ constexpr float kWorldScale = 1.49F;
                 0.0F, 0.0F, 1.0F, 0.0F,
                 0.0F, 0.0F, 0.0F, 1.0F};
     }
-    const float aspect = static_cast<float>(shorter) / static_cast<float>(longer);
-    const float xScale = (width >= height ? aspect : 1.0F) * kWorldScale;
-    const float yScale = (height > width ? aspect : 1.0F) * kWorldScale;
+    // The ratio belongs on whichever axis is longer; a square window needs none.
+    const float ratio = static_cast<float>(shorter) / static_cast<float>(longer);
+    const float xScale = (width > height ? ratio : 1.0F) * kWorldScale;
+    const float yScale = (height > width ? ratio : 1.0F) * kWorldScale;
     return {
             xScale, 0.0F, 0.0F, 0.0F,
             0.0F, yScale, 0.0F, 0.0F,
@@ -381,11 +389,15 @@ int captureFrame(const std::shared_ptr<VulkanBackendSession>& session,
             NativeViewport viewport(kCameraRadius);
             viewport.setCameraBoundsEnabled(true);
             viewport.setSurfaceSize(width, height);
+            // The capture opens where the window opens, so a capture is evidence
+            // about what the user sees rather than about a different view.
             viewport.setCamera(0.0F, 0.0F, 1.0F / kCameraRadius);
             if (panX != 0.0F || panY != 0.0F) {
                 viewport.moveByScreenDelta(panX, panY);
             }
             if (zoomFactor != 1.0F) {
+                // --capture-zoom is relative to the opening view, matching the way
+                // the wheel multiplies the current zoom rather than setting it.
                 viewport.zoomAt(zoomFactor, static_cast<float>(width) / 2.0F,
                         static_cast<float>(height) / 2.0F);
             }
@@ -460,6 +472,7 @@ int main(int argc, char** argv) {
             capturePanX = static_cast<float>(std::atof(argv[++index]));
             capturePanY = static_cast<float>(std::atof(argv[++index]));
             captureWithCamera = true;
+
         } else if (argument == "--capture-zoom" && index + 1 < argc) {
             captureZoomFactor = static_cast<float>(std::atof(argv[++index]));
             captureWithCamera = true;
