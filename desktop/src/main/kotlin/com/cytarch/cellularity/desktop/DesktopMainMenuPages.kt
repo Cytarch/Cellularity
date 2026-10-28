@@ -1,0 +1,196 @@
+/*
+ * Cellularity source code.
+ */
+
+package com.cytarch.cellularity.desktop
+
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.ui.Modifier
+import com.cytarch.cellularity.shared.files.StoredFileShareOutcome
+import com.cytarch.cellularity.shared.settings.CellularitySettings
+import com.cytarch.cellularity.shared.ui.main_menu.MainMenuPage
+import com.cytarch.cellularity.shared.ui.main_menu.about.AboutScreen
+import com.cytarch.cellularity.shared.ui.main_menu.freezer.FreezerAction
+import com.cytarch.cellularity.shared.ui.main_menu.freezer.FreezerEffect
+import com.cytarch.cellularity.shared.ui.main_menu.freezer.FreezerScreen
+import com.cytarch.cellularity.shared.ui.main_menu.freezer.FreezerStore
+import com.cytarch.cellularity.shared.ui.main_menu.gene_bank.GeneBankAction
+import com.cytarch.cellularity.shared.ui.main_menu.gene_bank.GeneBankEffect
+import com.cytarch.cellularity.shared.ui.main_menu.gene_bank.GeneBankScreen
+import com.cytarch.cellularity.shared.ui.main_menu.gene_bank.GeneBankStore
+import com.cytarch.cellularity.shared.ui.main_menu.settings.SettingsScreen
+import com.cytarch.cellularity.shared.ui.main_menu.settings.SettingsStore
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.launch
+
+/**
+ * The four main-menu pages.
+ *
+ * The screens and their stores already exist in the shared module; what is desktop
+ * specific is only where the stores get their repositories from and what an "open this
+ * plate" effect turns into here. The stores are kept rather than re-derived because they
+ * own the repository reads and the effect channel, and a store rebuilt on recomposition
+ * would lose both.
+ */
+@Composable
+fun DesktopMainMenuPages(
+    page: MainMenuPage,
+    collectionRevision: Long,
+    settings: CellularitySettings,
+    environment: DesktopEnvironment,
+    scope: CoroutineScope
+) {
+    when (page) {
+        MainMenuPage.EXPERIMENTS -> DesktopFreezerPage(
+            collectionRevision = collectionRevision,
+            settings = settings,
+            environment = environment,
+            scope = scope
+        )
+
+        MainMenuPage.GENE_BANK -> DesktopGeneBankPage(
+            collectionRevision = collectionRevision,
+            settings = settings,
+            environment = environment,
+            scope = scope
+        )
+
+        MainMenuPage.SETTINGS -> DesktopSettingsPage(environment = environment, scope = scope)
+
+        MainMenuPage.ABOUT -> Box(modifier = Modifier.fillMaxSize()) {
+            AboutScreen(versionName = DESKTOP_VERSION_NAME)
+        }
+    }
+}
+
+@Composable
+private fun DesktopFreezerPage(
+    collectionRevision: Long,
+    settings: CellularitySettings,
+    environment: DesktopEnvironment,
+    scope: CoroutineScope
+) {
+    val store = remember(environment) { FreezerStore(environment.fileRepository) }
+    val state by store.state.collectAsState()
+
+    LaunchedEffect(store, environment, scope) {
+        store.effects.collect { effect ->
+            when (effect) {
+                is FreezerEffect.OpenPlate -> environment.startSimulation()
+                    .onFailure { failure ->
+                        System.err.println(
+                            "cellularity: could not start the simulation: ${failure.message}"
+                        )
+                    }
+
+                // Sharing is the platform share sheet, which a desktop process has no
+                // equivalent of. The request is completed as "nothing can handle it"
+                // rather than left pending, because a pending share disables the item's
+                // buttons until it finishes.
+                is FreezerEffect.ShareSubstrate -> store.dispatch(
+                    FreezerAction.ShareFinished(StoredFileShareOutcome.NoCompatibleTarget)
+                )
+
+                is FreezerEffect.ShowNotice -> Unit
+            }
+        }
+    }
+
+    // The collection is re-read when something is imported and when the page is first
+    // shown; without this the list would be whatever it was at launch.
+    LaunchedEffect(store, collectionRevision) {
+        store.dispatch(FreezerAction.Refresh)
+    }
+
+    FreezerScreen(
+        items = state.items,
+        onAction = { action -> scope.launch { store.dispatch(action) } },
+        // Memory estimation is native on Android. Until the launcher can call it, no
+        // estimate is offered rather than a wrong one -- the screen expects exactly
+        // this, and a null estimate disables the start button rather than guessing.
+        estimateMemoryBytes = { _, _, _ -> null },
+        collectionPreferences = settings.experimentCollection,
+        onCollectionPreferencesChange = { update ->
+            scope.launch {
+                environment.settingsRepository.writeSettings(
+                    settings.copy(
+                        experimentCollection = update(settings.experimentCollection)
+                    )
+                )
+            }
+        }
+    )
+}
+
+@Composable
+private fun DesktopGeneBankPage(
+    collectionRevision: Long,
+    settings: CellularitySettings,
+    environment: DesktopEnvironment,
+    scope: CoroutineScope
+) {
+    val store = remember(environment) { GeneBankStore(environment.fileRepository) }
+    val state by store.state.collectAsState()
+
+    LaunchedEffect(store) {
+        store.effects.collect { effect ->
+            when (effect) {
+                is GeneBankEffect.ShareGenome -> store.dispatch(
+                    GeneBankAction.ShareFinished(StoredFileShareOutcome.NoCompatibleTarget)
+                )
+
+                is GeneBankEffect.ShowNotice -> Unit
+            }
+        }
+    }
+
+    LaunchedEffect(store, collectionRevision) {
+        store.dispatch(GeneBankAction.Refresh)
+    }
+
+    GeneBankScreen(
+        items = state.items,
+        onAction = { action -> scope.launch { store.dispatch(action) } },
+        collectionPreferences = settings.geneBankCollection,
+        onCollectionPreferencesChange = { update ->
+            scope.launch {
+                environment.settingsRepository.writeSettings(
+                    settings.copy(geneBankCollection = update(settings.geneBankCollection))
+                )
+            }
+        }
+    )
+}
+
+@Composable
+private fun DesktopSettingsPage(
+    environment: DesktopEnvironment,
+    scope: CoroutineScope
+) {
+    // The shared store already owns the read-modify-write of the document, so the
+    // launcher does not restate those rules; it only says where the document lives.
+    val store = remember(environment) {
+        SettingsStore(environment.settingsRepository)
+    }
+    val settings by store.state.collectAsState()
+
+    SettingsScreen(
+        state = settings,
+        onAction = { action -> scope.launch { store.dispatch(action) } },
+        // Crash reports and theme files are platform features the desktop build does
+        // not have yet. The screen treats them as optional, so nothing is shown that
+        // would not work.
+        crashReports = emptyList(),
+        onExportDiagnostics = { },
+        onExportTheme = { },
+        onImportTheme = { }
+    )
+}
+
+private const val DESKTOP_VERSION_NAME = "0.1.0-alpha.1"

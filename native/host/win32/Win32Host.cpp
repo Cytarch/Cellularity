@@ -537,7 +537,7 @@ int captureFrame(const std::shared_ptr<VulkanBackendSession>& session,
 
     try {
         Environment environment = Environment::constructDefaultEnvironment(
-                kMaxCellCount, kMaxFoodCount, kDishRadius);
+                maxCellCount, maxFoodCount, dishRadius);
         // A fresh world is empty of cells unless the environment seeds them, so a
         // capture of a run that has not been played yet would show food and nothing
         // else.
@@ -566,7 +566,7 @@ int captureFrame(const std::shared_ptr<VulkanBackendSession>& session,
         controller->setViewportSurfaceSize(width, height);
         // Defaults to the opening view the interactive host shows, so a capture is
         // evidence about what the user sees rather than about a different view.
-        controller->setViewportCamera(0.0F, 0.0F, 1.0F / kDishRadius);
+        controller->setViewportCamera(0.0F, 0.0F, 1.0F / static_cast<float>(dishRadius));
         controller->setMicroscopeTemperatureMode(temperatureMode);
 
         if (useCamera) {
@@ -666,6 +666,11 @@ int main(int argc, char** argv) {
     float captureZoomFactor = 1.0F;
     int captureTemperature = 1;
     int captureWarmup = 90;
+    // The run configuration, overridable from the command line so a substrate can be
+    // opened with the allocation it was saved with.
+    int maxCellCount = kMaxCellCount;
+    int maxFoodCount = kMaxFoodCount;
+    double dishRadius = kDishRadius;
     std::vector<std::string> positional;
     for (int index = 1; index < argc; ++index) {
         const std::string argument = argv[index];
@@ -693,6 +698,15 @@ int main(int argc, char** argv) {
             captureTemperature = std::atoi(argv[++index]);
         } else if (argument == "--capture-warmup" && index + 1 < argc) {
             captureWarmup = std::atoi(argv[++index]);
+        } else if (argument == "--cells" && index + 1 < argc) {
+            // The launcher passes the run configuration in, so a substrate chosen in
+            // the freezer starts with the allocation it was saved with rather than
+            // with this host's defaults.
+            maxCellCount = std::atoi(argv[++index]);
+        } else if (argument == "--food" && index + 1 < argc) {
+            maxFoodCount = std::atoi(argv[++index]);
+        } else if (argument == "--radius" && index + 1 < argc) {
+            dishRadius = std::atof(argv[++index]);
         } else {
             positional.push_back(argument);
         }
@@ -805,7 +819,7 @@ int main(int argc, char** argv) {
     std::shared_ptr<NativeCellularityController> controller;
     try {
         Environment environment = Environment::constructDefaultEnvironment(
-                kMaxCellCount, kMaxFoodCount, kDishRadius);
+                maxCellCount, maxFoodCount, dishRadius);
         // A fresh substrate with no cells is a valid world but a poor first
         // impression, and the app's own "new substrate" path seeds life the same way.
         environment.addRandom = true;
