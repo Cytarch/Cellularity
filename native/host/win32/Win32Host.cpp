@@ -613,6 +613,16 @@ int main(int argc, char** argv) {
             gPendingZoomFactor = 1.0F;
         }
 
+        // A minimized window has no client area, so there is nothing to present to and
+        // no valid extent to project into. Skipping the frame keeps the loop alive and
+        // keeps the console free of a resize complaint per iteration; the window sends
+        // another size message when it is restored. The camera is deliberately left
+        // untouched, so restoring the window returns to the view the user had.
+        if (surfaceWidth <= 0 || surfaceHeight <= 0) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(16));
+            continue;
+        }
+
         // The presentation is rebuilt from the live camera every frame, so a drag or
         // a wheel event shows up in the next frame without any other plumbing.
         producer.setPresentationOverride(presentationFrom(viewport));
