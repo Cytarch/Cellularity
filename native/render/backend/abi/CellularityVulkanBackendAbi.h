@@ -19,6 +19,15 @@ extern "C" {
 
 struct AAssetManager;
 struct ANativeWindow;
+
+// The window a surface is attached to, as an opaque platform handle.
+//
+// It is deliberately not ANativeWindow*: the same ABI serves Android, where the
+// handle is an ANativeWindow*, and Windows, where it is an HWND. The caller owns
+// the handle, and the handle must stay valid until detach_surface or
+// destroy_session completes. On Android the caller transfers one ANativeWindow
+// reference, which the backend releases.
+typedef void* CellularityVulkanNativeWindowHandleV1;
 struct CellularityVulkanSessionOpaque;
 
 typedef struct CellularityVulkanSessionOpaque*
@@ -71,17 +80,45 @@ typedef uint32_t CellularityVulkanOffscreenTargetV1;
 #define CELLULARITY_VULKAN_OFFSCREEN_GENOME_PREVIEW_V1 UINT32_C(0)
 #define CELLULARITY_VULKAN_OFFSCREEN_SUBSTRATE_PREVIEW_V1 UINT32_C(1)
 
+// Where the session reads its shaders and textures from. Android serves them
+// from the packaged asset manager; a desktop host reads them from disk.
+typedef uint32_t CellularityVulkanAssetSourceV1;
+#define CELLULARITY_VULKAN_ASSET_SOURCE_ANDROID_MANAGER_V1 UINT32_C(0)
+#define CELLULARITY_VULKAN_ASSET_SOURCE_FILESYSTEM_V1 UINT32_C(1)
+
 typedef struct CellularityVulkanSessionCreateInfoV1 {
     uint32_t abi_version;
     uint32_t struct_size;
     struct AAssetManager* asset_manager;
-    uint32_t flags;
+    CellularityVulkanAssetSourceV1 asset_source;
     uint32_t reserved_zero;
+    // Asset roots used when asset_source is CELLULARITY_VULKAN_ASSET_SOURCE_
+    // FILESYSTEM_V1. asset_root is required; asset_root_secondary is optional and
+    // is searched second, which lets a build point at the generated SPIR-V
+    // directory and the source asset directory at once. Paths are UTF-8, may be
+    // relative to the process working directory, and are joined with the asset's
+    // own relative path.
+    const char* asset_root;
+    const char* asset_root_secondary;
 } CellularityVulkanSessionCreateInfoV1;
 
+// The fields every caller must supply, and the value older callers set
+// struct_size to. asset_root and asset_root_secondary are optional and are
+// checked for presence against struct_size before being read, so a caller that
+// predates them is still accepted.
 #define CELLULARITY_VULKAN_SESSION_CREATE_INFO_V1_REQUIRED_SIZE    \
     (offsetof(CellularityVulkanSessionCreateInfoV1, reserved_zero) \
             + sizeof(uint32_t))
+
+// The size that includes the optional asset roots. A caller that sets
+// struct_size to this value may supply them.
+#define CELLULARITY_VULKAN_SESSION_CREATE_INFO_V1_FULL_SIZE \
+    (sizeof(CellularityVulkanSessionCreateInfoV1))
+
+// The offset at which asset_root becomes readable.
+#define CELLULARITY_VULKAN_SESSION_CREATE_INFO_V1_ASSET_ROOT_OFFSET \
+    (offsetof(CellularityVulkanSessionCreateInfoV1, asset_root)      \
+            + sizeof(const char*))
 
 typedef struct CellularityVulkanErrorV1 {
     uint32_t abi_version;
@@ -341,7 +378,7 @@ typedef CellularityVulkanOperationStatusV1 (*CellularityVulkanHasAttachedSurface
         uint32_t* out_attached);
 typedef CellularityVulkanOperationStatusV1 (*CellularityVulkanAttachWindowFnV1)(
         CellularityVulkanSessionHandle session,
-        struct ANativeWindow* window,
+        CellularityVulkanNativeWindowHandleV1 window,
         int32_t width,
         int32_t height);
 typedef CellularityVulkanOperationStatusV1 (*CellularityVulkanResizeSurfaceFnV1)(

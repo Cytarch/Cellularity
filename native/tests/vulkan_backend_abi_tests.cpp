@@ -27,6 +27,7 @@ using cellularity::render::PreparedRenderFrame;
 using cellularity::render::RenderFrameOutcome;
 using cellularity::render::RenderPresentationState;
 using cellularity::render::RenderViewportState;
+using cellularity::render::abi::VulkanBackendAssetSource;
 using cellularity::render::abi::VulkanBackendSession;
 using cellularity::render::abi::VulkanRenderSurfaceSessionAdapter;
 using cellularity::tests::assertThrows;
@@ -96,7 +97,7 @@ CellularityVulkanSessionHandle createSession(const CellularityVulkanSessionCreat
     FakeBackend& fake = *gBackend;
     ++fake.createCount;
     initializeSuccess(error);
-    fake.createInfoValid = info != nullptr && info->abi_version == CELLULARITY_VULKAN_ABI_VERSION_V1 && info->struct_size == CELLULARITY_VULKAN_SESSION_CREATE_INFO_V1_REQUIRED_SIZE && info->asset_manager != nullptr && info->flags == 0 && info->reserved_zero == 0;
+    fake.createInfoValid = info != nullptr && info->abi_version == CELLULARITY_VULKAN_ABI_VERSION_V1 && info->struct_size == CELLULARITY_VULKAN_SESSION_CREATE_INFO_V1_FULL_SIZE && info->asset_source == CELLULARITY_VULKAN_ASSET_SOURCE_FILESYSTEM_V1 && info->asset_root != nullptr && info->asset_root[0] != 0 && info->reserved_zero == 0;
     if (fake.failCreate) {
         error->code = CELLULARITY_VULKAN_ERROR_BACKEND_INITIALIZATION_FAILED_V1;
         constexpr char message[] = "expected fake creation failure";
@@ -128,7 +129,7 @@ CellularityVulkanOperationStatusV1 hasAttachedSurface(CellularityVulkanSessionHa
     return fake.operationStatus;
 }
 
-CellularityVulkanOperationStatusV1 attachWindow(CellularityVulkanSessionHandle session, ANativeWindow*, std::int32_t, std::int32_t) {
+CellularityVulkanOperationStatusV1 attachWindow(CellularityVulkanSessionHandle session, CellularityVulkanNativeWindowHandleV1, std::int32_t, std::int32_t) {
     FakeBackend& fake = backend(session);
     ++fake.attachCount;
     ++fake.consumedWindowReferences;
@@ -260,8 +261,17 @@ CellularityVulkanSurfaceApiV1 makeApi(FakeBackend& fake) {
     };
 }
 
-AAssetManager* fakeAssetManager() {
-    return reinterpret_cast<AAssetManager*>(static_cast<std::uintptr_t>(0x1000));
+// The session no longer takes an Android asset manager: it takes a described
+// asset source, so this fixture needs no Android type at all. The path is never
+// opened here because every call below is rejected before session creation.
+VulkanBackendAssetSource fakeAssetSource() {
+    return VulkanBackendAssetSource::fromFilesystem("unused-test-asset-root");
+}
+
+// An empty filesystem root is the invalid-source case the old null-manager check
+// used to cover.
+VulkanBackendAssetSource invalidAssetSource() {
+    return VulkanBackendAssetSource{};
 }
 
 void testManifestValidationRejectsBeforeCallbacks() {
@@ -270,32 +280,32 @@ void testManifestValidationRejectsBeforeCallbacks() {
 
     api.abi_version = 2;
     assertThrows([&] {
-        (void)VulkanBackendSession::create(&api, fakeAssetManager());
+        (void)VulkanBackendSession::create(&api, fakeAssetSource());
     },
             "Unknown API version must be rejected");
     api = makeApi(fake);
     api.struct_size = CELLULARITY_VULKAN_SURFACE_API_V1_REQUIRED_SIZE - 1;
     assertThrows([&] {
-        (void)VulkanBackendSession::create(&api, fakeAssetManager());
+        (void)VulkanBackendSession::create(&api, fakeAssetSource());
     },
             "Short API prefix must be rejected");
     api = makeApi(fake);
     api.api_context = nullptr;
     assertThrows([&] {
-        (void)VulkanBackendSession::create(&api, fakeAssetManager());
+        (void)VulkanBackendSession::create(&api, fakeAssetSource());
     },
             "Null API context must be rejected");
     api = makeApi(fake);
     api.present_microscope = nullptr;
     assertThrows([&] {
-        (void)VulkanBackendSession::create(&api, fakeAssetManager());
+        (void)VulkanBackendSession::create(&api, fakeAssetSource());
     },
             "Null required callback must be rejected");
     api = makeApi(fake);
     assertThrows([&] {
-        (void)VulkanBackendSession::create(&api, nullptr);
+        (void)VulkanBackendSession::create(&api, invalidAssetSource());
     },
-            "Null asset manager must be rejected");
+            "An empty asset root must be rejected");
 
     assertTrue(fake.retainCount == 0 && fake.createCount == 0, "Rejected manifests must not invoke backend callbacks");
 }
@@ -305,7 +315,7 @@ void testCreationFailuresBalanceApiAndSessionOwnership() {
     failed.failCreate = true;
     auto failedApi = makeApi(failed);
     assertThrows([&] {
-        (void)VulkanBackendSession::create(&failedApi, fakeAssetManager());
+        (void)VulkanBackendSession::create(&failedApi, fakeAssetSource());
     },
             "Backend creation failure must propagate");
     assertTrue(failed.retainCount == 1 && failed.releaseCount == 1 && failed.createCount == 1 && failed.destroyCount == 0, "Failed creation must balance only the API lease");
@@ -314,7 +324,7 @@ void testCreationFailuresBalanceApiAndSessionOwnership() {
     invalidFailure.invalidFailureRecord = true;
     auto invalidFailureApi = makeApi(invalidFailure);
     assertThrows([&] {
-        (void)VulkanBackendSession::create(&invalidFailureApi, fakeAssetManager());
+        (void)VulkanBackendSession::create(&invalidFailureApi, fakeAssetSource());
     },
             "Null session with a success code must be an ABI contract failure");
     assertTrue(invalidFailure.retainCount == 1 && invalidFailure.releaseCount == 1 && invalidFailure.destroyCount == 0, "Invalid failure records must still balance the API lease");
@@ -323,7 +333,7 @@ void testCreationFailuresBalanceApiAndSessionOwnership() {
     malformed.invalidSuccessRecord = true;
     auto malformedApi = makeApi(malformed);
     assertThrows([&] {
-        (void)VulkanBackendSession::create(&malformedApi, fakeAssetManager());
+        (void)VulkanBackendSession::create(&malformedApi, fakeAssetSource());
     },
             "Malformed success record must fail closed");
     assertTrue(malformed.retainCount == 1 && malformed.releaseCount == 1 && malformed.createCount == 1 && malformed.destroyCount == 1 && malformed.destroySequence < malformed.releaseSequence, "Malformed success must destroy the opaque session before releasing its API lease");
@@ -332,7 +342,7 @@ void testCreationFailuresBalanceApiAndSessionOwnership() {
     dirtySuccess.dirtySuccessTail = true;
     auto dirtySuccessApi = makeApi(dirtySuccess);
     assertThrows([&] {
-        (void)VulkanBackendSession::create(&dirtySuccessApi, fakeAssetManager());
+        (void)VulkanBackendSession::create(&dirtySuccessApi, fakeAssetSource());
     },
             "Success must return a fully zeroed error payload");
     assertTrue(dirtySuccess.destroyCount == 1 && dirtySuccess.releaseCount == 1, "Dirty success records must not leak the created session or API lease");
@@ -342,7 +352,7 @@ void testHappyPathBorrowsFrameAndClosesOnOwnerThread() {
     FakeBackend fake;
     auto api = makeApi(fake);
     api.struct_size = sizeof(api) + 128;
-    std::shared_ptr<VulkanBackendSession> session = VulkanBackendSession::create(&api, fakeAssetManager());
+    std::shared_ptr<VulkanBackendSession> session = VulkanBackendSession::create(&api, fakeAssetSource());
     assertTrue(fake.createInfoValid && fake.retainCount == 1 && fake.createCount == 1, "Compatible API tails must be ignored and create-info must be canonical");
 
     {
@@ -373,8 +383,8 @@ void testHappyPathBorrowsFrameAndClosesOnOwnerThread() {
         assertTrue(fake.ringGeometryTransferred, "Both substrate radii cross the Vulkan ABI boundary");
 
         fake.operationStatus = CELLULARITY_VULKAN_OPERATION_FAILED_V1;
-        const auto* window = reinterpret_cast<ANativeWindow*>(static_cast<std::uintptr_t>(0x2000));
-        assertTrue(session->attachWindow(const_cast<ANativeWindow*>(window), 320, 240) == CELLULARITY_VULKAN_OPERATION_FAILED_V1 && fake.attachCount == 1 && fake.consumedWindowReferences == 1, "attach_window must consume exactly one reference on failure");
+        const auto* window = reinterpret_cast<CellularityVulkanNativeWindowHandleV1>(static_cast<std::uintptr_t>(0x2000));
+        assertTrue(session->attachWindow(const_cast<CellularityVulkanNativeWindowHandleV1>(window), 320, 240) == CELLULARITY_VULKAN_OPERATION_FAILED_V1 && fake.attachCount == 1 && fake.consumedWindowReferences == 1, "attach_window must consume exactly one reference on failure");
 
         fake.surfaceOutcome = UINT32_C(0xFFFFFFFF);
         RenderViewportState viewport;

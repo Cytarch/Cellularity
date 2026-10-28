@@ -11,6 +11,38 @@
 
 namespace cellularity::render::abi {
 
+// Describes where the backend DSO should read its shaders and textures from.
+//
+// Two sources are supported, mirroring CellularityVulkanAssetSourceV1: Android's
+// packaged asset manager and a pair of filesystem roots used by a desktop host.
+// The asset manager is carried as an opaque handle so this header and its
+// translation unit stay free of both android/asset_manager.h and jni.h - the
+// client only forwards the value into the create-info structure.
+struct VulkanBackendAssetSource final {
+    CellularityVulkanAssetSourceV1 source =
+            CELLULARITY_VULKAN_ASSET_SOURCE_FILESYSTEM_V1;
+    void* androidAssetManager = nullptr;
+    std::string filesystemRoot;
+    std::string filesystemRootSecondary;
+
+    [[nodiscard]] static VulkanBackendAssetSource fromFilesystem(
+            std::string root, std::string secondary = {}) {
+        VulkanBackendAssetSource value;
+        value.source = CELLULARITY_VULKAN_ASSET_SOURCE_FILESYSTEM_V1;
+        value.filesystemRoot = std::move(root);
+        value.filesystemRootSecondary = std::move(secondary);
+        return value;
+    }
+
+    [[nodiscard]] static VulkanBackendAssetSource fromAndroidAssetManager(
+            void* assetManager) {
+        VulkanBackendAssetSource value;
+        value.source = CELLULARITY_VULKAN_ASSET_SOURCE_ANDROID_MANAGER_V1;
+        value.androidAssetManager = assetManager;
+        return value;
+    }
+};
+
 class VulkanBackendSession final {
 public:
     enum class Phase : std::uint8_t {
@@ -22,7 +54,7 @@ public:
 
     [[nodiscard]] static std::shared_ptr<VulkanBackendSession> create(
             const CellularityVulkanSurfaceApiV1* api,
-            AAssetManager* assetManager);
+            const VulkanBackendAssetSource& assets);
 
     VulkanBackendSession(const VulkanBackendSession&) = delete;
     VulkanBackendSession& operator=(const VulkanBackendSession&) = delete;
@@ -35,7 +67,7 @@ public:
     [[nodiscard]] CellularityVulkanOperationStatusV1 hasAttachedSurface(
             std::uint32_t& attached) noexcept;
     [[nodiscard]] CellularityVulkanOperationStatusV1 attachWindow(
-            ANativeWindow* window, std::int32_t width,
+            CellularityVulkanNativeWindowHandleV1 window, std::int32_t width,
             std::int32_t height) noexcept;
     [[nodiscard]] CellularityVulkanOperationStatusV1 resizeSurface(
             std::int32_t width, std::int32_t height) noexcept;

@@ -786,7 +786,10 @@ if(ANDROID)
             platform/android/AndroidRenderAssets.cpp
             platform/android/vulkan/AndroidVulkanCapabilityProbe.cpp
             render/backend/vulkan/AndroidVulkanClearFrameSession.cpp
+            render/backend/vulkan/NativeVulkanSurface.cpp
+            render/backend/vulkan/NativeVulkanWindowAndroid.cpp
             render/backend/vulkan/VulkanBackendAbiExports.cpp
+            render/backend/vulkan/VulkanBackendJniExports.cpp
             render/backend/vulkan/VulkanBasicCellRenderer.cpp
             render/backend/vulkan/VulkanResourceFoundation.cpp
             render/backend/vulkan/VulkanResult.cpp
@@ -825,6 +828,48 @@ if(ANDROID)
     cellularity_configure_source_target(cellularity_diagnostics)
     cellularity_optimize_target(cellularity_diagnostics)
 
+endif()
+
+# The Vulkan backend on a desktop host. It is the same backend source as the
+# Android DSO above with the Android-only pieces replaced by their Win32
+# equivalents, so the two platforms exercise one implementation rather than two.
+#
+# The Windows build does not need the JNI capability probe: that probe exists to
+# answer a managed-side question about the packaged app, and the host has no
+# managed layer. Its place is taken by the host tests, which drive the session
+# directly.
+if(WIN32)
+    # vcpkg ships vulkan-headers and vulkan-loader; either that or the LunarG SDK
+    # provides the import library. Both spell the loader import library
+    # vulkan-1.lib, which is what CMake records here.
+    find_package(Vulkan QUIET)
+    if(Vulkan_FOUND)
+        set(CELLULARITY_HOST_VULKAN_LIBRARY Vulkan::Vulkan)
+    else()
+        find_library(CELLULARITY_HOST_VULKAN_LIBRARY NAMES vulkan-1 vulkan REQUIRED)
+    endif()
+
+    add_library(cellularity_vulkan_host STATIC
+            render/backend/vulkan/AndroidVulkanClearFrameSession.cpp
+            render/backend/vulkan/NativeVulkanSurface.cpp
+            render/backend/vulkan/NativeVulkanWindowWin32.cpp
+            render/backend/vulkan/VulkanBackendAbiExports.cpp
+            render/backend/vulkan/VulkanBasicCellRenderer.cpp
+            render/backend/vulkan/VulkanResourceFoundation.cpp
+            render/backend/vulkan/VulkanResult.cpp
+    )
+    cellularity_configure_source_target(cellularity_vulkan_host)
+    target_compile_definitions(cellularity_vulkan_host PRIVATE
+            CELLULARITY_ENABLE_VULKAN_PROFILING=$<BOOL:${CELLULARITY_ENABLE_VULKAN_PROFILING}>
+            "$<$<CONFIG:Debug>:CELLULARITY_VULKAN_VALIDATION=1>"
+    )
+    target_link_libraries(cellularity_vulkan_host PRIVATE
+            cellularity_vulkan_frame_contract
+            cellularity_render_overlay_contract
+            cellularity_render_assets
+            cellularity_render_frame_result
+            ${CELLULARITY_HOST_VULKAN_LIBRARY}
+    )
 endif()
 
 # Host builds always expose the probe for local policy calibration. Android app

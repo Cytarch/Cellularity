@@ -1,7 +1,5 @@
 #pragma once
 
-#include <android/native_window.h>
-
 #include <array>
 #include <cstdint>
 #include <memory>
@@ -10,6 +8,7 @@
 
 #include "app/microscope/render/MicroscopeDebugHud.h"
 #include "render/backend/RenderSurfaceSession.h"
+#include "render/backend/vulkan/NativeVulkanWindow.h"
 #include "render/backend/vulkan/VulkanBasicCellRenderer.h"
 #include "render/frame/PreparedRenderFrameView.h"
 
@@ -18,12 +17,14 @@ namespace cellularity::render::vulkan {
 using ClearFrameResult = RenderFrameOutcome;
 
 /**
- * Thread-confined Vulkan 1.0 microscope-world test session.
+ * Thread-confined Vulkan 1.0 microscope-world session.
  *
- * attachWindow always consumes one ANativeWindow reference, including on
- * failure. Instance/device resources survive detachSurface. Completed
- * off-screen capture targets also survive; Android surface, swapchain and
- * swapchain-depth resources do not.
+ * attachWindow always consumes the window reference it is given, including on
+ * failure. The window type is platform-neutral, so this session serves Android
+ * (ANativeWindow) and Windows (HWND) through the same code.
+ * Instance/device resources survive detachSurface. Completed off-screen capture
+ * targets also survive; the native surface, swapchain and swapchain-depth
+ * resources do not.
  */
 class AndroidVulkanClearFrameSession final {
 public:
@@ -47,7 +48,7 @@ public:
             const AndroidVulkanClearFrameSession&) = delete;
 
     [[nodiscard]] bool attachWindow(
-            ANativeWindow* window, int width, int height);
+            NativeVulkanWindowReference window, int width, int height);
     void resizeSurface(int width, int height);
     void detachSurface();
     void setPerformanceProfilingEnabled(bool enabled);

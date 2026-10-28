@@ -1,12 +1,13 @@
 #include "render/backend/vulkan/AndroidVulkanClearFrameSession.h"
 
 #include "app/microscope/render/MicroscopeDebugHud.h"
+#include "platform/PlatformLog.h"
+#include "render/backend/vulkan/NativeVulkanSurface.h"
+#include "render/backend/vulkan/NativeVulkanWindow.h"
 #include "render/backend/vulkan/VulkanResourceFoundation.h"
 #include "render/backend/vulkan/VulkanResult.h"
 
-#include <android/log.h>
 #include <vulkan/vulkan.h>
-#include <vulkan/vulkan_android.h>
 
 #include <algorithm>
 #include <array>
@@ -281,27 +282,9 @@ struct FrameResources final {
     bool gpuTimestampPending = false;
 };
 
-class NativeWindowReference final {
-public:
-    explicit NativeWindowReference(ANativeWindow* window) noexcept
-            : mWindow(window) {}
-
-    ~NativeWindowReference() {
-        if (mWindow != nullptr) {
-            ANativeWindow_release(mWindow);
-        }
-    }
-
-    NativeWindowReference(const NativeWindowReference&) = delete;
-    NativeWindowReference& operator=(const NativeWindowReference&) = delete;
-
-    [[nodiscard]] ANativeWindow* release() noexcept {
-        return std::exchange(mWindow, nullptr);
-    }
-
-private:
-    ANativeWindow* mWindow;
-};
+// The session owns the window reference for as long as it is attached. The
+// reference is move-only, and the platform window type stays behind
+// NativeVulkanWindow, so this file names no window system.
 
 class SteadyStateFrameScope final {
 public:
@@ -840,7 +823,7 @@ struct AndroidVulkanClearFrameSession::Impl final {
     VkFormat depthFormat = VK_FORMAT_UNDEFINED;
     PFN_vkSetDebugUtilsObjectNameEXT setDebugObjectName = nullptr;
 
-    ANativeWindow* window = nullptr;
+    NativeVulkanWindowReference window;
     VkSurfaceKHR surface = VK_NULL_HANDLE;
     VulkanSwapchain swapchain;
     VkFormat surfaceFormat = VK_FORMAT_UNDEFINED;
@@ -1112,12 +1095,11 @@ struct AndroidVulkanClearFrameSession::Impl final {
         if (callbackData != nullptr && callbackData->pMessage != nullptr) {
             self->lastValidationMessage =
                     sanitizeLineValue(callbackData->pMessage);
-            __android_log_print(
+            cellularity::platform::logMessage("CellularityVulkanValidation",
                     (severity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT)
                                     != 0
-                            ? ANDROID_LOG_ERROR
-                            : ANDROID_LOG_WARN,
-                    "CellularityVulkanValidation", "%s",
+                            ? cellularity::platform::LogSeverity::Error
+                            : cellularity::platform::LogSeverity::Warning,
                     callbackData->pMessage);
         }
         return VK_FALSE;
@@ -1149,15 +1131,15 @@ struct AndroidVulkanClearFrameSession::Impl final {
             return false;
         }
         if (!hasExtension(extensions, VK_KHR_SURFACE_EXTENSION_NAME)
-                || !hasExtension(
-                        extensions, VK_KHR_ANDROID_SURFACE_EXTENSION_NAME)) {
-            setFailure("Required Vulkan Android surface extensions are unavailable");
+                || !hasExtension(extensions,
+                        CELLULARITY_VULKAN_SURFACE_EXTENSION_NAME)) {
+            setFailure("Required Vulkan surface extensions are unavailable");
             return false;
         }
 
         std::vector<const char*> enabledExtensions = {
                 VK_KHR_SURFACE_EXTENSION_NAME,
-                VK_KHR_ANDROID_SURFACE_EXTENSION_NAME
+                CELLULARITY_VULKAN_SURFACE_EXTENSION_NAME
         };
         debugUtilsAvailable = hasExtension(
                 extensions, VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
@@ -1237,16 +1219,10 @@ struct AndroidVulkanClearFrameSession::Impl final {
             setFailure("Cannot create a Vulkan surface without a native window");
             return false;
         }
-        const VkAndroidSurfaceCreateInfoKHR createInfo{
-                VK_STRUCTURE_TYPE_ANDROID_SURFACE_CREATE_INFO_KHR,
-                nullptr,
-                0,
-                window
-        };
-        const VkResult result = vkCreateAndroidSurfaceKHR(
-                instance, &createInfo, nullptr, &surface);
+        const VkResult result =
+                createPlatformVulkanSurface(instance, *window, &surface);
         if (result != VK_SUCCESS) {
-            setFailure("vkCreateAndroidSurfaceKHR", result);
+            setFailure("platform surface creation", result);
             return false;
         }
         ++surfaceGeneration;
@@ -3010,10 +2986,7 @@ struct AndroidVulkanClearFrameSession::Impl final {
             vkDestroySurfaceKHR(instance, surface, nullptr);
             surface = VK_NULL_HANDLE;
         }
-        if (window != nullptr) {
-            ANativeWindow_release(window);
-            window = nullptr;
-        }
+        window.reset();
         return ClearFrameResult::SurfaceLost;
     }
 
@@ -4756,20 +4729,19 @@ struct AndroidVulkanClearFrameSession::Impl final {
     }
 
     [[nodiscard]] bool attachWindow(
-            ANativeWindow* newWindow, int width, int height) {
-        NativeWindowReference incomingWindow(newWindow);
+            NativeVulkanWindowReference newWindow, int width, int height) {
         if (!checkThread("attachWindow")) {
             return false;
         }
         detachSurface();
-        window = incomingWindow.release();
+        window = std::move(newWindow);
         status = "attaching";
         lastResult = "VK_SUCCESS";
         error.clear();
         requestedWidth = std::max(width, 0);
         requestedHeight = std::max(height, 0);
         if (window == nullptr) {
-            setFailure("Android native window is unavailable");
+            setFailure("Native window is unavailable");
             return false;
         }
         if (!createInstance() || !createSurface()
@@ -4860,10 +4832,7 @@ struct AndroidVulkanClearFrameSession::Impl final {
             vkDestroySurfaceKHR(instance, surface, nullptr);
             surface = VK_NULL_HANDLE;
         }
-        if (window != nullptr) {
-            ANativeWindow_release(window);
-            window = nullptr;
-        }
+        window.reset();
         requestedWidth = 0;
         requestedHeight = 0;
         swapchainRecreatePending = false;
@@ -4900,10 +4869,7 @@ struct AndroidVulkanClearFrameSession::Impl final {
             vkDestroySurfaceKHR(instance, surface, nullptr);
             surface = VK_NULL_HANDLE;
         }
-        if (window != nullptr) {
-            ANativeWindow_release(window);
-            window = nullptr;
-        }
+        window.reset();
         destroyDevice();
         if (debugMessenger != VK_NULL_HANDLE && instance != VK_NULL_HANDLE) {
             const auto destroyDebugMessenger =
@@ -5487,8 +5453,8 @@ AndroidVulkanClearFrameSession::AndroidVulkanClearFrameSession(
 AndroidVulkanClearFrameSession::~AndroidVulkanClearFrameSession() = default;
 
 bool AndroidVulkanClearFrameSession::attachWindow(
-        ANativeWindow* window, int width, int height) {
-    return mImpl->attachWindow(window, width, height);
+        NativeVulkanWindowReference window, int width, int height) {
+    return mImpl->attachWindow(std::move(window), width, height);
 }
 
 void AndroidVulkanClearFrameSession::resizeSurface(int width, int height) {

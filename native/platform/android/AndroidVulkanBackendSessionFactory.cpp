@@ -58,8 +58,12 @@ AndroidVulkanBackendSessionFactory::createOnOwnerThread() noexcept {
             return result;
         }
         const AndroidRenderAssets assets = mAssetsLease->assets();
+        // The asset manager is handed over as an opaque handle; the client only
+        // forwards it, which keeps the client free of Android headers.
         result.session = cellularity::render::abi::VulkanBackendSession::create(
-                mApi, assets.assetManager());
+                mApi,
+                cellularity::render::abi::VulkanBackendAssetSource::
+                        fromAndroidAssetManager(assets.assetManager()));
         return result;
     } catch (const std::bad_alloc&) {
         initializeError(result.error,

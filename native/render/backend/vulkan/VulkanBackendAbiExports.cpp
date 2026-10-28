@@ -1,7 +1,11 @@
 #include "render/backend/abi/CellularityVulkanBackendAbi.h"
 
-#include <android/native_window.h>
+// jni.h is only needed by the managed bridge, which lives in
+// VulkanBackendJniExports.cpp. The Windows host build of this file has no
+// managed layer and therefore no jni.h.
+#if defined(__ANDROID__)
 #include <jni.h>
+#endif
 
 #include <algorithm>
 #include <array>
@@ -20,12 +24,18 @@
 #include <vector>
 
 #include "app/microscope/render/MicroscopeDebugHud.h"
+#if defined(__ANDROID__)
 #include "platform/android/AndroidRenderAssets.h"
+#endif
 #include "render/AssetRenderTextureLoader.h"
+#include "render/FileRenderAssets.h"
 #include "render/backend/RenderFrameResult.h"
 #include "render/backend/abi/VulkanBackendAbiError.h"
 #include "render/backend/abi/VulkanBackendAbiValidation.h"
 #include "render/backend/vulkan/AndroidVulkanClearFrameSession.h"
+// createNativeVulkanWindow interprets the opaque ABI window handle for the
+// running platform, so the backend needs the platform window header here.
+#include "render/backend/vulkan/NativeVulkanWindow.h"
 #include "render/backend/vulkan/VulkanBasicCellFrame.h"
 #include "render/frame/PreparedRenderFrameView.h"
 
@@ -439,28 +449,92 @@ CellularityVulkanSessionHandle createSession(
             || info->abi_version != CELLULARITY_VULKAN_ABI_VERSION_V1
             || info->struct_size
                     < CELLULARITY_VULKAN_SESSION_CREATE_INFO_V1_REQUIRED_SIZE
-            || info->asset_manager == nullptr || info->flags != 0
             || info->reserved_zero != 0) {
         setError(error, CELLULARITY_VULKAN_ERROR_INVALID_ARGUMENT_V1,
                 "Invalid Vulkan session creation request");
         return nullptr;
     }
+
+    // The asset roots are optional trailing fields, so they may only be read when
+    // the caller declared a structure large enough to contain them.
+    const bool rootsReadable = info->struct_size
+            >= CELLULARITY_VULKAN_SESSION_CREATE_INFO_V1_ASSET_ROOT_OFFSET;
+    const char* assetRoot =
+            rootsReadable ? info->asset_root : nullptr;
+    const char* assetRootSecondary =
+            rootsReadable ? info->asset_root_secondary : nullptr;
+
+    if (info->asset_source == CELLULARITY_VULKAN_ASSET_SOURCE_ANDROID_MANAGER_V1) {
+#if defined(__ANDROID__)
+        if (info->asset_manager == nullptr) {
+            setError(error, CELLULARITY_VULKAN_ERROR_INVALID_ARGUMENT_V1,
+                    "Android asset source requires a non-null asset manager");
+            return nullptr;
+        }
+#else
+        // The ABI accepts this source on every platform, but only an Android
+        // build can serve it, so a host build rejects it explicitly instead of
+        // silently falling back to a filesystem root the caller did not supply.
+        (void)assetRoot;
+        (void)assetRootSecondary;
+        setError(error, CELLULARITY_VULKAN_ERROR_INVALID_ARGUMENT_V1,
+                "Android asset source is unavailable in this build");
+        return nullptr;
+#endif
+    } else if (info->asset_source
+            == CELLULARITY_VULKAN_ASSET_SOURCE_FILESYSTEM_V1) {
+        if (assetRoot == nullptr || assetRoot[0] == '\0') {
+            setError(error, CELLULARITY_VULKAN_ERROR_INVALID_ARGUMENT_V1,
+                    "Filesystem asset source requires a non-empty asset root");
+            return nullptr;
+        }
+    } else {
+        setError(error, CELLULARITY_VULKAN_ERROR_INVALID_ARGUMENT_V1,
+                "Unknown Vulkan asset source");
+        return nullptr;
+    }
+
     try {
-        AndroidRenderAssets assets(info->asset_manager);
-        AssetRenderTextureLoader textureLoader(assets);
+        // Both sources satisfy NativeRenderAssets, so everything below the choice
+        // is shared. This file sits in the global anonymous namespace, so the
+        // backend's own types must be qualified.
+        //
+        // The Android branch is compiled only where the Android asset type exists:
+        // the ABI still accepts that source on every platform, but a host build
+        // has no implementation for it and rejects it below instead.
+        std::unique_ptr<NativeRenderAssets> assets;
+#if defined(__ANDROID__)
+        if (info->asset_source
+                == CELLULARITY_VULKAN_ASSET_SOURCE_ANDROID_MANAGER_V1) {
+            assets = std::make_unique<AndroidRenderAssets>(info->asset_manager);
+        } else {
+#else
+        {
+#endif
+            std::vector<std::string> roots;
+            roots.emplace_back(assetRoot);
+            if (assetRootSecondary != nullptr
+                    && assetRootSecondary[0] != '\0') {
+                roots.emplace_back(assetRootSecondary);
+            }
+            assets = std::make_unique<cellularity::render::FileRenderAssets>(
+                    std::move(roots));
+        }
+
+        AssetRenderTextureLoader textureLoader(*assets);
         auto implementation = std::make_unique<AndroidVulkanClearFrameSession>(
-                readSpirv(assets, "vulkan/shaders/background.vert.spv",
+                readSpirv(*assets, "vulkan/shaders/background.vert.spv",
                         "Background vertex"),
-                readSpirv(assets, "vulkan/shaders/background.frag.spv",
+                readSpirv(*assets, "vulkan/shaders/background.frag.spv",
                         "Background fragment"),
-                readSpirv(assets, "vulkan/shaders/density_field.vert.spv",
+                readSpirv(*assets, "vulkan/shaders/density_field.vert.spv",
                         "Density-field vertex"),
-                readSpirv(assets, "vulkan/shaders/density_field.frag.spv",
+                readSpirv(*assets, "vulkan/shaders/density_field.frag.spv",
                         "Density-field fragment"),
                 readShaderSpirv<kVulkanBasicCellProgramCount>(
-                        assets, "Basic-cell", &basicCellProgramName),
+                        *assets, "Basic-cell", &basicCellProgramName),
                 readShaderSpirv<kVulkanWorldProgramCount>(
-                        assets, "World", &worldProgramName),
+                        *assets, "World", &worldProgramName),
                 textureLoader.loadTexture("small_dots", false),
                 textureLoader.loadTexture("gauss_bessel_integral", true));
         return new CellularityVulkanSessionOpaque(std::move(implementation));
@@ -505,15 +579,24 @@ CellularityVulkanOperationStatusV1 hasAttachedSurface(
 }
 
 CellularityVulkanOperationStatusV1 attachWindow(
-        CellularityVulkanSessionHandle session, ANativeWindow* window,
+        CellularityVulkanSessionHandle session,
+        CellularityVulkanNativeWindowHandleV1 window,
         std::int32_t width, std::int32_t height) noexcept {
-    if (session == nullptr || window == nullptr || width < 0 || height < 0) {
-        if (window != nullptr)
-            ANativeWindow_release(window);
+    // The handle is opaque in the ABI. createNativeVulkanWindow interprets it for
+    // the running platform, and a reference it cannot wrap is rejected without
+    // anyone left holding an unreleased handle, because the caller passed one
+    // only for a platform this build has no window system for.
+    if (session == nullptr || width < 0 || height < 0) {
+        return CELLULARITY_VULKAN_OPERATION_INVALID_ARGUMENT_V1;
+    }
+    cellularity::render::vulkan::NativeVulkanWindowReference reference =
+            cellularity::render::vulkan::createNativeVulkanWindow(window);
+    if (reference == nullptr) {
         return CELLULARITY_VULKAN_OPERATION_INVALID_ARGUMENT_V1;
     }
     try {
-        return session->implementation->attachWindow(window, width, height)
+        return session->implementation->attachWindow(
+                       std::move(reference), width, height)
                 ? CELLULARITY_VULKAN_OPERATION_OK_V1
                 : CELLULARITY_VULKAN_OPERATION_FAILED_V1;
     } catch (...) {
@@ -1007,17 +1090,9 @@ CellularityVulkanDiagnosticsStatusV1 releaseDiagnosticsSnapshot(
 
 } // namespace
 
-extern "C" __attribute__((visibility("default")))
+extern "C" CELLULARITY_VULKAN_BACKEND_EXPORT
 const CellularityVulkanSurfaceApiV1*
 cellularity_vulkan_get_surface_api_v1(void) {
     static const CellularityVulkanSurfaceApiV1 api = makeApi();
     return &api;
-}
-
-extern "C" JNIEXPORT jlong JNICALL
-Java_com_cytarch_cellularity_platform_render_vulkan_NativeVulkanBackendLoader_nativeBackendApiV1Address(
-        JNIEnv*, jclass) {
-    static_assert(sizeof(std::uintptr_t) <= sizeof(jlong));
-    return static_cast<jlong>(reinterpret_cast<std::uintptr_t>(
-            cellularity_vulkan_get_surface_api_v1()));
 }

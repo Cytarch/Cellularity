@@ -1,5 +1,11 @@
 #include "render/backend/abi/VulkanBackendSession.h"
 
+// VulkanBackendSession only forwards an opaque asset-manager handle into the
+// create-info structure when that source is selected, so it never dereferences
+// the type. This forward declaration keeps the translation unit free of both
+// jni.h and android/asset_manager.h.
+struct AAssetManager;
+
 #include <algorithm>
 #include <cassert>
 #include <cstdio>
@@ -98,7 +104,7 @@ bool isKnownVulkanDiagnosticsStatus(
 
 std::shared_ptr<VulkanBackendSession> VulkanBackendSession::create(
         const CellularityVulkanSurfaceApiV1* api,
-        AAssetManager* assetManager) {
+        const VulkanBackendAssetSource& assets) {
     if (api == nullptr) {
         throw std::invalid_argument("Vulkan backend API address is null");
     }
@@ -108,8 +114,14 @@ std::shared_ptr<VulkanBackendSession> VulkanBackendSession::create(
             || api->api_context == nullptr || !hasRequiredCallbacks(*api)) {
         throw std::invalid_argument("Vulkan backend API V1 is incompatible");
     }
-    if (assetManager == nullptr) {
-        throw std::invalid_argument("Vulkan backend requires Android assets");
+    if (assets.source == CELLULARITY_VULKAN_ASSET_SOURCE_ANDROID_MANAGER_V1) {
+        if (assets.androidAssetManager == nullptr) {
+            throw std::invalid_argument(
+                    "Vulkan backend requires a non-null Android asset manager");
+        }
+    } else if (assets.filesystemRoot.empty()) {
+        throw std::invalid_argument(
+                "Vulkan backend requires a non-empty asset root");
     }
 
     CellularityVulkanSurfaceApiV1 copied{};
@@ -123,8 +135,19 @@ std::shared_ptr<VulkanBackendSession> VulkanBackendSession::create(
         CellularityVulkanSessionCreateInfoV1 info{};
         info.abi_version = CELLULARITY_VULKAN_ABI_VERSION_V1;
         info.struct_size =
-                CELLULARITY_VULKAN_SESSION_CREATE_INFO_V1_REQUIRED_SIZE;
-        info.asset_manager = assetManager;
+                CELLULARITY_VULKAN_SESSION_CREATE_INFO_V1_FULL_SIZE;
+        info.asset_source = assets.source;
+        if (assets.source
+                == CELLULARITY_VULKAN_ASSET_SOURCE_ANDROID_MANAGER_V1) {
+            info.asset_manager =
+                    static_cast<AAssetManager*>(assets.androidAssetManager);
+        } else {
+            info.asset_manager = nullptr;
+            info.asset_root = assets.filesystemRoot.c_str();
+            info.asset_root_secondary = assets.filesystemRootSecondary.empty()
+                    ? nullptr
+                    : assets.filesystemRootSecondary.c_str();
+        }
 
         CellularityVulkanErrorV1 error{};
         error.abi_version = CELLULARITY_VULKAN_ABI_VERSION_V1;
@@ -276,7 +299,7 @@ CellularityVulkanOperationStatusV1 VulkanBackendSession::hasAttachedSurface(
 }
 
 CellularityVulkanOperationStatusV1 VulkanBackendSession::attachWindow(
-        ANativeWindow* window, std::int32_t width,
+        CellularityVulkanNativeWindowHandleV1 window, std::int32_t width,
         std::int32_t height) noexcept {
     Call call(*this);
     if (!call)
