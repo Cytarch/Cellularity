@@ -1,0 +1,67 @@
+/*
+ * Cellularity source code.
+ *
+ * The Windows desktop launcher.
+ *
+ * It is a plain JVM module rather than another Kotlin Multiplatform target, because
+ * there is nothing here to share: the UI it drives already lives in :shared, which
+ * compiles for the JVM unchanged. What this module owns is the desktop-only layer --
+ * the application window, the JVM implementations of the file and settings seams the
+ * Android app implements against Android APIs, and the native bridge to the renderer.
+ */
+
+plugins {
+    alias(libs.plugins.kotlin.jvm)
+    alias(libs.plugins.kotlin.serialization)
+    alias(libs.plugins.kotlin.compose)
+    alias(libs.plugins.compose.multiplatform)
+}
+
+kotlin {
+    jvmToolchain(libs.versions.jdk.get().toInteger())
+    compilerOptions {
+        jvmTarget.set(
+            org.jetbrains.kotlin.gradle.dsl.JvmTarget.fromTarget(
+                libs.versions.jvmTarget.get()
+            )
+        )
+    }
+}
+
+// The toolchain is the project JDK, but the bytecode target follows the same
+// convention as :shared, so a jar built here stays loadable by the JVM target the
+// rest of the project compiles against.
+java {
+    sourceCompatibility = JavaVersion.toVersion(libs.versions.jvmTarget.get())
+    targetCompatibility = JavaVersion.toVersion(libs.versions.jvmTarget.get())
+}
+
+dependencies {
+    implementation(project(':shared'))
+
+    implementation(compose.desktop.currentOs)
+    implementation(compose.runtime)
+    implementation(compose.foundation)
+    implementation(compose.material3)
+    implementation(compose.materialIconsExtended)
+    implementation(libs.kotlinx.coroutines.core)
+    implementation(libs.kotlinx.serialization.json)
+
+    testImplementation(libs.junit)
+}
+
+compose.desktop {
+    application {
+        mainClass = 'com.cytarch.cellularity.desktop.MainKt'
+
+        nativeDistributions {
+            targetFormats(
+                org.jetbrains.compose.desktop.application.dsl.TargetFormat.Msi
+            )
+            packageName = 'Cellularity'
+            packageVersion = libs.versions.appVersionName.get().replaceAll(/-.*$/, '')
+            description = 'Cellularity microscope simulation'
+            vendor = 'Cytarch'
+        }
+    }
+}
