@@ -2513,6 +2513,15 @@ def verify_v30c_genome_preview_reveal(errors: list[str]) -> None:
         / "app/src/main/java/com/cytarch/cellularity/ui/play_menu/screens/"
         "genome_editor/GenomeEditorScreen.kt"
     )
+    # The surface geometry moved to the shared module so that both platforms use one
+    # contract rather than each growing its own. The rule follows it: the declaration and
+    # its arithmetic are checked where they now live, and the handoff that consumes them is
+    # still checked in the screen.
+    genome_geometry = read(
+        REPO_ROOT
+        / "shared/src/commonMain/kotlin/com/cytarch/cellularity/shared/ui/play/"
+        "genome_editor/sections/GenomeEditorLayoutGeometry.kt"
+    )
     play_content = read(
         REPO_ROOT
         / "app/src/main/java/com/cytarch/cellularity/ui/play_menu/PlayContent.kt"
@@ -2648,8 +2657,15 @@ def verify_v30c_genome_preview_reveal(errors: list[str]) -> None:
             errors,
         )
     for snippet in (
-        "internal data class GenomePreviewSurfaceGeometry(",
-        "internal fun genomePreviewSurfaceGeometry(",
+        "data class GenomePreviewSurfaceGeometry(",
+        "fun genomePreviewSurfaceGeometry(",
+    ):
+        require(
+            snippet in genome_geometry,
+            f"V-30C editor surface geometry is missing {snippet}",
+            errors,
+        )
+    for snippet in (
         "viewportWidth = previewSurfaceGeometry.viewportWidth",
         "viewportHeight = previewSurfaceGeometry.viewportHeight",
         "backingSurfaceWidth = previewSurfaceGeometry.backingWidth",
@@ -2668,9 +2684,9 @@ def verify_v30c_genome_preview_reveal(errors: list[str]) -> None:
         )
         == 2
         and "viewportWidth = visibleWidthPx.roundToInt().coerceAtLeast(1)"
-        in genome_screen
+        in genome_geometry
         and "backingWidth = parentWidthPx.roundToInt().coerceAtLeast(1)"
-        in genome_screen,
+        in genome_geometry,
         "V-30C portrait and landscape layouts must share one non-zero stable "
         "backing geometry contract",
         errors,
