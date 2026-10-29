@@ -107,6 +107,19 @@ if (existingJavaOptions == null || !existingJavaOptions.contains('java.desktop/j
 // covers was not a wrong picture but a frozen window: presenting frames on the event thread
 // left the interface with no time to handle a click, and no screenshot can tell that apart
 // from a working screen. This posts work to the event queue and reports how long it waited.
+// Reports where the native child window would land, without showing a window. The report it
+// exists for is "the interface disappears when an experiment starts", and geometry is the
+// part of that a screenshot cannot settle.
+tasks.register('runLayoutProbe', JavaExec) {
+    group = 'verification'
+    description = 'Reports the layout the renderer would be parented into.'
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'com.cytarch.cellularity.desktop.LayoutProbeKt'
+    environment 'JDK_JAVA_OPTIONS', "${existingJavaOptions ?: ''} ${requiredOpens}".trim()
+    systemProperty 'java.library.path', nativeOutputDirectory.absolutePath
+    environment 'CELLULARITY_NATIVE_DIR', nativeOutputDirectory.absolutePath
+    environment 'PATH', "${nativeOutputDirectory.absolutePath};${System.getenv('PATH')}"
+}
 tasks.register('runResponsivenessProbe', JavaExec) {
     group = 'verification'
     description = 'Measures whether the interface answers while the simulation is running.'

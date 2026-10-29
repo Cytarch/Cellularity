@@ -287,6 +287,11 @@ private class SurfaceHolder(
         append(reported)
         append(" cells=")
         append(latestCellCount.get())
+        // The canvas is the component the native child window is parented to, so its size is
+        // the size the simulation will occupy. Reported here rather than found by walking the
+        // AWT hierarchy, which cannot tell this canvas from any other of the same size.
+        append(" canvas=")
+        append(canvas?.let { "${it.width}x${it.height}" } ?: "none")
     }
 
     private val threadStarted = AtomicLong(0L)
