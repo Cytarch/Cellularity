@@ -225,6 +225,15 @@ object DesktopNativeRenderer {
     external fun nativeWindowGeometry(windowHandle: Long): LongArray?
 
     /**
+     * The extent the surface is actually presenting at, as {width, height}.
+     *
+     * Not the window's size, and not the requested size: the swapchain is resized from the
+     * thread that presents, so between a window resize and the next frame these disagree.
+     * Reading it is how a caller tells "the surface caught up" from "it never will".
+     */
+    external fun nativeSurfaceExtent(sessionHandle: Long): LongArray?
+
+    /**
      * Creates a simulation and attaches it to [windowHandle].
      *
      * Returns an opaque session handle, or 0 if the renderer could not start. The

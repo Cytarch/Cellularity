@@ -557,6 +557,40 @@ Java_com_cytarch_cellularity_desktop_nativebridge_DesktopNativeRenderer_nativeCr
 // extent to follow the window has to recreate the session at the new size. Leaving it
 // as a window-only operation keeps the two handles independent and keeps this call
 // safe to make before a session exists.
+// Reports the extent the surface is presenting at, as {width, height}, or null when the
+// handle is not a live session or no frame has been presented yet.
+//
+// This is the number the picture is actually drawn into, and it is deliberately not the
+// window's size: the swapchain is resized from the thread that presents, so between a window
+// resize and the next frame the two disagree, and a session that never got the resize keeps
+// presenting into its creation extent for the rest of its life. A window larger than the
+// surface it presents is a picture that fills part of its own viewport, which is worth being
+// able to measure rather than infer from a screenshot.
+extern "C" JNIEXPORT jlongArray JNICALL
+Java_com_cytarch_cellularity_desktop_nativebridge_DesktopNativeRenderer_nativeSurfaceExtent(
+        JNIEnv* env, jclass, jlong sessionHandle) {
+    const std::shared_ptr<DesktopSession> session = findSession(sessionHandle);
+    if (!session) {
+        return nullptr;
+    }
+    // Both fields belong to the thread that presents and are read here from a caller that is
+    // not that thread. That is deliberate and safe in the direction it is used: a probe
+    // comparing them against the window wants to know whether the surface has caught up, and
+    // a stale reading can only ever report an extent that was true a frame ago.
+    const jlong values[2] = {
+            static_cast<jlong>(session->appliedSurfaceWidth),
+            static_cast<jlong>(session->appliedSurfaceHeight)};
+    if (values[0] <= 0 || values[1] <= 0) {
+        return nullptr;
+    }
+    jlongArray result = env->NewLongArray(2);
+    if (result == nullptr) {
+        return nullptr;
+    }
+    env->SetLongArrayRegion(result, 0, 2, values);
+    return result;
+}
+
 // Reads the child window's rectangle and the client area of its parent.
 //
 // Returns {x, y, width, height of the child window}, {width, height of the parent's client

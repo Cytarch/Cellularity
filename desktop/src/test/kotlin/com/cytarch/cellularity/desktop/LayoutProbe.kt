@@ -192,6 +192,67 @@ private fun reportNativeGeometry() {
         "LAYOUT nativeWindow bottom edge=${offsetY + height} " +
             "parentClientHeight=$parentHeight"
     )
+    reportSurfaceExtent()
+}
+
+/**
+ * Compares the extent the surface presents at with the size of the canvas it sits in.
+ *
+ * These two are the whole of "the simulation is drawn into a corner". A window created at one
+ * size whose surface was never resized keeps presenting into that first extent for the rest
+ * of its life, which draws a picture filling part of its own viewport -- and nothing about
+ * that is visible from the layout, because the window itself is the right size. So the two
+ * numbers are read and compared, and a disagreement is the failure rather than a hint.
+ */
+private fun reportSurfaceExtent() {
+    val session = Regex("session=(\\d+)").find(surfaceDescription())?.groupValues?.get(1)
+        ?.toLongOrNull()
+        ?.takeIf { it != 0L }
+    if (session == null) {
+        println("LAYOUT no live session to ask about its surface")
+        return
+    }
+    val extent = nativeSurfaceExtent(session)
+    val canvas = Regex("canvas=(\\d+)x(\\d+)").find(surfaceDescription())?.groupValues
+    if (extent == null || extent.size < 2) {
+        println("LAYOUT the session has presented no frame yet")
+        return
+    }
+    val surfaceWidth = extent[0]
+    val surfaceHeight = extent[1]
+    if (canvas == null) {
+        println("LAYOUT presenting at ${surfaceWidth}x$surfaceHeight; canvas unknown")
+        return
+    }
+    val canvasWidth = canvas[1].toLong()
+    val canvasHeight = canvas[2].toLong()
+    println(
+        "LAYOUT presenting at ${surfaceWidth}x$surfaceHeight " +
+            "in a canvas of ${canvasWidth}x$canvasHeight " +
+            "fills=${surfaceWidth == canvasWidth && surfaceHeight == canvasHeight}"
+    )
+    if (surfaceWidth != canvasWidth || surfaceHeight != canvasHeight) {
+        println(
+            "LAYOUT the picture does not fill its viewport: it is drawn into " +
+                "${surfaceWidth}x$surfaceHeight of ${canvasWidth}x$canvasHeight"
+        )
+    }
+}
+
+/**
+ * Calls the bridge's surface extent reader reflectively, for the same reason as the rest:
+ * the probe measures the renderer rather than trusting the launcher's account of it.
+ */
+private fun nativeSurfaceExtent(session: Long): LongArray? = try {
+    val renderer = Class.forName(
+        "com.cytarch.cellularity.desktop.nativebridge.DesktopNativeRenderer"
+    )
+    val instance = renderer.getField("INSTANCE").get(null)
+    renderer.getMethod("nativeSurfaceExtent", java.lang.Long.TYPE).invoke(instance, session)
+        as? LongArray
+} catch (thrown: ReflectiveOperationException) {
+    println("LAYOUT could not read the surface extent: $thrown")
+    null
 }
 
 /**

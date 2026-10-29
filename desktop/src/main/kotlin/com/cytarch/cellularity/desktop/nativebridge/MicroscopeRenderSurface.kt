@@ -696,3 +696,4 @@ private class SurfaceHolder(
         }
     }
 }
+
