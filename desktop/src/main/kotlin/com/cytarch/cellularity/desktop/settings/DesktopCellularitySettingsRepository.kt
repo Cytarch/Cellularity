@@ -359,9 +359,38 @@ class DesktopCellularitySettingsRepository(
         operation { context.ensureActive() }
     }
 
+    /**
+     * What went wrong, in words that identify it.
+     *
+     * The message alone is not enough and this was learned from a real report: an access refusal
+     * carries the path and nothing else, so the interface said "not saved: IO_FAILURE, <path>" and
+     * the path was already known -- it was in the same sentence. A failure that names what happened
+     * rather than where is the difference between a report somebody can act on and one that only
+     * says a thing did not work.
+     */
     private fun ioError(failure: Exception): SettingsError = SettingsError(
         SettingsErrorCode.IO_FAILURE,
-        failure.message.orEmpty()
+        buildString {
+            append(failure.javaClass.simpleName)
+            val message = failure.message
+            if (!message.isNullOrBlank()) {
+                append(": ")
+                append(message)
+            }
+            // The cause is where the useful sentence usually lives: the platform's own exception
+            // wraps ours and keeps the reason in the inner one.
+            val cause = failure.cause
+            if (cause != null && cause !== failure) {
+                append(" (caused by ")
+                append(cause.javaClass.simpleName)
+                val causeMessage = cause.message
+                if (!causeMessage.isNullOrBlank()) {
+                    append(": ")
+                    append(causeMessage)
+                }
+                append(')')
+            }
+        }
     )
 
     private fun ioFailure(detail: String): SettingsResult.Failure =
