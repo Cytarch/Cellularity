@@ -334,6 +334,16 @@ private class SurfaceHolder(
 
     private val publishedWindow = AtomicLong(0L)
 
+    /**
+     * The native window, created on the event thread and collected by the render loop.
+     *
+     * Written once by whoever creates it and read every frame until it appears, so it is
+     * volatile: without that the render thread may keep reading a stale zero and wait forever
+     * for a window that already exists.
+     */
+    @Volatile
+    private var createdWindow = 0L
+
     @Volatile
     private var released = false
 
@@ -400,10 +410,40 @@ private class SurfaceHolder(
         // forever and the renderer would never get a window. Asking once here covers that
         // case; the listener covers every later one.
         publishGeometry(surface)
+        // Created after the geometry is published, not before: the window is parented to the
+        // canvas's own handle, and publishing the geometry is what records that handle. Creating
+        // it first would ask for a window owned by nothing.
+        createWindowOnThisThread(surface)
         // Nothing can be presented until the canvas is laid out, so the loop is started
         // here rather than before there is anything for it to wait for.
         start()
         return surface
+    }
+
+    /**
+     * Creates the native child window here, on the event thread.
+     *
+     * A window receives its messages on the thread that created it. The event thread runs the
+     * toolkit's message loop, so a window made here is one the system can talk to; a window made
+     * on the render thread belongs to a loop that draws and sleeps and never reads them, and
+     * Windows reports that as an application which is not responding.
+     *
+     * The window is only created, not used: the session is still created, drawn and stopped on
+     * the render thread, which is what the renderer requires, and the window is handed over as a
+     * number. Nothing is presented until the loop picks it up, which is one frame later.
+     */
+    private fun createWindowOnThisThread(surface: Canvas) {
+        if (!DesktopNativeRenderer.isAvailable) return
+        val owner = nativeWindowHandleOf(surface)
+        if (owner == 0L) return
+        val width = surface.width.coerceAtLeast(1)
+        val height = surface.height.coerceAtLeast(1)
+        val handle = DesktopNativeRenderer.nativeCreateWindow(owner, 0, 0, width, height)
+        if (handle == 0L) {
+            failOnce("The renderer could not create its window.")
+            return
+        }
+        createdWindow = handle
     }
 
     /**
@@ -652,17 +692,25 @@ private class SurfaceHolder(
                         sleepFrame()
                         continue
                     }
-                    windowHandle = DesktopNativeRenderer.nativeCreateWindow(
-                        owner,
-                        0,
-                        0,
-                        unpackWidth(requested),
-                        unpackHeight(requested)
-                    )
-                    if (windowHandle == 0L) {
-                        failOnce("The renderer could not create its window.")
-                        return
+                    // Created on the event thread, not here, and taken from it when it appears.
+                    //
+                    // This is the whole of a fault that survived every other change to sizing,
+                    // placement and visibility: Windows delivers a window's messages to the
+                    // thread that created it, and a thread that never pumps them leaves the
+                    // window dead to the system. This loop draws frames and sleeps, so a window
+                    // created here is a window whose messages are never read -- and Windows
+                    // eventually says so by marking the application as not responding, which is
+                    // exactly what a click on the viewport produced.
+                    //
+                    // The trade is one frame of waiting for a window that already exists by the
+                    // time the next frame comes round, and it is not a trade at all against a
+                    // window that stops answering.
+                    val created = createdWindow
+                    if (created == 0L) {
+                        sleepFrame()
+                        continue
                     }
+                    windowHandle = created
                     publishedWindow.set(windowHandle)
                     appliedExtent = requested
                 } else if (requested != appliedExtent || placement != appliedPlacement || hasPlacement != appliedPlacementKnown) {

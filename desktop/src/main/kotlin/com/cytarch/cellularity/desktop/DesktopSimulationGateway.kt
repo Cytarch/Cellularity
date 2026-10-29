@@ -99,18 +99,62 @@ class DesktopSimulationGateway(
 
     private val applyMutex = Mutex()
 
-    /** Reads the environment and the stats once. */
+    /**
+     * Reads the environment and the stats once, reporting what the environment read did.
+     *
+     * The read is now retried in place before it is given up on. There are two things that can
+     * fail and they are different: the renderer can refuse to answer at all, which usually means
+     * the world is not ready, and the bytes it returns can fail to decode, which means the two
+     * sides disagree about the document. Retrying helps the first and cannot help the second, so
+     * the two are counted apart and the count is kept for whoever asks -- a panel that says only
+     * "loading" cannot tell a person which of the two they are looking at.
+     *
+     * The retry used to be outside, in start(), which meant it repeated the whole read including
+     * a stats read that had already succeeded, and it gave up after a fixed number of attempts
+     * that were measured in seconds rather than in what actually went wrong. Neither is a reason
+     * for the read itself not to try again.
+     */
     suspend fun readOnce() {
-        val snapshot = withContext(ioDispatcher) {
-            runCatching { renderer.nativeReadEnvironment(sessionHandle) }
-                .getOrNull()
-                ?.let { bytes ->
-                    runCatching { EnvironmentBatchCodec.decodeSnapshot(bytes) }.getOrNull()
+        var attempt = 0
+        while (true) {
+            val outcome = withContext(ioDispatcher) {
+                val bytes = runCatching { renderer.nativeReadEnvironment(sessionHandle) }.getOrNull()
+                if (bytes == null) {
+                    EnvironmentReadOutcome.NoAnswer
+                } else {
+                    runCatching { EnvironmentBatchCodec.decodeSnapshot(bytes) }
+                        .fold(
+                            onSuccess = { EnvironmentReadOutcome.Decoded(it) },
+                            onFailure = { EnvironmentReadOutcome.Undecodable(it.toString()) }
+                        )
                 }
-        }
-        if (snapshot != null) {
-            mutableEnvironment.value = snapshot
-            mutableConfirmed.value = snapshot
+            }
+
+            when (outcome) {
+                is EnvironmentReadOutcome.Decoded -> {
+                    mutableEnvironment.value = outcome.snapshot
+                    mutableConfirmed.value = outcome.snapshot
+                    environmentReadFailure = null
+                    break
+                }
+
+                EnvironmentReadOutcome.NoAnswer -> {
+                    attempt++
+                    environmentReadFailure = "the simulation did not answer"
+                    if (attempt >= MAXIMUM_READ_ATTEMPTS) break
+                    delay(READ_RETRY_MILLIS)
+                }
+
+                is EnvironmentReadOutcome.Undecodable -> {
+                    // Retried once, because a half-written document is possible, and then left:
+                    // decoding the same bytes again will keep producing the same answer, and
+                    // repeating it forever would hide the disagreement behind a spinner.
+                    attempt++
+                    environmentReadFailure = "the environment could not be decoded: ${outcome.reason}"
+                    if (attempt >= MAXIMUM_READ_ATTEMPTS) break
+                    delay(READ_RETRY_MILLIS)
+                }
+            }
         }
 
         val statsValues = withContext(ioDispatcher) {
@@ -129,16 +173,23 @@ class DesktopSimulationGateway(
     }
 
     /**
-     * Reads once and returns whether the world answered.
+     * Why the last environment read did not produce a document, or null if it did.
      *
-     * The distinction matters because a read that fails leaves the confirmed environment null,
-     * and the panel shows its loading state for as long as that lasts. A caller that cannot tell
-     * "read and found nothing yet" from "read and was answered" has no way to try again.
+     * Kept because "the panel is loading" and "the panel will never load" are different things to
+     * a person and identical to the code. Whatever the reason, it is worth saying rather than
+     * showing a message that implies something is still coming.
      */
-    private suspend fun readOnceOrNull(): EnvironmentSnapshot? {
-        readOnce()
-        return mutableEnvironment.value
+    var environmentReadFailure: String? = null
+        private set
+
+    private sealed interface EnvironmentReadOutcome {
+        data class Decoded(val snapshot: EnvironmentSnapshot) : EnvironmentReadOutcome
+
+        data object NoAnswer : EnvironmentReadOutcome
+
+        data class Undecodable(val reason: String) : EnvironmentReadOutcome
     }
+
 
     /**
      * Records that the session is live, and takes the first reading -- retrying until it lands.
@@ -157,20 +208,15 @@ class DesktopSimulationGateway(
      * is known is the safer of the two mistakes.
      */
     suspend fun start() {
-        var attempt = 0
-        while (true) {
-            if (readOnceOrNull() != null) {
-                if (mutableState.value == SimulationSessionState.Opening) {
-                    mutableState.value = SimulationSessionState.Ready
-                }
-                return
+        readOnce()
+        if (mutableEnvironment.value != null) {
+            if (mutableState.value == SimulationSessionState.Opening) {
+                mutableState.value = SimulationSessionState.Ready
             }
-            attempt++
-            if (attempt >= MAXIMUM_OPENING_READ_ATTEMPTS) {
-                return
-            }
-            delay(OPENING_READ_RETRY_MILLIS)
         }
+        // Deliberately left as opening when nothing came back. The shared model has no failure
+        // state, and claiming readiness for a world that has never answered is the fault this
+        // replaced -- the panel kept saying it was loading while the session said it was ready.
     }
 
     override suspend fun execute(command: SimulationCommand): SimulationResult = when (command) {
@@ -289,10 +335,18 @@ class DesktopSimulationGateway(
      * loading deserves the difference between "not yet" and "never", which is a distinction the
      * state now keeps instead of erasing.
      */
-    const val MAXIMUM_OPENING_READ_ATTEMPTS = 20
+    /**
+     * How many times one read is tried before it reports what went wrong.
+     *
+     * Ten attempts at a fifth of a second is two seconds. Beyond that the reason is kept and
+     * shown, because a world that has not answered in two seconds is not late, it is absent --
+     * and a message that implies something is still coming is worse than one that says what
+     * happened.
+     */
+    const val MAXIMUM_READ_ATTEMPTS = 10
 
-    /** How long to wait between opening reads. */
-    const val OPENING_READ_RETRY_MILLIS = 250L
+    /** How long to wait before trying a read again. */
+    const val READ_RETRY_MILLIS = 200L
     }
 }
 

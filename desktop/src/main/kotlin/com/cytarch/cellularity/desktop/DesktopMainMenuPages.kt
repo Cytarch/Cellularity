@@ -28,6 +28,7 @@ import com.cytarch.cellularity.shared.ui.main_menu.gene_bank.GeneBankScreen
 import com.cytarch.cellularity.shared.ui.main_menu.gene_bank.GeneBankStore
 import com.cytarch.cellularity.shared.ui.main_menu.settings.SettingsAction
 import com.cytarch.cellularity.shared.ui.main_menu.settings.SettingsScreen
+import com.cytarch.cellularity.shared.ui.main_menu.settings.SettingsEffect
 import com.cytarch.cellularity.shared.ui.main_menu.settings.SettingsStore
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
@@ -200,6 +201,39 @@ private fun DesktopSettingsPage(
         SettingsStore(environment.settingsRepository)
     }
     val settings by store.state.collectAsState()
+
+    // The store's own effects, which the launcher used to discard entirely -- and this page was
+    // the only one that did. The freezer and the gene bank both collect theirs; the settings page
+    // did not, so a refused write went nowhere at all.
+    //
+    // That is the shape of "the switches are clickable but do not switch": the switch reports the
+    // action, the action is reduced, the write is refused, the store publishes the unchanged
+    // value, the screen draws it again, and nothing is said. Every part of that is correct on its
+    // own and the result is a control that appears dead. Saying so is the least the page can do,
+    // and it is the difference between a fault that can be reported and one that cannot.
+    LaunchedEffect(store, notices) {
+        store.effects.collect { effect ->
+            when (effect) {
+                is SettingsEffect.SaveFailed -> notices.post(
+                    DesktopThemeNotice(
+                        "The setting was not saved: ${effect.error.code}" +
+                            if (effect.error.detail.isBlank()) {
+                                ""
+                            } else {
+                                " (${effect.error.detail})"
+                            }
+                    )
+                )
+
+                // Recreating the interface means restarting the activity on a phone. A window
+                // has no activity to recreate: the theme is read from the settings state, so a
+                // changed theme is drawn by the same recomposition that draws the changed value,
+                // and there is nothing to do here. Naming it rather than ignoring it keeps the
+                // decision visible instead of leaving it to look like an oversight.
+                SettingsEffect.RecreateUi -> Unit
+            }
+        }
+    }
 
     // The platform's own window is the parent, so the picker belongs to the application
     // rather than floating free of it.

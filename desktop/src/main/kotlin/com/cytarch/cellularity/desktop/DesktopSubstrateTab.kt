@@ -4,6 +4,14 @@
 
 package com.cytarch.cellularity.desktop
 
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.Text
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -69,6 +77,29 @@ fun SubstrateTab(
     }
 
     if (!isVisible) return
+
+    // When there is no world to show, say why rather than showing a loading message that implies
+    // one is coming. A panel that says "loading" forever and a panel that failed are identical to
+    // the code and completely different to a person -- and the difference is the whole of what is
+    // needed to tell a slow read from an impossible one. The reason comes from the gateway, which
+    // is the only place that saw the answer.
+    val readFailure = gateway.environmentReadFailure
+    if (environment == null && readFailure != null) {
+        Box(modifier = modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.padding(24.dp)
+            ) {
+                Text(
+                    text = "The substrate environment could not be read",
+                    textAlign = TextAlign.Center
+                )
+                Text(text = readFailure, textAlign = TextAlign.Center)
+            }
+        }
+        return
+    }
 
     SubstrateInfoScreen(
         state = state,
