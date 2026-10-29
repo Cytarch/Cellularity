@@ -344,6 +344,15 @@ private class SurfaceHolder(
     @Volatile
     private var createdWindow = 0L
 
+
+    // What the window has already been told, so the same geometry is not applied on every
+    // layout pass. Kept beside the creation rather than in the render loop, because the loop no
+    // longer touches the window at all.
+    private val appliedWindowExtent = AtomicLong(0L)
+    private val appliedWindowPlacement = AtomicLong(0L)
+
+    @Volatile
+    private var appliedWindowPlacementKnown = false
     @Volatile
     private var released = false
 
@@ -444,6 +453,9 @@ private class SurfaceHolder(
             return
         }
         createdWindow = handle
+        // Applied immediately, so the window exists where it belongs before it is ever shown
+        // rather than appearing at its parent's origin for a frame.
+        applyWindowBounds()
     }
 
     /**
@@ -610,6 +622,61 @@ private class SurfaceHolder(
             requestedPlacement.set(pack(offset.first, offset.second))
             placementKnown.set(true)
         }
+
+        // Moved and resized here, on the event thread, rather than by the render loop.
+        //
+        // Two things make this the only safe place. Windows delivers a window's messages to the
+        // thread that created it, and `SetWindowPos` is one of them -- and it is not a message, it
+        // is a synchronous call: the caller waits for the owning thread to process it. The render
+        // loop draws frames in a tight cycle, so a resize issued by the event thread would wait
+        // for a thread that is busy drawing, and a resize issued by the render loop would reach
+        // into a window owned by the event thread while it is in the middle of its own work.
+        // Either way the waiting lands on the thread that answers the user.
+        //
+        // So the window is only ever touched by the thread that owns it, geometry is published to
+        // it as an instruction, and the render loop is left with the one thing the renderer
+        // actually requires a single thread for: the session.
+        applyWindowBounds()
+    }
+
+    /**
+     * Applies the published geometry to the window, on the thread that owns it.
+     *
+     * Position and size are applied together, because they are decided together: a window
+     * resized but left where it was is the defect this replaces, and applying them in two calls
+     * would reopen the gap between them for a frame.
+     */
+    private fun applyWindowBounds() {
+        val window = createdWindow
+        if (window == 0L) return
+        val requested = requestedExtent.get()
+        if (requested == 0L) return
+        val placement = requestedPlacement.get()
+        val hasPlacement = placementKnown.get()
+        if (requested == appliedWindowExtent.get() &&
+            placement == appliedWindowPlacement.get() &&
+            hasPlacement == appliedWindowPlacementKnown
+        ) {
+            return
+        }
+        if (hasPlacement) {
+            DesktopNativeRenderer.nativeSetChildWindowBounds(
+                window,
+                unpackWidth(placement),
+                unpackHeight(placement),
+                unpackWidth(requested),
+                unpackHeight(requested)
+            )
+        } else {
+            DesktopNativeRenderer.nativeResizeWindow(
+                window,
+                unpackWidth(requested),
+                unpackHeight(requested)
+            )
+        }
+        appliedWindowExtent.set(requested)
+        appliedWindowPlacement.set(placement)
+        appliedWindowPlacementKnown = hasPlacement
     }
 
     /**
@@ -712,30 +779,13 @@ private class SurfaceHolder(
                     }
                     windowHandle = created
                     publishedWindow.set(windowHandle)
-                    appliedExtent = requested
-                } else if (requested != appliedExtent || placement != appliedPlacement || hasPlacement != appliedPlacementKnown) {
-                    // Position and size are applied together, because they are decided
-                    // together: a window resized but left where it was is the defect this
-                    // replaces, and applying them in two calls would reopen the gap between
-                    // them for a frame.
-                    if (hasPlacement) {
-                        DesktopNativeRenderer.nativeSetChildWindowBounds(
-                            windowHandle,
-                            unpackWidth(placement),
-                            unpackHeight(placement),
-                            unpackWidth(requested),
-                            unpackHeight(requested)
-                        )
-                    } else {
-                        DesktopNativeRenderer.nativeResizeWindow(
-                            windowHandle,
-                            unpackWidth(requested),
-                            unpackHeight(requested)
-                        )
-                    }
-                    appliedExtent = requested
-                    appliedPlacement = placement
-                    appliedPlacementKnown = hasPlacement
+                    // The session is sized from the extent the window was actually given, which is
+                    // the number the swapchain has to match. It is read here rather than taken
+                    // from the request, because the request may already have moved on: the window
+                    // is resized by the event thread, and a session built for a size the window
+                    // no longer has presents into part of it.
+                    appliedExtent = appliedWindowExtent.get()
+                    if (appliedExtent == 0L) appliedExtent = requested
                 }
 
                 if (sessionHandle == 0L) {
