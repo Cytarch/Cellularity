@@ -5,6 +5,7 @@
 package com.cytarch.cellularity.desktop
 
 import androidx.compose.material3.MaterialTheme
+import com.cytarch.cellularity.desktop.nativebridge.SurfaceDiagnostics
 import androidx.compose.ui.awt.ComposePanel
 import com.cytarch.cellularity.desktop.nativebridge.DesktopAssetRoots
 import com.cytarch.cellularity.desktop.nativebridge.DesktopNativeRenderer
@@ -78,6 +79,25 @@ fun main() {
     println("PLAYSCREEN the window is up")
     System.out.flush()
 
+    // A picture of the simulation, taken through the bridge rather than from the screen.
+    //
+    // `Robot` was the only way to photograph anything here, and it photographs the whole display
+    // -- which is not allowed on a machine somebody else is using. The bridge has always had a
+    // capture of its own and it always came back as one flat colour, because a blit from a window
+    // whose content lives on the GPU copies a surface the pixels were never in. PrintWindow asks
+    // the compositor for what is actually shown, and it can only be asked of a window that reads
+    // its messages -- which is what fix has just made this window do.
+    Thread.sleep(6_000)
+    val described = SurfaceDiagnostics.describe()
+    println("PLAYSCREEN surface: $described")
+    // No picture is taken here. The bridge can capture a window, and what it captures is that
+    // window's own surface -- content drawn by the GPU may never have been in it, so the result is
+    // a flat colour and not a photograph of the world. Printing the surface's own account of
+    // itself says far more, and says it reliably: how many times the render loop has gone round,
+    // how many frames it has presented, and what the last one reported.
+    Thread.sleep(4_000)
+    println("PLAYSCREEN surface now: ${SurfaceDiagnostics.describe()}")
+    System.out.flush()
     try {
         Thread.sleep(TimeUnit.MINUTES.toMillis(10))
     } catch (interrupted: InterruptedException) {

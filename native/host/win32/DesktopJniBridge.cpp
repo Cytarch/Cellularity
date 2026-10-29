@@ -748,20 +748,24 @@ Java_com_cytarch_cellularity_desktop_nativebridge_DesktopNativeRenderer_nativeCa
             return -1;
         }
 
-        // BitBlt rather than PrintWindow. PrintWindow asks the window to render itself into
-        // the given device context, and for a composited window whose contents live on the
-        // GPU that request is answered by the desktop compositor -- which does not answer at
-        // all for a window that is not on a monitor, and the call was observed to hang rather
-        // than fail. A blit copies whatever surface the window has and always returns.
+
+        // A blit, and PrintWindow is not tried here.
         //
-        // The consequence is honest and worth stating: a blit of a composited window can come
-        // back empty, because the pixels may never have been in that surface to begin with.
-        // An empty capture is therefore reported as an empty capture and not as a picture of
-        // a black world -- the caller decides what it means.
+        // PrintWindow was attempted once the window started being owned by the thread that reads
+        // its messages, on the reasoning that a request the compositor never answers could now be
+        // answered. It still hangs. The window it was asked about sits on no monitor, and the
+        // compositor has nothing to hand back for one -- so the request waits rather than failing,
+        // and a function that waits forever inside a bridge is worse than one that returns an
+        // empty picture.
+        //
+        // What that costs is stated plainly: a blit copies the window's own surface, and content
+        // drawn by the GPU may never have been in it, so a capture can come back as one flat
+        // colour. An empty capture is reported as an empty capture and not as a picture of a black
+        // world, and the caller decides what it means. Nothing in this project should be judged by
+        // such a picture, and the honest place for that sentence is here, next to the call.
         const HGDIOBJ previous = ::SelectObject(memoryDc, bitmap);
         const BOOL rendered = ::BitBlt(memoryDc, 0, 0, width, height, windowDc, 0, 0,
-                SRCCOPY | CAPTUREBLT);
-        ::SelectObject(memoryDc, previous);
+                SRCCOPY | CAPTUREBLT);        ::SelectObject(memoryDc, previous);
 
         // Read back top-down so the file can be walked row by row by anything that reads a
         // BMP, without the reader having to know which way round the rows are.

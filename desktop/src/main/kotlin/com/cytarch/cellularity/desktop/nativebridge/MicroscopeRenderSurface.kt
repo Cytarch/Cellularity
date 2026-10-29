@@ -321,7 +321,21 @@ private class SurfaceHolder(
         append(publishedSession.get())
         append(" reported=")
         append(reported)
-        append(" cells=")
+        append(" stage=")
+    append(loopStage.get())
+    append(" loop=")
+    append(loopIterations.get())
+    append(" frames=")
+    append(presentedFrames.get())
+    append(" lastFrame=")
+    append(lastFrameStatus.get())
+    append(" hasWindow=")
+    append(createdWindow != 0L)
+    append(" windowExtent=")
+    append(unpackWidth(appliedWindowExtent.get()))
+    append('x')
+    append(unpackHeight(appliedWindowExtent.get()))
+    append(" cells=")
         append(latestCellCount.get())
         // The canvas is the component the native child window is parented to, so its size is
         // the size the simulation will occupy. Reported here rather than found by walking the
@@ -353,6 +367,40 @@ private class SurfaceHolder(
 
     @Volatile
     private var appliedWindowPlacementKnown = false
+
+    // Whether the window is currently shown, and whether it has ever been told. A window is
+    // created visible, so the first decision has to be applied even when it agrees with that --
+    // otherwise a tab that opens on something else leaves the picture in front of it until the
+    // first switch.
+    @Volatile
+    private var appliedVisible = true
+
+    @Volatile
+    private var appliedVisibilityOnce = false
+
+    // How many frames have been presented and what the last one reported.
+    //
+    // A session handle proves a session was created and nothing more: a world advances as frames
+    // are presented, so a session that exists and a frame that is never drawn look the same from
+    // outside -- an empty plate that never fills. The count and the last status are what tell the
+    // two apart, and they are the first thing to ask when a simulation shows nothing.
+    private val presentedFrames = AtomicLong(0L)
+
+    // How many times the loop has gone round, counted before any of its waits. A loop that is
+    // waiting and a loop that never started look identical from outside -- both show no frames --
+    // and they are different faults with different causes, so the count is taken at the top.
+    private val loopIterations = AtomicLong(0L)
+
+    /**
+     * Which step of the loop it is on, as a number, so a stopped loop says where it stopped.
+     *
+     * A loop that presents no frames and a loop that never started look the same from outside, and
+     * so do a loop waiting for a window, a loop creating a session and a loop inside a frame -- and
+     * those have nothing in common except that none of them draws. The step is written before the
+     * call that might not return, so the last value written names the call that is still running.
+     */
+    private val loopStage = AtomicLong(0L)
+    private val lastFrameStatus = AtomicLong(0L)
     @Volatile
     private var released = false
 
@@ -682,6 +730,18 @@ private class SurfaceHolder(
         appliedWindowExtent.set(requested)
         appliedWindowPlacement.set(placement)
         appliedWindowPlacementKnown = hasPlacement
+
+        // Visibility belongs here for the same reason position and size do, and it was the last
+        // of the three to be moved -- which is why the render loop stopped dead on it. `ShowWindow`
+        // is a call to the window, the window belongs to the event thread, and a call from another
+        // thread waits for that thread to process it. Everything the loop did to the window waited
+        // in the same way; this one simply had not been moved yet.
+        val wanted = requestedVisible.get()
+        if (!appliedVisibilityOnce || wanted != appliedVisible) {
+            DesktopNativeRenderer.nativeShowWindow(window, wanted)
+            appliedVisible = wanted
+            appliedVisibilityOnce = true
+        }
     }
 
     /**
@@ -725,10 +785,10 @@ private class SurfaceHolder(
         var appliedExtent = 0L
         var appliedPlacement = 0L
         var appliedPlacementKnown = false
-        var appliedVisible = true
-        var appliedVisibilityOnce = false
+
         try {
             while (!released) {
+                loopIterations.incrementAndGet()
                 val pointer = queuedPointerInput.getAndSet(emptyList())
                 val fromComposition = pendingInput.getAndSet(emptyList())
                 if (sessionHandle != 0L) {
@@ -794,11 +854,13 @@ private class SurfaceHolder(
                 }
 
                 if (sessionHandle == 0L) {
+                    loopStage.set(10L)
                     // A saved plate is decoded from its file; a new one is built from the
                     // allocation the caller named. The decision is made here, once, because
                     // the renderer takes a path or does not and there is no later moment at
                     // which a running world could become a different one.
                     val stored = substratePath
+                    loopStage.set(11L)
                     sessionHandle = if (stored != null) {
                         DesktopNativeRenderer.nativeCreateSessionFromSubstrate(
                             windowHandle,
@@ -824,6 +886,7 @@ private class SurfaceHolder(
                         )
                     }
                     if (sessionHandle == 0L) {
+                    loopStage.set(10L)
                         failOnce(
                             if (substratePath != null) {
                                 "The saved plate could not be opened."
@@ -849,20 +912,20 @@ private class SurfaceHolder(
                 // wanted it hidden only after the window already existed. A window left in the
                 // wrong state is also invisible to Win32's own hit testing, which is how the
                 // discrepancy was found.
-                val visible = requestedVisible.get()
-                if (!appliedVisibilityOnce || visible != appliedVisible) {
-                    DesktopNativeRenderer.nativeShowWindow(windowHandle, visible)
-                    appliedVisible = visible
-                    appliedVisibilityOnce = true
-                }
 
+
+                loopStage.set(20L)
                 val result = DesktopNativeRenderer.nativeRenderFrame(sessionHandle)
+                lastFrameStatus.set(result.toLong())
+                presentedFrames.incrementAndGet()
                 if (result == 2) return
                 if (result == 1) {
                     failOnce("The renderer reported a failed frame.")
                     return
                 }
+                loopStage.set(21L)
                 latestCellCount.set(DesktopNativeRenderer.nativeCellCount(sessionHandle))
+                loopStage.set(22L)
             }
         } catch (thrown: Throwable) {
             failOnce("The renderer stopped: $thrown")
