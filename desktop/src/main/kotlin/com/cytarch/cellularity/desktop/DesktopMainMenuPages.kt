@@ -12,6 +12,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import com.cytarch.cellularity.desktop.nativebridge.DesktopNativeRenderer
 import com.cytarch.cellularity.shared.files.StoredFileShareOutcome
 import com.cytarch.cellularity.shared.settings.CellularitySettings
 import com.cytarch.cellularity.shared.ui.main_menu.MainMenuPage
@@ -113,10 +114,15 @@ private fun DesktopFreezerPage(
     FreezerScreen(
         items = state.items,
         onAction = { action -> scope.launch { store.dispatch(action) } },
-        // Memory estimation is native on Android. Until the launcher can call it, no
-        // estimate is offered rather than a wrong one -- the screen expects exactly
-        // this, and a null estimate disables the start button rather than guessing.
-        estimateMemoryBytes = { _, _, _ -> null },
+        // The same native policy the phone asks, reached through the desktop bridge. It
+        // needs no session -- it is a question about a shape, not about a running world --
+        // which is what lets the freezer decide whether a plate can be started before
+        // anything has been started. A null answer disables the start button rather than
+        // guessing, and that is the right refusal: a world the runtime would reject should
+        // not look startable.
+        estimateMemoryBytes = { cells, food, radius ->
+            DesktopNativeRenderer.estimateWorldAllocationBytes(cells, food, radius)
+        },
         collectionPreferences = settings.experimentCollection,
         onCollectionPreferencesChange = { update ->
             scope.launch {

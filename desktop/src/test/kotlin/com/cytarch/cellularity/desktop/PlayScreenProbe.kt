@@ -8,6 +8,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.awt.ComposePanel
 import com.cytarch.cellularity.desktop.nativebridge.DesktopAssetRoots
 import com.cytarch.cellularity.desktop.nativebridge.DesktopNativeRenderer
+import com.cytarch.cellularity.desktop.files.DesktopCellularityFileRepository
 import com.cytarch.cellularity.shared.model.SimulationContract
 import java.awt.Dimension
 import java.awt.Frame
@@ -26,6 +27,12 @@ import java.util.concurrent.atomic.AtomicReference
  * Run through `:desktop:runPlayScreen`.
  */
 fun main() {
+    // A repository of its own under the build directory, so a probe never reads or
+    // writes the genomes the person running it has saved.
+    val probeRepository = DesktopCellularityFileRepository(
+        java.nio.file.Files.createTempDirectory("cellularity-probe").resolve("substrates")
+    )
+
     val failure = AtomicReference<Throwable?>(null)
     val built = CountDownLatch(1)
     val frame = AtomicReference<Frame?>(null)
@@ -42,6 +49,7 @@ fun main() {
                 MaterialTheme {
                     DesktopPlayScreen(
                         configuration = SimulationContract.defaultConfiguration,
+                        fileRepository = probeRepository,
                         onExit = { }
                     )
                 }

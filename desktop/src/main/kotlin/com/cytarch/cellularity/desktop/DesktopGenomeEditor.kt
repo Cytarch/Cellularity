@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.fillMaxSize
@@ -19,7 +20,10 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -37,6 +41,10 @@ import com.cytarch.cellularity.shared.ui.play.genome_editor.GenomeCellSpecificVa
 import com.cytarch.cellularity.shared.ui.play.genome_editor.GenomeEditorAction
 import com.cytarch.cellularity.shared.ui.play.genome_editor.GenomeEditorSection
 import com.cytarch.cellularity.shared.ui.play.genome_editor.GenomeEditorSections
+import com.cytarch.cellularity.shared.ui.play.genome_editor.GenomeEditorState
+import com.cytarch.cellularity.shared.ui.play.genome_editor.GenomeFileFailureReason
+import com.cytarch.cellularity.shared.ui.play.genome_editor.GenomeFileState
+import com.cytarch.cellularity.shared.ui.play.genome_editor.GenomeLoadChoice
 import com.cytarch.cellularity.shared.ui.play.genome_editor.sections.GenomeCellSpecificSection
 import com.cytarch.cellularity.shared.ui.play.genome_editor.sections.GenomeEditorGestureCallbacks
 import com.cytarch.cellularity.shared.ui.play.genome_editor.sections.GenomeGeneralSection
@@ -126,7 +134,7 @@ fun DesktopGenomeEditor(
                 }
             }
 
-            PendingWorkNotice(store)
+            GenomeFileControls(store)
         }
     }
 }
@@ -317,33 +325,180 @@ private fun ParametricEditors(store: DesktopGenomeEditorStore) {
 }
 
 /**
- * Says what the editor cannot do here yet.
+ * Saving a genome, and loading one back.
  *
- * Saving and loading a genome, and previewing it, are the two things the phone's editor
- * does that this one does not. Both are reported rather than silently missing: an editor
- * that looks complete and quietly discards a genome is worse than one that says it cannot
- * keep it.
+ * The two operations are the reducer's, not this screen's: a request moves the file state
+ * to listing or to naming, and the store's effect handler does the work and answers with an
+ * action. What is left here is therefore only presentation -- which state asks for which
+ * decision -- and that is deliberately the only thing left, because a second copy of the
+ * rules is a second place for them to be wrong.
+ *
+ * The preview is still absent, and unlike saving it is not a matter of wiring: it renders
+ * through the native worker into a platform surface, which is a piece of work in its own
+ * right. It is named here so that a person knows the editor is not finished rather than
+ * concluding the feature is broken.
  */
 @Composable
-private fun PendingWorkNotice(store: DesktopGenomeEditorStore) {
+private fun GenomeFileControls(store: DesktopGenomeEditorStore) {
+    val state = store.state
+
     DefaultCard {
         Column(modifier = Modifier.padding(12.dp)) {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                ToolbarAction(
+                    label = "Save genome",
+                    enabled = !store.isBusy,
+                    onClick = store::requestSave
+                )
+                ToolbarAction(
+                    label = "Load genome",
+                    enabled = !store.isBusy,
+                    onClick = store::requestLoad
+                )
+                if (store.isBusy) {
+                    Text(
+                        text = "working…",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
             Text(
-                text = if (store.state.dirty) {
-                    "This genome has edits that have not been saved."
-                } else {
-                    "This genome is unchanged since it was created."
-                },
-                style = MaterialTheme.typography.bodySmall
-            )
-            Text(
-                text = "Saving and loading genomes, and the live preview, are not available " +
-                    "in the desktop build yet.",
+                text = fileStatusText(state),
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = if (state.fileState is GenomeFileState.Failed) {
+                    MaterialTheme.colorScheme.error
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                },
+                modifier = Modifier.padding(top = 6.dp)
             )
         }
     }
+
+    when (val fileState = state.fileState) {
+        is GenomeFileState.Choosing -> LoadChoiceDialog(
+            choices = fileState.choices,
+            onChoose = store::chooseLoad,
+            onDismiss = store::dismissLoad
+        )
+
+        GenomeFileState.EnteringSaveName -> SaveNameDialog(
+            initialName = state.genomeName,
+            onConfirm = store::confirmSave,
+            onDismiss = store::dismissSave
+        )
+
+        else -> Unit
+    }
+}
+
+/** What the editor can say about the last file operation without a dialog. */
+@Composable
+private fun fileStatusText(state: GenomeEditorState): String = when (val fileState = state.fileState) {
+    GenomeFileState.Idle ->
+        if (state.dirty) {
+            "This genome has edits that have not been saved."
+        } else {
+            "This genome is unchanged since it was created or loaded."
+        }
+
+    GenomeFileState.Listing -> "Reading the stored genomes…"
+    is GenomeFileState.Choosing -> "Choose a genome to load."
+    GenomeFileState.EnteringSaveName -> "Type a name for this genome."
+    is GenomeFileState.Loading -> "Loading…"
+    is GenomeFileState.Saving -> "Saving…"
+    is GenomeFileState.Loaded -> "Loaded ${fileState.name ?: "the plate's genome"}."
+    is GenomeFileState.Saved -> "Saved as ${fileState.name}."
+    is GenomeFileState.Failed -> "That did not work: ${fileState.reason.explain()}"
+}
+
+/**
+ * Says a failure in words a person can act on.
+ *
+ * The reason codes are the shared ones, so this is a rendering of them rather than a
+ * judgement about them, and a reason added later fails to compile here rather than silently
+ * showing nothing.
+ */
+private fun GenomeFileFailureReason.explain(): String = when (this) {
+    GenomeFileFailureReason.BAD_NAME -> "the name cannot be used for a file"
+    GenomeFileFailureReason.NOT_FOUND -> "there is no such genome"
+    GenomeFileFailureReason.NEWER_VERSION -> "it was saved by a newer version"
+    GenomeFileFailureReason.TOO_LARGE -> "it is larger than a genome may be"
+    GenomeFileFailureReason.INVALID_GENOME -> "its contents are not a valid genome"
+    GenomeFileFailureReason.NO_MICROSCOPE_CELL -> "no cell on the plate is selected"
+    GenomeFileFailureReason.READ_FAILED -> "the file could not be read"
+    GenomeFileFailureReason.WRITE_FAILED -> "the file could not be written"
+}
+
+/** The genomes that can be loaded, including the two that are not files. */
+@Composable
+private fun LoadChoiceDialog(
+    choices: List<GenomeLoadChoice>,
+    onChoose: (GenomeLoadChoice) -> Unit,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Load a genome") },
+        text = {
+            Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                choices.forEach { choice ->
+                    val label = when (choice) {
+                        GenomeLoadChoice.Microscope -> "From the selected cell"
+                        GenomeLoadChoice.DefaultGenome -> "A new random genome"
+                        is GenomeLoadChoice.Stored -> choice.name
+                    }
+                    Text(
+                        text = label,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onChoose(choice) }
+                            .padding(12.dp)
+                    )
+                }
+            }
+        },
+        confirmButton = { },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel") }
+        }
+    )
+}
+
+/** The name prompt, with the genome's current name offered as a starting point. */
+@Composable
+private fun SaveNameDialog(
+    initialName: String,
+    onConfirm: (String) -> Unit,
+    onDismiss: () -> Unit
+) {
+    var name by remember(initialName) { mutableStateOf(initialName) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Save this genome") },
+        text = {
+            Column {
+                Text("The genome is stored beside your other Cellularity files.")
+                Spacer(modifier = Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { onConfirm(name) }) { Text("Save") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel") }
+        }
+    )
 }
 
 /** A gene's colour as a strip, so the list says which gene is which at a glance. */

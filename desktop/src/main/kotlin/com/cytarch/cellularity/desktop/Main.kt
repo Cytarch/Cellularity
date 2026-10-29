@@ -61,6 +61,7 @@ fun main() = application {
         if (configuration != null) {
             DesktopPlayScreen(
                 configuration = configuration,
+                fileRepository = environment.fileRepository,
                 onExit = { runningSimulation = null },
                 modifier = Modifier.fillMaxSize()
             )

@@ -14,6 +14,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -23,13 +24,16 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.unit.dp
+import com.cytarch.cellularity.desktop.files.DesktopCellularityFileRepository
 import com.cytarch.cellularity.desktop.nativebridge.DesktopAssetRoots
 import com.cytarch.cellularity.desktop.nativebridge.SurfaceInputEvent
+import com.cytarch.cellularity.shared.model.GenomeDraft
 import com.cytarch.cellularity.shared.model.SimulationConfiguration
 import com.cytarch.cellularity.shared.ui.play.PlayAction
 import com.cytarch.cellularity.shared.ui.play.PlayLaunchSource
 import com.cytarch.cellularity.shared.ui.play.PlayScreen
 import com.cytarch.cellularity.shared.ui.play.PlayTab
+import com.cytarch.cellularity.shared.ui.play.genome_editor.GenomeProvider
 import com.cytarch.cellularity.shared.ui.play.microscope.MicroscopeAction
 import com.cytarch.cellularity.shared.ui.play.microscope.MicroscopeStore
 import com.cytarch.cellularity.shared.ui.play.microscope.MicroscopeTemperature
@@ -45,6 +49,7 @@ import com.cytarch.cellularity.shared.ui.play.microscope.MicroscopeTemperature
 @Composable
 fun DesktopPlayScreen(
     configuration: SimulationConfiguration,
+    fileRepository: DesktopCellularityFileRepository,
     onExit: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -186,7 +191,7 @@ fun DesktopPlayScreen(
                     )
                 }
             },
-            genomeContent = { GenomeTab() }
+            genomeContent = { GenomeTab(fileRepository) }
         )
     }
 }
@@ -231,15 +236,36 @@ private fun SubstrateTab(isVisible: Boolean, onPlateActionClick: () -> Unit) {
 /**
  * The genome panel.
  *
- * The editor itself is shared: the same sections and the same reducer the phone uses. What
- * the phone adds around them -- a native preview and a file repository -- is not here, and
- * the editor says so rather than quietly discarding a genome it cannot save.
+ * The editor itself is shared: the same sections, the same reducer, and now the same effect
+ * handler the phone uses. What differs is only where the bytes go -- a directory in the
+ * user's profile rather than the app's private storage -- and that the preview is not
+ * available, which the editor says rather than showing an empty box.
  *
  * The store is remembered for the life of the screen, not per tab visit, so switching to
  * the microscope and back does not throw away work in progress.
  */
 @Composable
-private fun GenomeTab() {
-    val store = remember { DesktopGenomeEditorStore() }
+private fun GenomeTab(fileRepository: DesktopCellularityFileRepository) {
+    // A scope that outlives recomposition: a save in flight must not be cancelled because
+    // the screen redrew, or the state would say "saving" with nothing saving.
+    val scope = rememberCoroutineScope()
+    val store = remember(fileRepository) {
+        DesktopGenomeEditorStore(
+            repository = fileRepository,
+            genomeProvider = NoMicroscopeGenome
+        ).also { it.attach(scope) }
+    }
     DesktopGenomeEditor(store = store, modifier = Modifier.fillMaxSize())
+}
+
+/**
+ * Says that there is no genome to take from the plate.
+ *
+ * Selecting a cell and editing its genome is what the phone offers, and it needs a way to
+ * read a cell's genome out of the running simulation, which this bridge does not have yet.
+ * Answering "none" makes the editor report that as the reason the option failed instead of
+ * offering a choice that would do nothing.
+ */
+private object NoMicroscopeGenome : GenomeProvider {
+    override val genome: GenomeDraft? = null
 }

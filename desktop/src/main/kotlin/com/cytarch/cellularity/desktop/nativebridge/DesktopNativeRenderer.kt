@@ -252,6 +252,33 @@ object DesktopNativeRenderer {
     external fun nativeCellCount(sessionHandle: Long): Long
 
     /**
+     * What one world of this shape would cost in memory, or null when it would not fit.
+     *
+     * The two answers are different and the difference is the point: a number is shown to
+     * the person as the price of starting a plate, and a refusal is what disables the start
+     * button. A refusal must not be reported as zero, because zero reads as "this is free".
+     *
+     * This does not need a session, and that is deliberate: it is asked before there is
+     * anything to ask about, which is exactly why the freezer can decide whether a plate is
+     * startable at all.
+     */
+    fun estimateWorldAllocationBytes(
+        maxCellCount: Int,
+        maxFoodCount: Int,
+        radius: Double
+    ): Long? {
+        if (!isAvailable) return null
+        val bytes = nativeEstimateWorldAllocationBytes(maxCellCount, maxFoodCount, radius)
+        return bytes.takeIf { it >= 0L }
+    }
+
+    external fun nativeEstimateWorldAllocationBytes(
+        maxCellCount: Int,
+        maxFoodCount: Int,
+        radius: Double
+    ): Long
+
+    /**
      * The environment as one wire document, or null when there is nothing to read.
      *
      * The document is handed over whole and undecoded because the schema belongs to one

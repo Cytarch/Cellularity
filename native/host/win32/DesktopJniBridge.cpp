@@ -90,6 +90,7 @@
 // declaration is not enough to read the cell count out of it.
 #include "app/microscope/NativeMicroscopeRuntime.h"
 #include "core/Environment.h"
+#include "core/SimulationMemoryPolicy.h"
 #include "core/SimulationWorld.h"
 #include "formats/DecodedWorldValidation.h"
 #include "render/backend/abi/CellularityVulkanBackendAbi.h"
@@ -482,6 +483,34 @@ void registerChildWindow(HWND window) {
 // the application decides where the renderer sits and when it goes away, and the
 // WS_CHILD style is what makes Windows clip and move it with its parent. No border or
 // caption style is requested, so the client area is the whole window and the extent
+// Estimates the peak memory one world of this shape needs.
+//
+// Returns the estimate in bytes, or -1 when the world would not fit in the budget this
+// machine grants it. The distinction matters to the caller and is not a detail: the freezer
+// uses the number to show what starting a plate will cost, and uses the refusal to disable
+// the start button rather than letting a person launch a world that the runtime will then
+// reject. Returning zero for a refusal would say "this costs nothing", which is the one
+// answer that would make the screen lie.
+//
+// This mirrors the entry point the Android bridge exposes, deliberately and completely: the
+// same policy, the same environment construction, the same two answers. A desktop that
+// estimated differently from a phone would be a second answer to a question that has one.
+extern "C" JNIEXPORT jlong JNICALL
+Java_com_cytarch_cellularity_desktop_nativebridge_DesktopNativeRenderer_nativeEstimateWorldAllocationBytes(
+        JNIEnv*, jclass, jint maxCellCount, jint maxFoodCount, jdouble radius) {
+    try {
+        const Environment environment = Environment::constructDefaultEnvironment(
+                maxCellCount, maxFoodCount, radius);
+        const cellularity::memory::WorldAllocationEstimate estimate =
+                cellularity::memory::estimateCurrentWorldAllocation(environment);
+        return estimate.bytes <= estimate.budgetBytes
+                ? static_cast<jlong>(estimate.bytes)
+                : static_cast<jlong>(-1);
+    } catch (...) {
+        return static_cast<jlong>(-1);
+    }
+}
+
 // the session is attached with is the extent that is visible.
 //
 // The window belongs to the calling thread's message queue. Nothing here needs that

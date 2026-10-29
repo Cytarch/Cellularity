@@ -48,6 +48,7 @@ dependencies {
     implementation(libs.kotlinx.serialization.json)
 
     testImplementation(libs.junit)
+    testImplementation "org.jetbrains.kotlin:kotlin-test-junit"
 }
 
 // The renderer is a CMake target, so it lands in the build tree where neither the JVM

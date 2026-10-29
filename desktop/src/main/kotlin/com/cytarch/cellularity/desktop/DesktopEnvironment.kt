@@ -22,7 +22,16 @@ import kotlinx.coroutines.runBlocking
 class DesktopEnvironment private constructor(
     val dataDirectory: Path,
     val settingsRepository: DesktopCellularitySettingsRepository,
-    val fileRepository: CellularityFileRepository,
+    /**
+     * The desktop implementation rather than the shared contract.
+     *
+     * Sharing the interface would be more general and is what callers that only list and
+     * read need. The genome editor needs the concrete type, because saving from the editor
+     * and drafting a genome for a new plate are desktop capabilities the contract does not
+     * describe -- the phone reaches them through its own adapter. Declaring the real type
+     * here keeps that a compile-time fact rather than a cast at the call site.
+     */
+    val fileRepository: DesktopCellularityFileRepository,
     private val nativeHost: DesktopNativeHost
 ) {
     /** Loads persisted state. Safe to call more than once. */

@@ -36,7 +36,17 @@ fun main() {
     val built = CountDownLatch(1)
     val frame = AtomicReference<Frame?>(null)
     val panel = AtomicReference<ComposePanel?>(null)
-    val store = DesktopGenomeEditorStore()
+    // A repository of its own under the build directory, so the probe never reads or writes
+    // the genomes the person running it has saved.
+    val store = DesktopGenomeEditorStore(
+        repository = com.cytarch.cellularity.desktop.files.DesktopCellularityFileRepository(
+            java.nio.file.Files.createTempDirectory("cellularity-editor-probe")
+                .resolve("substrates")
+        ),
+        genomeProvider = object : com.cytarch.cellularity.shared.ui.play.genome_editor.GenomeProvider {
+            override val genome: com.cytarch.cellularity.shared.model.GenomeDraft? = null
+        }
+    )
 
     javax.swing.SwingUtilities.invokeLater {
         try {
@@ -177,7 +187,7 @@ fun main() {
     settle(400)
     capture(window, File(outputDirectory, "genome-editor-many-genes.png"))
 
-    println("GENOME pendingEffectsNobodyHandled=${store.unsupportedEffectCount}")
+    println("GENOME fileState=${store.state.fileState}")
     System.out.flush()
 
     settle(1_000)
