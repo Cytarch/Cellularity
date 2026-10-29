@@ -97,6 +97,27 @@ fun main() {
     // how many frames it has presented, and what the last one reported.
     Thread.sleep(4_000)
     println("PLAYSCREEN surface now: ${SurfaceDiagnostics.describe()}")
+
+    // Whether Windows agrees the window is on screen, and whether a click at its centre would
+    // reach it. Both are asked of the system rather than of this process, because the claim under
+    // check is not what the surface believes about itself -- it is what the rest of Windows sees.
+    // A window that presents frames into a surface nobody can see would pass every check the
+    // surface could make about itself.
+    val handleText = SurfaceDiagnostics.describe()
+    val windowHandle = Regex("window=(\\d+)").find(handleText)?.groupValues?.get(1)?.toLongOrNull()
+    if (windowHandle != null && windowHandle != 0L) {
+        println("PLAYSCREEN scaling: ${DesktopNativeRenderer.nativeDescribeScaling(windowHandle)}")
+        val geometry = DesktopNativeRenderer.nativeWindowGeometry(windowHandle)
+        if (geometry != null && geometry.size >= 4) {
+            val centreX = (geometry[0] + geometry[2] / 2).toInt()
+            val centreY = (geometry[1] + geometry[3] / 2).toInt()
+            println(
+                "PLAYSCREEN at the window's centre ($centreX, $centreY) the window under the " +
+                    "cursor is ${DesktopNativeRenderer.nativeWindowAtPoint(centreX, centreY)} " +
+                    "(1 means this renderer's window)"
+            )
+        }
+    }
     System.out.flush()
     try {
         Thread.sleep(TimeUnit.MINUTES.toMillis(10))

@@ -321,7 +321,11 @@ private class SurfaceHolder(
         append(publishedSession.get())
         append(" reported=")
         append(reported)
-        append(" stage=")
+        append(" visibleWanted=")
+    append(requestedVisible.get())
+    append(" showCalls=")
+    append(visibilityApplications.get())
+    append(" stage=")
     append(loopStage.get())
     append(" loop=")
     append(loopIterations.get())
@@ -400,6 +404,12 @@ private class SurfaceHolder(
      * call that might not return, so the last value written names the call that is still running.
      */
     private val loopStage = AtomicLong(0L)
+
+    // How many times the window has been shown or hidden, and what was last asked for. A window
+    // that reports itself hidden while the surface believes it asked for it to be shown is either
+    // a request that was never made or one that was refused, and the two are told apart by counting
+    // the attempts rather than by reading the code that makes them.
+    private val visibilityApplications = AtomicLong(0L)
     private val lastFrameStatus = AtomicLong(0L)
     @Volatile
     private var released = false
@@ -706,6 +716,23 @@ private class SurfaceHolder(
         if (requested == 0L) return
         val placement = requestedPlacement.get()
         val hasPlacement = placementKnown.get()
+        // Visibility is applied before the geometry check and not after it, which is the difference
+        // between a window that appears and one that never does. The check exists so the same
+        // rectangle is not set on every layout pass, and it returned early on the first passes --
+        // when the extent is still zero and there is nothing to set -- so an application of
+        // visibility placed after it was skipped on exactly the passes that ran, and the passes
+        // that did not skip it never came, because the geometry had already settled.
+        //
+        // Measured: the world was running, a thousand three hundred frames presented, and Windows
+        // reported selfVisible=no. The surface believed it had been told to show itself.
+        val wanted = requestedVisible.get()
+        if (!appliedVisibilityOnce || wanted != appliedVisible) {
+            visibilityApplications.incrementAndGet()
+            DesktopNativeRenderer.nativeShowWindow(window, wanted)
+            appliedVisible = wanted
+            appliedVisibilityOnce = true
+        }
+
         if (requested == appliedWindowExtent.get() &&
             placement == appliedWindowPlacement.get() &&
             hasPlacement == appliedWindowPlacementKnown
@@ -730,18 +757,6 @@ private class SurfaceHolder(
         appliedWindowExtent.set(requested)
         appliedWindowPlacement.set(placement)
         appliedWindowPlacementKnown = hasPlacement
-
-        // Visibility belongs here for the same reason position and size do, and it was the last
-        // of the three to be moved -- which is why the render loop stopped dead on it. `ShowWindow`
-        // is a call to the window, the window belongs to the event thread, and a call from another
-        // thread waits for that thread to process it. Everything the loop did to the window waited
-        // in the same way; this one simply had not been moved yet.
-        val wanted = requestedVisible.get()
-        if (!appliedVisibilityOnce || wanted != appliedVisible) {
-            DesktopNativeRenderer.nativeShowWindow(window, wanted)
-            appliedVisible = wanted
-            appliedVisibilityOnce = true
-        }
     }
 
     /**

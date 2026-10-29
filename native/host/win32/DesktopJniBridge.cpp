@@ -159,6 +159,22 @@ LRESULT CALLBACK childWindowProc(
 // is not an optimisation: RegisterClassExW fails with ERROR_CLASS_ALREADY_EXISTS for
 // a second attempt in the same process, and that has to be told apart from a real
 // failure rather than reported as one.
+// Whether every window above this one is shown.
+//
+// IsWindowVisible answers for one window and ignores the chain it hangs from, and a child of a
+// hidden frame reports itself as visible while appearing nowhere. Asking the whole chain is the
+// difference between "this window is shown" and "this window can be seen".
+bool allAncestorsVisible(HWND window) noexcept {
+    HWND current = window;
+    for (int hop = 0; hop < 64 && current != nullptr; ++hop) {
+        if (::IsWindowVisible(current) == 0) {
+            return false;
+        }
+        current = ::GetParent(current);
+    }
+    return true;
+}
+
 bool ensureChildWindowClassRegistered() noexcept {
     static const bool registered = []() {
         WNDCLASSEXW windowClass{};
@@ -600,6 +616,21 @@ Java_com_cytarch_cellularity_desktop_nativebridge_DesktopNativeRenderer_nativeDe
             const UINT windowDpi = ::GetDpiForWindow(window);
             report += " windowDpi=";
             report += std::to_string(windowDpi);
+            // Whether this window and every one above it are shown. A child is only on screen if
+            // its ancestors are, so a check that stopped at the child would report a window as
+            // visible while the thing it sits in is not -- and a picture nobody can see is the
+            // same to a person as a picture that was never drawn.
+            report += " selfVisible=";
+            report += ::IsWindowVisible(window) != 0 ? "yes" : "no";
+            report += " allAncestorsVisible=";
+            report += allAncestorsVisible(window) ? "yes" : "no";
+            RECT onScreen{};
+            if (::GetWindowRect(window, &onScreen) != 0) {
+                report += " windowRect=";
+                report += std::to_string(onScreen.left);
+                report += ",";
+                report += std::to_string(onScreen.top);
+            }
             RECT client{};
             if (::GetClientRect(window, &client) != 0) {
                 report += " childClient=";
