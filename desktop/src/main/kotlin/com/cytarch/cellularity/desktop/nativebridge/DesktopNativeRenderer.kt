@@ -213,6 +213,18 @@ object DesktopNativeRenderer {
     external fun nativeResizeWindow(windowHandle: Long, width: Int, height: Int): Int
 
     /**
+     * Where the child window is, and how much room its parent has.
+     *
+     * Eight numbers: the child's screen rectangle, the parent's client size, and the child's
+     * offset inside that client area. Two systems decide these -- Win32, which this bridge
+     * calls, and the layout, which Compose decides -- and a disagreement between them is
+     * invisible from inside either one. Reporting them together is what makes it visible.
+     *
+     * Null when the handle is not a live window this bridge created.
+     */
+    external fun nativeWindowGeometry(windowHandle: Long): LongArray?
+
+    /**
      * Creates a simulation and attaches it to [windowHandle].
      *
      * Returns an opaque session handle, or 0 if the renderer could not start. The

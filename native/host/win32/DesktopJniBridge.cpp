@@ -557,6 +557,61 @@ Java_com_cytarch_cellularity_desktop_nativebridge_DesktopNativeRenderer_nativeCr
 // extent to follow the window has to recreate the session at the new size. Leaving it
 // as a window-only operation keeps the two handles independent and keeps this call
 // safe to make before a session exists.
+// Reads the child window's rectangle and the client area of its parent.
+//
+// Returns {x, y, width, height of the child window}, {width, height of the parent's client
+// area}, and {the child's x and y relative to the parent's client origin}, or null when the
+// handle is not a live window this bridge created.
+//
+// This exists because "the simulation is drawn into a corner" is a claim about two
+// rectangles that are decided by two different systems: the child window's rectangle is set
+// by Win32 calls this bridge makes, and the place reserved for it in the interface is decided
+// by the Compose layout. Neither can see the other's numbers, so a disagreement between them
+// is invisible from inside either one and shows up only as a picture that is the wrong size
+// in the wrong place. Reporting both together is what makes the disagreement measurable.
+extern "C" JNIEXPORT jlongArray JNICALL
+Java_com_cytarch_cellularity_desktop_nativebridge_DesktopNativeRenderer_nativeWindowGeometry(
+        JNIEnv* env, jclass, jlong windowHandle) {
+    try {
+        const HWND window = windowFromHandle(windowHandle);
+        if (!isBridgeWindow(window)) {
+            return nullptr;
+        }
+        RECT windowRect{};
+        if (::GetWindowRect(window, &windowRect) == 0) {
+            return nullptr;
+        }
+        const HWND parent = ::GetParent(window);
+        RECT clientRect{};
+        POINT clientOrigin{0, 0};
+        if (parent != nullptr) {
+            if (::GetClientRect(parent, &clientRect) == 0) {
+                return nullptr;
+            }
+            if (::ClientToScreen(parent, &clientOrigin) == 0) {
+                return nullptr;
+            }
+        }
+        const jlong values[8] = {
+                static_cast<jlong>(windowRect.left),
+                static_cast<jlong>(windowRect.top),
+                static_cast<jlong>(windowRect.right - windowRect.left),
+                static_cast<jlong>(windowRect.bottom - windowRect.top),
+                static_cast<jlong>(clientRect.right - clientRect.left),
+                static_cast<jlong>(clientRect.bottom - clientRect.top),
+                static_cast<jlong>(windowRect.left - clientOrigin.x),
+                static_cast<jlong>(windowRect.top - clientOrigin.y)};
+        jlongArray result = env->NewLongArray(8);
+        if (result == nullptr) {
+            return nullptr;
+        }
+        env->SetLongArrayRegion(result, 0, 8, values);
+        return result;
+    } catch (...) {
+        return nullptr;
+    }
+}
+
 extern "C" JNIEXPORT jint JNICALL
 Java_com_cytarch_cellularity_desktop_nativebridge_DesktopNativeRenderer_nativeResizeWindow(
         JNIEnv*, jclass, jlong windowHandle, jint width, jint height) {

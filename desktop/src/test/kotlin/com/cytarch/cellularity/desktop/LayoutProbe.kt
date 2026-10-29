@@ -151,6 +151,66 @@ private fun reportCoverage(frame: ComposeWindow) {
     } else {
         println("LAYOUT the navigation bar has its ${barHeight} px to itself")
     }
+    reportNativeGeometry()
+}
+
+/**
+ * Reports the child window's rectangle next to the room reserved for it.
+ *
+ * These two are decided by different systems and neither can see the other's numbers. Win32
+ * owns the child window's rectangle, set by this bridge. Compose owns the layout, which
+ * decides where the interface puts the interop area. A disagreement between them shows up
+ * only as a picture of the wrong size in the wrong place -- the simulation drawn into a
+ * corner, say -- and it cannot be found by reading either side alone.
+ */
+private fun reportNativeGeometry() {
+    val handle = Regex("window=(\\d+)").find(surfaceDescription())?.groupValues?.get(1)
+        ?.toLongOrNull()
+    if (handle == null) {
+        println("LAYOUT the surface did not report a window handle: ${surfaceDescription()}")
+        return
+    }
+    val geometry = nativeWindowGeometry(handle)
+    if (geometry == null || geometry.size < 8) {
+        println("LAYOUT the bridge returned no geometry for window $handle")
+        return
+    }
+    val width = geometry[2]
+    val height = geometry[3]
+    val parentWidth = geometry[4]
+    val parentHeight = geometry[5]
+    val offsetX = geometry[6]
+    val offsetY = geometry[7]
+    println(
+        "LAYOUT nativeWindow=${width}x$height at ($offsetX,$offsetY) in its parent; " +
+            "parentClient=${parentWidth}x$parentHeight"
+    )
+    // The child covers a band that starts where it was placed. On the play screen that band
+    // has to stop above the navigation bar, and it has to start where the interface left room
+    // for it -- which is what the offset says.
+    println(
+        "LAYOUT nativeWindow bottom edge=${offsetY + height} " +
+            "parentClientHeight=$parentHeight"
+    )
+}
+
+/**
+ * Calls the bridge's geometry reader reflectively.
+ *
+ * Reflection because this probe stands outside the launcher's internals on purpose: it
+ * measures the renderer rather than trusting the launcher's own account of it, and a direct
+ * call would break whenever that signature changes, which is not what the probe is for.
+ */
+private fun nativeWindowGeometry(handle: Long): LongArray? = try {
+    val renderer = Class.forName(
+        "com.cytarch.cellularity.desktop.nativebridge.DesktopNativeRenderer"
+    )
+    val instance = renderer.getField("INSTANCE").get(null)
+    renderer.getMethod("nativeWindowGeometry", java.lang.Long.TYPE).invoke(instance, handle)
+        as? LongArray
+} catch (thrown: ReflectiveOperationException) {
+    println("LAYOUT could not read the window geometry: $thrown")
+    null
 }
 
 
@@ -162,6 +222,27 @@ private fun reportCoverage(frame: ComposeWindow) {
  * the report say the interface is covered when it is not.
  */
 private const val NAVIGATION_BAR_HEIGHT = 56
+
+/**
+ * Asks the mounted surface to describe itself, reflectively.
+ *
+ * Reflection rather than a direct call because this probe stands outside the launcher's
+ * internals on purpose: it measures the renderer rather than trusting the launcher's own
+ * account of it, and a direct call would stop compiling whenever that object changes shape,
+ * which is not what the probe is for.
+ */
+private fun surfaceDescription(): String = try {
+    val diagnostics = Class.forName(
+        "com.cytarch.cellularity.desktop.nativebridge.SurfaceDiagnostics"
+    )
+    val instance = diagnostics.getField("INSTANCE").get(null)
+    diagnostics.getMethod("describe").invoke(instance) as? String
+        ?: "the surface did not describe itself"
+} catch (thrown: ReflectiveOperationException) {
+    "the surface could not be described: $thrown"
+} catch (thrown: RuntimeException) {
+    "the surface could not be described: $thrown"
+}
 
 private fun settle(millis: Long) {
     try {
