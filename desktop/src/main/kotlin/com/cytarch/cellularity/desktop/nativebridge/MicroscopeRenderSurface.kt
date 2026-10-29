@@ -22,12 +22,14 @@ import androidx.compose.ui.unit.dp
 import java.awt.Canvas
 import java.awt.Color as AwtColor
 import java.awt.Component
+import java.awt.IllegalComponentStateException
 import java.awt.Dimension
 import java.awt.event.ComponentAdapter
 import java.awt.event.ComponentEvent
 import java.awt.event.MouseAdapter
 import java.awt.event.MouseEvent
 import java.awt.event.MouseWheelEvent
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.atomic.AtomicReference
 
@@ -250,6 +252,15 @@ private class SurfaceHolder(
     /** The renderer's viewport, as the interface last observed it, or zero for none yet. */
     private val requestedExtent = AtomicLong(0L)
 
+    // The screen position the viewport was last laid out at, packed the same way the extent
+    // is: two numbers in one atomic so a frame can never read half of an update and place the
+    // window at a mixture of two layouts.
+    private val requestedPlacement = AtomicLong(0L)
+
+    // Whether a placement has been published at all. Kept apart from the value so that a
+    // viewport in the top-left corner is not mistaken for a viewport whose place is unknown.
+    private val placementKnown = AtomicBoolean(false)
+
     /** The parent window handle, published by the AWT callback that learned it. */
     private val ownerHandle = AtomicLong(0L)
 
@@ -437,6 +448,34 @@ private class SurfaceHolder(
             }
         }
 
+    /**
+     * Where the canvas sits inside the window that holds it, in that window's client area.
+     *
+     * Walked rather than converted, because every step of the walk is an addition inside one
+     * coordinate space. Going out to the screen and back was tried and does not survive
+     * display scaling: AWT counts logical pixels and Win32 counts physical ones, so the two
+     * sides disagree about what a number means and the window ends up somewhere nobody asked
+     * for. Nothing here has to agree about a scale.
+     */
+    private fun offsetWithinWindow(component: Component): Pair<Int, Int> {
+        var x = 0
+        var y = 0
+        var current: Component? = component
+        while (current != null) {
+            x += current.x
+            y += current.y
+            val parent = current.parent
+            if (parent is java.awt.Window) {
+                // The window's own origin is its decorated corner; the child belongs to the
+                // client area, which starts inside the frame's border and title bar.
+                val insets = parent.insets
+                return (x - insets.left) to (y - insets.top)
+            }
+            current = parent
+        }
+        return x to y
+    }
+
     /** Records the canvas's extent and parent, for the render thread to act on. */
     private fun publishGeometry(component: Component) {
         if (released) return
@@ -444,6 +483,16 @@ private class SurfaceHolder(
         val height = component.height
         if (width <= 0 || height <= 0) return
         requestedExtent.set(pack(width, height))
+        // The offset is measured from the canvas up to the window it lives in, in AWT's own
+        // coordinates on both sides. Reaching the same place through screen coordinates was
+        // tried and is wrong under display scaling: AWT counts logical pixels while Win32
+        // counts physical ones, so a conversion done on either side alone lands the window
+        // somewhere it was never asked to be. Additions inside one coordinate space cannot
+        // disagree about the scale, and the bridge takes the window's client origin off the
+        // result itself.
+        val offset = offsetWithinWindow(component)
+        requestedPlacement.set(pack(offset.first, offset.second))
+        placementKnown.set(true)
 
         // Not an error yet when this is zero: AWT realises the peer asynchronously and the
         // listener calls back once it has. It stays an error if it never does, which is why
@@ -480,6 +529,8 @@ private class SurfaceHolder(
         var windowHandle = 0L
         var sessionHandle = 0L
         var appliedExtent = 0L
+        var appliedPlacement = 0L
+        var appliedPlacementKnown = false
         try {
             while (!released) {
                 val pointer = queuedPointerInput.getAndSet(emptyList())
@@ -496,6 +547,20 @@ private class SurfaceHolder(
                     sleepFrame()
                     continue
                 }
+
+                // Where the viewport actually is, not merely how large it is. A child window
+                // placed at its parent's origin is placed over whatever the interface draws
+                // first -- on this screen that is the navigation bar, which is why the tabs
+                // did not answer while the simulation did: the bar was not missing, it was
+                // underneath. The surface reports its own screen position for the same reason
+                // it reports its extent, and the bridge converts it into the parent's client
+                // space, because the conversion is a Win32 question and not a layout one.
+                val placement = requestedPlacement.get()
+                // A separate flag rather than a sentinel, because (0,0) is a real position:
+                // the viewport in the top-left corner of its window is the ordinary case, and
+                // treating it as "no position" means the one placement that matters most is
+                // the one that never gets applied.
+                val hasPlacement = placementKnown.get()
 
                 if (windowHandle == 0L) {
                     val owner = ownerHandle.get()
@@ -516,13 +581,29 @@ private class SurfaceHolder(
                     }
                     publishedWindow.set(windowHandle)
                     appliedExtent = requested
-                } else if (requested != appliedExtent) {
-                    DesktopNativeRenderer.nativeResizeWindow(
-                        windowHandle,
-                        unpackWidth(requested),
-                        unpackHeight(requested)
-                    )
+                } else if (requested != appliedExtent || placement != appliedPlacement || hasPlacement != appliedPlacementKnown) {
+                    // Position and size are applied together, because they are decided
+                    // together: a window resized but left where it was is the defect this
+                    // replaces, and applying them in two calls would reopen the gap between
+                    // them for a frame.
+                    if (hasPlacement) {
+                        DesktopNativeRenderer.nativeSetChildWindowBounds(
+                            windowHandle,
+                            unpackWidth(placement),
+                            unpackHeight(placement),
+                            unpackWidth(requested),
+                            unpackHeight(requested)
+                        )
+                    } else {
+                        DesktopNativeRenderer.nativeResizeWindow(
+                            windowHandle,
+                            unpackWidth(requested),
+                            unpackHeight(requested)
+                        )
+                    }
                     appliedExtent = requested
+                    appliedPlacement = placement
+                    appliedPlacementKnown = hasPlacement
                 }
 
                 if (sessionHandle == 0L) {

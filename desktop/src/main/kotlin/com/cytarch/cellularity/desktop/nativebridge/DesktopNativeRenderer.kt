@@ -256,6 +256,22 @@ object DesktopNativeRenderer {
     external fun nativeCaptureWindow(windowHandle: Long, path: String): Int
 
     /**
+     * Places the child window at a screen point with an extent, in one call.
+     *
+     * The point is in screen coordinates and is converted to the parent's client space by the
+     * bridge, because that conversion is Win32's to make: the managed side knows where the
+     * interface put the viewport but not where the parent's client area begins or how the two
+     * spaces are scaled, and guessing either is how a window ends up over the interface.
+     */
+    external fun nativeSetChildWindowBounds(
+        windowHandle: Long,
+        screenX: Int,
+        screenY: Int,
+        width: Int,
+        height: Int
+    ): Int
+
+    /**
      * Creates a simulation and attaches it to [windowHandle].
      *
      * Returns an opaque session handle, or 0 if the renderer could not start. The

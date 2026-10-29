@@ -61,7 +61,15 @@ fun main() {
             }
             frame.contentPane.add(panel)
             frame.pack()
-            frame.setLocation(-4800, -4800)
+            // Off the desktop by default, because this probe is run while somebody is using
+            // the machine and a window in front of them is a cost they did not agree to.
+            // WindowFromPoint answers -1 for a window that is not on a monitor, so the one
+            // question this probe exists to ask can only be answered with the window on the
+            // screen; the caller asks for that explicitly rather than getting it by default.
+            val placement = System.getenv("CELLULARITY_PROBE_ORIGIN")?.split(",")
+            val x = placement?.getOrNull(0)?.trim()?.toIntOrNull() ?: -4800
+            val y = placement?.getOrNull(1)?.trim()?.toIntOrNull() ?: -4800
+            frame.setLocation(x, y)
             window.set(frame)
             frame.isVisible = true
         } catch (thrown: Throwable) {
@@ -90,18 +98,17 @@ fun main() {
         println("HIT the bridge reported no window geometry")
         kotlin.system.exitProcess(4)
     }
-    val offsetX = geometry[6]
-    val offsetY = geometry[7]
-    val width = geometry[2]
-    val height = geometry[3]
-    val origin = frame.locationOnScreen
-    println("HIT window at screen ${origin.x},${origin.y}; child ${width}x$height at ($offsetX,$offsetY)")
-
-    // Client-area coordinates of the child, since the frame's own origin includes its
-    // decorations and the child is placed relative to the client area.
-    val insets = frame.insets
-    val childScreenX = origin.x + insets.left + offsetX.toInt()
-    val childScreenY = origin.y + insets.top + offsetY.toInt()
+    // The window's own screen rectangle, asked of Win32 rather than assembled from AWT
+    // positions and frame insets. Assembling it was tried and does not survive display
+    // scaling: AWT counts logical pixels and Win32 counts physical ones, so a rectangle built
+    // from one side's numbers and handed to the other side lands somewhere neither intended.
+    // GetWindowRect is in the same space WindowFromPoint answers in, so the two cannot
+    // disagree about what a coordinate means.
+    val childScreenX = geometry[0].toInt()
+    val childScreenY = geometry[1].toInt()
+    val width = geometry[2].toInt()
+    val height = geometry[3].toInt()
+    println("HIT child window on screen at ${childScreenX},${childScreenY} ${width}x$height")
 
     // A grid rather than a single point: the corner is where the report says the picture is,
     // and the middle is where a person would click, and they can disagree.
@@ -134,12 +141,20 @@ fun main() {
         "HIT over the viewport: simulation=$bridgePoints interface=$otherPoints elsewhere=$elsewherePoints"
     )
 
-    // Two more points outside the viewport, where the interface is expected to be reachable.
-    // If those are also covered, the problem is not the viewport's layering but the window's.
-    val barX = childScreenX + 40
-    val barY = childScreenY + height.toInt() + 28
-    println("HIT over the navigation bar: ${classify(windowAtPoint(barX, barY))}")
-
+    // A vertical scan along one column, so the boundary between what the interface owns and
+    // what the simulation owns is visible as a change of answer rather than inferred from two
+    // samples. Step 20 px upward from the window's top edge, so the interface above it is
+    // included: if a run of "interface" appears there, the window no longer reaches over it.
+    val columnX = childScreenX + 40
+    val scanAbove = (0..80 step 20).reversed().joinToString(" ") { back ->
+        when (windowAtPoint(columnX, childScreenY - back)) {
+            1 -> "s"
+            0 -> "u"
+            else -> "."
+        }
+    }
+    println("HIT above the window (80px up to its top edge, step 20): $scanAbove")
+    println("HIT legend: s=simulation u=interface .=elsewhere")
     val reached = bridgePoints > 0
     println(
         if (reached) {

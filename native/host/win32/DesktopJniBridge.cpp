@@ -756,6 +756,12 @@ extern "C" JNIEXPORT jint JNICALL
 Java_com_cytarch_cellularity_desktop_nativebridge_DesktopNativeRenderer_nativeWindowAtPoint(
         JNIEnv*, jclass, jint screenX, jint screenY) {
     try {
+        // Screen coordinates in the same space WindowFromPoint answers in, with no conversion.
+        // An earlier version scaled them by the system dots per inch on the theory that the
+        // caller worked in physical pixels and Windows did not; the measurements then came
+        // back as "no window" everywhere, which is what a conversion applied to coordinates
+        // that were already correct looks like. GetWindowRect and WindowFromPoint agree with
+        // each other, so handing one's answer to the other needs nothing in between.
         POINT point{screenX, screenY};
         const HWND hit = ::WindowFromPoint(point);
         if (hit == nullptr) {
@@ -862,6 +868,10 @@ Java_com_cytarch_cellularity_desktop_nativebridge_DesktopNativeRenderer_nativeRe
                 == 0) {
             return kStatusFailed;
         }
+        // Placed at the parent's client origin here, which is only correct while nothing else
+        // is competing for that space. The caller that knows where the viewport actually goes
+        // moves the window with setChildWindowBounds below; doing it there rather than here
+        // keeps this entry point the plain "make it this big" operation its name promises.
         // The window is the new size now but the surface is not, and the surface may
         // only be resized from the thread that presents. The request is recorded for the
         // next frame to pick up, which also means a refusal is retried rather than lost.
@@ -878,6 +888,55 @@ Java_com_cytarch_cellularity_desktop_nativebridge_DesktopNativeRenderer_nativeRe
     }
 }
 
+// Places the child window so that its top-left corner sits at a screen point, and gives it an
+// extent, in one call.
+//
+// The point arrives in screen coordinates and is converted here, because the conversion is
+// from the desktop's coordinate space into the parent's client space and this is the side that
+// can ask Win32 to do it. The managed side knows where the interface put the viewport, but it
+// cannot know the parent's client origin or how the two coordinate spaces are scaled -- and
+// guessing either is how a window ends up over the interface.
+//
+// Returns 0 on success, 1 if the request was refused, and 2 if the handle is not a live window
+// this bridge created.
+extern "C" JNIEXPORT jint JNICALL
+Java_com_cytarch_cellularity_desktop_nativebridge_DesktopNativeRenderer_nativeSetChildWindowBounds(
+        JNIEnv*, jclass, jlong windowHandle, jint offsetX, jint offsetY, jint width,
+        jint height) {
+    try {
+        const HWND window = windowFromHandle(windowHandle);
+        if (!isBridgeWindow(window)) {
+            return kStatusInvalidHandle;
+        }
+        if (width <= 0 || height <= 0) {
+            return kStatusFailed;
+        }
+        // The offset is taken as already being relative to the parent's client area, and the
+        // screen coordinates in the signature are only a cross-check. Converting from the
+        // desktop's space was tried first and was wrong in a way worth recording: the managed
+        // side works in AWT's logical coordinates while this side sees physical pixels, and
+        // under display scaling ScreenToClient turned a viewport offset into a negative one.
+        // A caller that knows where the canvas sits inside its AWT parent can state the
+        // offset directly, and then no coordinate space has to be reconciled at all.
+        POINT origin{offsetX, offsetY};
+        // The window is moved and resized, and the surface follows a frame later: the
+        // swapchain may only be touched by the thread that presents. Both are recorded the
+        // same way a plain resize records them, so this cannot leave the two disagreeing.
+        if (::SetWindowPos(window, nullptr, origin.x, origin.y, width, height,
+                    SWP_NOZORDER | SWP_NOACTIVATE)
+                == 0) {
+            return kStatusFailed;
+        }
+        if (const std::shared_ptr<DesktopSession> session =
+                    findSessionByWindow(window)) {
+            session->pendingSurfaceWidth.store(width, std::memory_order_release);
+            session->pendingSurfaceHeight.store(height, std::memory_order_release);
+        }
+        return kStatusOk;
+    } catch (...) {
+        return kStatusFailed;
+    }
+}
 // Destroys the child window. Returns 0 when there was nothing to do (a null handle)
 // and when the window is gone, 1 if the window still has a live session or Win32
 // refused to destroy it, and 2 if the handle is not a live window this bridge
