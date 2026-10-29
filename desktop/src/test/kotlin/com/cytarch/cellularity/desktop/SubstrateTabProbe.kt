@@ -192,20 +192,6 @@ private fun capture(window: Frame, destination: File): File? = try {
     null
 }
 
-/** The same lookup the interface uses, needed because the renderer parents a child window. */
-private fun nativeWindowHandleOf(component: java.awt.Component): Long {
-    if (!component.isShowing) return 0L
-    return try {
-        val peerField = java.awt.Component::class.java.getDeclaredField("peer")
-        peerField.isAccessible = true
-        val peer: Any = peerField.get(component) ?: return 0L
-        val getHWnd = peer.javaClass.methods.firstOrNull { it.name == "getHWnd" } ?: return 0L
-        (getHWnd.invoke(peer) as? Long) ?: 0L
-    } catch (_: ReflectiveOperationException) {
-        0L
-    } catch (_: RuntimeException) {
-        0L
-    } catch (_: LinkageError) {
-        0L
-    }
-}
+// The lookup itself lives beside the tests that need it. It used to be copied here as well, which
+// is how two copies of a reflection helper come to disagree: the copy that looked for a field
+// named `hwnd` returned zero for every component and reported it as a component without a window.

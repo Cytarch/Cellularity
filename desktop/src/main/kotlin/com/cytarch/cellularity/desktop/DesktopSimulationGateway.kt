@@ -28,6 +28,7 @@ import com.cytarch.cellularity.shared.simulation.SimulationResult
 import com.cytarch.cellularity.shared.simulation.SimulationSessionState
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -127,11 +128,48 @@ class DesktopSimulationGateway(
         }
     }
 
-    /** Records that the session is live, and takes the first reading. */
-    suspend fun start() {
+    /**
+     * Reads once and returns whether the world answered.
+     *
+     * The distinction matters because a read that fails leaves the confirmed environment null,
+     * and the panel shows its loading state for as long as that lasts. A caller that cannot tell
+     * "read and found nothing yet" from "read and was answered" has no way to try again.
+     */
+    private suspend fun readOnceOrNull(): EnvironmentSnapshot? {
         readOnce()
-        if (mutableState.value == SimulationSessionState.Opening) {
-            mutableState.value = SimulationSessionState.Ready
+        return mutableEnvironment.value
+    }
+
+    /**
+     * Records that the session is live, and takes the first reading -- retrying until it lands.
+     *
+     * It used to read exactly once and then declare the session ready whether or not anything
+     * came back. A single read can genuinely fail on a world that has only just been created, and
+     * when it did, the state said Ready while the confirmed environment stayed null -- so the
+     * substrate panel showed its loading message for the rest of the run and nothing ever tried
+     * again. That is exactly what a panel stuck at three fifths of its height is: not an empty
+     * world, but a read that was never repeated.
+     *
+     * So the read is repeated until it succeeds. The retries are bounded, and when the bound is
+     * reached the session is deliberately left in the opening state rather than being called
+     * ready: there is no failure state in the shared model, and claiming readiness for a world
+     * that has never answered is what produced the fault in the first place. Reporting less than
+     * is known is the safer of the two mistakes.
+     */
+    suspend fun start() {
+        var attempt = 0
+        while (true) {
+            if (readOnceOrNull() != null) {
+                if (mutableState.value == SimulationSessionState.Opening) {
+                    mutableState.value = SimulationSessionState.Ready
+                }
+                return
+            }
+            attempt++
+            if (attempt >= MAXIMUM_OPENING_READ_ATTEMPTS) {
+                return
+            }
+            delay(OPENING_READ_RETRY_MILLIS)
         }
     }
 
@@ -242,6 +280,19 @@ class DesktopSimulationGateway(
 
         /** revision, worldEpoch, updates, cells, food, time, temperature, tool, cell, failed */
         const val STATS_FIELD_COUNT = 10
+
+    /**
+     * How many times the opening read is tried before the session is left as opening.
+     *
+     * Twenty attempts at a quarter of a second is five seconds. A world that has not answered in
+     * five seconds is not slow, it is not there -- and a person watching a panel that says it is
+     * loading deserves the difference between "not yet" and "never", which is a distinction the
+     * state now keeps instead of erasing.
+     */
+    const val MAXIMUM_OPENING_READ_ATTEMPTS = 20
+
+    /** How long to wait between opening reads. */
+    const val OPENING_READ_RETRY_MILLIS = 250L
     }
 }
 

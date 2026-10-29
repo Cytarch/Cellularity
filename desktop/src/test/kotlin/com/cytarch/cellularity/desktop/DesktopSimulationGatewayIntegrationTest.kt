@@ -219,22 +219,6 @@ class DesktopSimulationGatewayIntegrationTest {
     }
 
     private companion object {
-        fun handleOf(component: Component): Long {
-            if (!component.isShowing) return 0L
-            return try {
-                val peerField = Component::class.java.getDeclaredField("peer")
-                peerField.isAccessible = true
-                val peer: Any = peerField.get(component) ?: return 0L
-                val getHWnd = peer.javaClass.methods.firstOrNull { it.name == "getHWnd" }
-                    ?: return 0L
-                (getHWnd.invoke(peer) as? Long) ?: 0L
-            } catch (_: ReflectiveOperationException) {
-                0L
-            } catch (_: RuntimeException) {
-                0L
-            } catch (_: LinkageError) {
-                0L
-            }
-        }
+        private fun handleOf(component: Component): Long = nativeWindowHandleOf(component)
     }
 }
