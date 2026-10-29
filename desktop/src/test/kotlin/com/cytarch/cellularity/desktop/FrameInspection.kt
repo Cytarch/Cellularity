@@ -32,7 +32,7 @@ object FrameInspection {
     class Frame(
         val width: Int,
         val height: Int,
-        private val pixels: IntArray
+        internal val pixels: IntArray
     ) {
         val distinctColours: Int = pixels.toHashSet().size
 
@@ -117,28 +117,70 @@ object FrameInspection {
                 "(${filledHeightPercent}% of the height)"
     }
 
+    /**
+     * How many pixels two frames of the same size disagree about.
+     *
+     * This is what turns "the switch does not change" from an impression into a number. Two
+     * frames of one screen, drawn with the only difference being the value a switch is showing,
+     * either differ or do not -- and if they do not, the control has no visible effect at all,
+     * which is a fault that no amount of checking its callback could find.
+     */
+    fun difference(first: Frame, second: Frame): Int {
+        require(first.width == second.width && first.height == second.height) {
+            "two frames can only be compared when they are the same size"
+        }
+        var differing = 0
+        for (index in first.pixels.indices) {
+            if (first.pixels[index] != second.pixels[index]) differing++
+        }
+        return differing
+    }
+
     /** Composes, draws and measures, with the scene closed whether or not drawing succeeded. */
     fun inspect(
         width: Int,
         height: Int,
         content: @Composable () -> Unit
+    ): Frame = inspectAndPress(width, height, content) { _, _ -> }
+
+    /**
+     * Draws a screen, then gives the caller the scene to press something on, then draws again.
+     *
+     * Returns both frames, because the pair is the finding: a control that is drawn correctly and
+     * a control that changes when it is pressed are different claims, and only the second one is
+     * about a switch that a person can use. Presenting both frames is what makes the difference
+     * measurable, and it is measured here rather than described.
+     *
+     * The scene is drawn once before the press because a frame that has never been composed has
+     * nothing to press: the position of a control is only known once it has been laid out.
+     */
+    fun inspectAndPress(
+        width: Int,
+        height: Int,
+        content: @Composable () -> Unit,
+        press: (ImageComposeScene, Frame) -> Unit
     ): Frame {
         val scene = ImageComposeScene(width = width, height = height, density = Density(1f))
         return try {
             scene.setContent { MaterialTheme { content() } }
-            val image = scene.render()
-            val bitmap = org.jetbrains.skia.Bitmap()
-            bitmap.allocN32Pixels(width, height)
-            image.readPixels(bitmap)
-            val pixels = IntArray(width * height)
-            for (y in 0 until height) {
-                for (x in 0 until width) {
-                    pixels[y * width + x] = bitmap.getColor(x, y) and 0xFFFFFF
-                }
-            }
-            Frame(width, height, pixels)
+            val before = read(width, height, scene.render())
+            press(scene, before)
+            read(width, height, scene.render())
         } finally {
             scene.close()
         }
+    }
+
+    private fun read(width: Int, height: Int, image: org.jetbrains.skia.Image): Frame {
+        val bitmap = org.jetbrains.skia.Bitmap()
+        bitmap.allocN32Pixels(width, height)
+        image.readPixels(bitmap)
+        val pixels = IntArray(width * height)
+        for (y in 0 until height) {
+            for (x in 0 until width) {
+                pixels[y * width + x] = bitmap.getColor(x, y) and 0xFFFFFF
+            }
+        }
+        return Frame(width, height, pixels)
     }
 }
