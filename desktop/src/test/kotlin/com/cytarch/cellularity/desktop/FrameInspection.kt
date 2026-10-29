@@ -100,9 +100,21 @@ object FrameInspection {
                 return false
             }
 
+        /**
+         * How much of the frame's height the content covers, as a percentage.
+         *
+         * A panel that paints its controls in the top part of the screen and leaves the rest to
+         * the background looks, to a person, like a blank rectangle with something at the top of
+         * it -- and that is the shape of a fault that a colour count alone cannot see. Whether
+         * the empty part is a fault is a separate question; this is what makes it askable.
+         */
+        val filledHeightPercent: Int
+            get() = if (height == 0) 0 else contentHeight * 100 / height
+
         override fun toString(): String =
             "colours=$distinctColours background=#${background.toString(16).padStart(6, '0')} " +
-                "content=${contentWidth}x$contentHeight in ${width}x$height"
+                "content=${contentWidth}x$contentHeight in ${width}x$height " +
+                "(${filledHeightPercent}% of the height)"
     }
 
     /** Composes, draws and measures, with the scene closed whether or not drawing succeeded. */

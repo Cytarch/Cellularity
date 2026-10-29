@@ -60,6 +60,14 @@ class DesktopScreenFrameTest {
                 "invisible: $frame",
             !frame.isFlat
         )
+        // A screen that fills its frame and one that fills part of it are different screens, and
+        // only one of them was intended. The ratio is used rather than an equality because a
+        // screen one pixel short of its frame is a rounding difference and not a finding.
+        assertTrue(
+            "the settings screen has to use the frame it is given, but its content covers " +
+                "only ${frame.filledHeightPercent} per cent of the height: $frame",
+            frame.filledHeightPercent >= 95
+        )
     }
 
     /**
@@ -101,6 +109,14 @@ class DesktopScreenFrameTest {
             "the substrate panel painted only one colour, so it appears as a blank rectangle " +
                 "rather than as a panel: $frame",
             !frame.isFlat
+        )
+        // Deliberately not asserted to fill the frame. A panel whose sections are shorter than
+        // the window is a panel with room to spare, and a scrolling panel legitimately ends
+        // where its content ends -- so the fraction is printed as a question rather than
+        // asserted as a verdict. It is 60 per cent at the time of writing, and the rest of the
+        // height shows the theme's background, which is a near-white lavender.
+        println(
+            "SUBSTRATE fills ${frame.filledHeightPercent} per cent of the height it was given"
         )
     }
 }
