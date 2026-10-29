@@ -77,9 +77,28 @@ object FrameInspection {
         /** True when the frame is one colour, which is a screen with nothing visible on it. */
         val isFlat: Boolean get() = distinctColours == 1
 
-        /** True when what was drawn covers most of the frame rather than a part of it. */
+        /**
+         * True when something other than the background reaches the edges of the frame.
+         *
+         * Counted rather than taken from the bounding box, and that distinction was a real
+         * mistake: a frame whose entire area is one colour has no bounding box at all, so an
+         * image that filled the frame completely and an image with nothing on it measured the
+         * same way. Whether a colour occurs at the edge is what separates them, and it does not
+         * care whether that colour is the most common one.
+         */
         val fills: Boolean
-            get() = contentWidth * 10 >= width * 9 && contentHeight * 10 >= height * 9
+            get() {
+                if (width == 0 || height == 0) return false
+                for (x in 0 until width) {
+                    if (pixels[x] != background) return true
+                    if (pixels[(height - 1) * width + x] != background) return true
+                }
+                for (y in 0 until height) {
+                    if (pixels[y * width] != background) return true
+                    if (pixels[y * width + width - 1] != background) return true
+                }
+                return false
+            }
 
         override fun toString(): String =
             "colours=$distinctColours background=#${background.toString(16).padStart(6, '0')} " +

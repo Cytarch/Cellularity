@@ -73,6 +73,12 @@ class DesktopFrameInspectionTest {
      * screen that is one flat rectangle is a bounding box that does not exist. Measuring it here
      * on a rectangle whose size is known is what makes it trustworthy when it is pointed at a
      * screen.
+     *
+     * The rectangle is placed away from the edges on purpose. Whether content reaches the edge is
+     * a separate question from how large it is, and the two were confused here first: a small
+     * rectangle in the top-left corner touches two edges, so a reader that answers the second
+     * question by looking at the edges calls it a filled frame. It is right to; the question was
+     * wrong.
      */
     @Test
     fun theExtentOfTheContentIsMeasured() {
@@ -94,20 +100,56 @@ class DesktopFrameInspectionTest {
         )
         assertEquals(60, frame.contentHeight)
         assertTrue(
-            "a rectangle smaller than the frame must not be reported as filling it: $frame",
-            !frame.fills
+            "the content of a small rectangle must not span the frame, but it measured " +
+                "${frame.contentWidth} by ${frame.contentHeight} in ${width}x$height: $frame",
+            frame.contentWidth < width && frame.contentHeight < height
         )
     }
 
-    /** A drawing that covers the frame has to be reported as covering it. */
+    /**
+     * A drawing that covers the frame has to be reported as covering it.
+     *
+     * The first attempt at this test drew a full-size box on top of another full-size box and
+     * expected the reader to say the frame was filled. It said the opposite, correctly: the two
+     * boxes were the same colour, so the picture really was one colour, and a frame of one
+     * colour has no bounding box to measure. The reader was right and the test was wrong -- but
+     * the same measurement also made "the screen is covered" and "the screen is empty"
+     * indistinguishable, which is a fault in the reader, and both were fixed.
+     *
+     * So the drawing here covers the frame and is not uniform: a differently coloured border
+     * around the edge. Whether a colour reaches the edge is what the reader now answers.
+     */
     @Test
     fun aDrawingThatFillsTheFrameIsReportedAsFillingIt() {
         val frame = FrameInspection.inspect(width, height) {
-            Box(modifier = Modifier.fillMaxSize().background(Color(0xFFFFFFFF))) {
-                Box(modifier = Modifier.fillMaxSize().background(Color(0xFF102030)))
+            Box(modifier = Modifier.fillMaxSize().background(Color(0xFF102030))) {
+                Box(
+                    modifier = Modifier
+                        .size((width - 40).dp, (height - 40).dp)
+                        .background(Color(0xFFFFFFFF))
+                )
             }
         }
 
         assertTrue("a full-frame drawing has to be reported as filling it: $frame", frame.fills)
+    }
+
+    /**
+     * An empty frame is not reported as filled, even though it is also "all background".
+     *
+     * This is the half that the first version of the reader got wrong: a frame with nothing on
+     * it and a frame covered edge to edge both have no content outside the background, so a
+     * reader that only measures the bounding box cannot tell a full screen from a blank one.
+     */
+    @Test
+    fun anEmptyFrameIsNotReportedAsFillingItself() {
+        val frame = FrameInspection.inspect(width, height) {
+            Box(modifier = Modifier.fillMaxSize().background(Color(0xFFFFFFFF)))
+        }
+
+        assertTrue(
+            "a frame with nothing on it must not be reported as filled: $frame",
+            !frame.fills
+        )
     }
 }
