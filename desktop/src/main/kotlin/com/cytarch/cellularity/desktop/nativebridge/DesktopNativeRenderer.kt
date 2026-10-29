@@ -234,6 +234,28 @@ object DesktopNativeRenderer {
     external fun nativeSurfaceExtent(sessionHandle: Long): LongArray?
 
     /**
+     * What Win32 would hand a click at this screen point to, among the windows the bridge
+     * made: 1 for one of them, 0 for something else inside the same top-level window, -1 for
+     * somewhere else entirely.
+     *
+     * The simulation is a native child window and the interface is drawn by Compose into the
+     * same top-level window, so which one a click reaches depends on what Windows considers
+     * to be on top at that pixel. Neither side knows about the other's windows, so this is the
+     * only account of it that is not a guess.
+     */
+    external fun nativeWindowAtPoint(screenX: Int, screenY: Int): Int
+
+    /**
+     * Writes one of the bridge's windows into a BMP file and returns the byte count, or -1.
+     *
+     * This is how the renderer's output is inspected without inspecting the machine: a screen
+     * capture would photograph whatever is in front and would take the screen from whoever is
+     * using it, while capturing one window by its handle reads only that window and leaves
+     * everyone else's screen untouched.
+     */
+    external fun nativeCaptureWindow(windowHandle: Long, path: String): Int
+
+    /**
      * Creates a simulation and attaches it to [windowHandle].
      *
      * Returns an opaque session handle, or 0 if the renderer could not start. The

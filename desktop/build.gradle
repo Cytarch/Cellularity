@@ -119,6 +119,32 @@ if (existingJavaOptions == null || !existingJavaOptions.contains('java.desktop/j
 // Measures whether the event thread is still being serviced while the simulation runs. A
 // frozen window is a claim about that one thread, and it is checkable without looking at
 // anything: post work to its queue and time the round trip.
+// Asks Windows which window a click at a screen point would reach. The simulation is a
+// native child window and the interface is drawn by Compose into the same top-level window,
+// so this is the only account of their layering that is not one side's opinion of the other.
+// Captures the renderer's own window and reads the picture back, so a defect in it is found
+// by a run rather than reported by a person. Capturing one window by its handle reads that
+// window and nothing else: no screen is photographed and no input is taken.
+tasks.register('runCaptureProbe', JavaExec) {
+    group = 'verification'
+    description = 'Captures the renderer window and checks the picture fills it.'
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'com.cytarch.cellularity.desktop.CaptureProbeKt'
+    environment 'JDK_JAVA_OPTIONS', "${existingJavaOptions ?: ''} ${requiredOpens}".trim()
+    systemProperty 'java.library.path', nativeOutputDirectory.absolutePath
+    environment 'CELLULARITY_NATIVE_DIR', nativeOutputDirectory.absolutePath
+    environment 'PATH', "${nativeOutputDirectory.absolutePath};${System.getenv('PATH')}"
+}
+tasks.register('runHitTestProbe', JavaExec) {
+    group = 'verification'
+    description = 'Reports whether a click reaches the simulation or the interface.'
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'com.cytarch.cellularity.desktop.HitTestProbeKt'
+    environment 'JDK_JAVA_OPTIONS', "${existingJavaOptions ?: ''} ${requiredOpens}".trim()
+    systemProperty 'java.library.path', nativeOutputDirectory.absolutePath
+    environment 'CELLULARITY_NATIVE_DIR', nativeOutputDirectory.absolutePath
+    environment 'PATH', "${nativeOutputDirectory.absolutePath};${System.getenv('PATH')}"
+}
 tasks.register('runEventThreadProbe', JavaExec) {
     group = 'verification'
     description = 'Reports whether the interface thread answers while the world runs.'

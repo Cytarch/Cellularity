@@ -75,6 +75,7 @@
 #include <chrono>
 #include <cmath>
 #include <cstdint>
+#include <fstream>
 #include <limits>
 #include <memory>
 #include <mutex>
@@ -125,6 +126,10 @@ constexpr jint kInputRefused = 0;
 // class from the window itself when it creates the Vulkan surface, and a class
 // registered against the wrong module produces a surface that is created
 // successfully but that no device reports as presentable.
+// Bounded so a pathological window chain cannot turn this into an unbounded walk. Real
+// hierarchies are a handful deep; anything longer is not a window tree a click could reach.
+constexpr int kMaximumAncestorHops = 64;
+
 constexpr const wchar_t* kChildWindowClassName =
         L"CellularityDesktopJniChildWindow";
 
@@ -589,6 +594,201 @@ Java_com_cytarch_cellularity_desktop_nativebridge_DesktopNativeRenderer_nativeSu
     }
     env->SetLongArrayRegion(result, 0, 2, values);
     return result;
+}
+
+// Captures one of this bridge's windows into a 32-bit top-down BMP file and returns the byte
+// count written, or -1 when the handle is not a live window this bridge created or the file
+// could not be written.
+//
+// This is for looking at the renderer's output without looking at the machine. The usual way
+// to check what a window looks like is a screen capture, which on a shared machine means
+// taking the screen away from whoever is using it, and which also photographs whatever
+// happens to be in front. Capturing one window by its handle answers the same question about
+// the same pixels and touches nothing else: the file holds this window's contents or an
+// error, and no part of anybody else's screen is read.
+//
+// PW_RENDERFULLCONTENT is what makes a window that is not on a monitor come out with its
+// contents rather than as a blank rectangle: a Vulkan surface presents into a composited
+// child window, and the ordinary path would ask the desktop compositor for pixels that were
+// never put on a monitor.
+extern "C" JNIEXPORT jint JNICALL
+Java_com_cytarch_cellularity_desktop_nativebridge_DesktopNativeRenderer_nativeCaptureWindow(
+        JNIEnv* env, jclass, jlong windowHandle, jstring path) {
+    try {
+        const HWND window = windowFromHandle(windowHandle);
+        if (!isBridgeWindow(window)) {
+            return -1;
+        }
+        std::string destination;
+        if (!readUtf8String(env, path, destination) || destination.empty()) {
+            return -1;
+        }
+
+        RECT bounds{};
+        if (::GetWindowRect(window, &bounds) == 0) {
+            return -1;
+        }
+        const int width = bounds.right - bounds.left;
+        const int height = bounds.bottom - bounds.top;
+        if (width <= 0 || height <= 0) {
+            return -1;
+        }
+
+        HDC windowDc = ::GetWindowDC(window);
+        if (windowDc == nullptr) {
+            return -1;
+        }
+        HDC memoryDc = ::CreateCompatibleDC(windowDc);
+        HBITMAP bitmap = memoryDc == nullptr
+                ? nullptr
+                : ::CreateCompatibleBitmap(windowDc, width, height);
+        if (memoryDc == nullptr || bitmap == nullptr) {
+            if (bitmap != nullptr) {
+                ::DeleteObject(bitmap);
+            }
+            if (memoryDc != nullptr) {
+                ::DeleteDC(memoryDc);
+            }
+            ::ReleaseDC(window, windowDc);
+            return -1;
+        }
+
+        // BitBlt rather than PrintWindow. PrintWindow asks the window to render itself into
+        // the given device context, and for a composited window whose contents live on the
+        // GPU that request is answered by the desktop compositor -- which does not answer at
+        // all for a window that is not on a monitor, and the call was observed to hang rather
+        // than fail. A blit copies whatever surface the window has and always returns.
+        //
+        // The consequence is honest and worth stating: a blit of a composited window can come
+        // back empty, because the pixels may never have been in that surface to begin with.
+        // An empty capture is therefore reported as an empty capture and not as a picture of
+        // a black world -- the caller decides what it means.
+        const HGDIOBJ previous = ::SelectObject(memoryDc, bitmap);
+        const BOOL rendered = ::BitBlt(memoryDc, 0, 0, width, height, windowDc, 0, 0,
+                SRCCOPY | CAPTUREBLT);
+        ::SelectObject(memoryDc, previous);
+
+        // Read back top-down so the file can be walked row by row by anything that reads a
+        // BMP, without the reader having to know which way round the rows are.
+        BITMAPINFO info{};
+        info.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+        info.bmiHeader.biWidth = width;
+        info.bmiHeader.biHeight = -height;
+        info.bmiHeader.biPlanes = 1;
+        info.bmiHeader.biBitCount = 32;
+        info.bmiHeader.biCompression = BI_RGB;
+        const std::size_t pixelBytes =
+                static_cast<std::size_t>(width) * static_cast<std::size_t>(height) * 4U;
+        std::vector<std::uint8_t> pixels(pixelBytes);
+        const int scanned = ::GetDIBits(memoryDc, bitmap, 0, static_cast<UINT>(height),
+                pixels.data(), &info, DIB_RGB_COLORS);
+
+        ::DeleteObject(bitmap);
+        ::DeleteDC(memoryDc);
+        ::ReleaseDC(window, windowDc);
+
+        if (rendered == 0 || scanned == 0) {
+            return -1;
+        }
+
+        const std::size_t headerBytes = 14U + 40U;
+        std::vector<std::uint8_t> file;
+        file.reserve(headerBytes + pixelBytes);
+        const auto append16 = [&file](std::uint16_t value) {
+            file.push_back(static_cast<std::uint8_t>(value & 0xFFU));
+            file.push_back(static_cast<std::uint8_t>((value >> 8U) & 0xFFU));
+        };
+        const auto append32 = [&file](std::uint32_t value) {
+            file.push_back(static_cast<std::uint8_t>(value & 0xFFU));
+            file.push_back(static_cast<std::uint8_t>((value >> 8U) & 0xFFU));
+            file.push_back(static_cast<std::uint8_t>((value >> 16U) & 0xFFU));
+            file.push_back(static_cast<std::uint8_t>((value >> 24U) & 0xFFU));
+        };
+        const std::uint32_t fileSize =
+                static_cast<std::uint32_t>(headerBytes + pixelBytes);
+        file.push_back('B');
+        file.push_back('M');
+        append32(fileSize);
+        append16(0);
+        append16(0);
+        append32(static_cast<std::uint32_t>(headerBytes));
+        append32(40U);
+        append32(static_cast<std::uint32_t>(width));
+        append32(static_cast<std::uint32_t>(height));
+        append16(1);
+        append16(32);
+        append32(0);
+        append32(static_cast<std::uint32_t>(pixelBytes));
+        append32(2835);
+        append32(2835);
+        append32(0);
+        append32(0);
+        file.insert(file.end(), pixels.begin(), pixels.end());
+
+        std::ofstream output(destination, std::ios::binary | std::ios::trunc);
+        if (!output) {
+            return -1;
+        }
+        output.write(reinterpret_cast<const char*>(file.data()),
+                static_cast<std::streamsize>(file.size()));
+        if (!output) {
+            return -1;
+        }
+        return static_cast<jint>(file.size());
+    } catch (...) {
+        return -1;
+    }
+}
+// Reports what Win32 would deliver a click at a screen point to, among the windows this
+// bridge made: 1 when the point belongs to one of them, 0 when it belongs to some other
+// window inside the same top-level window (which is what the interface drawing over the
+// simulation looks like), and -1 when the point is not in that top-level window at all or
+// belongs to no window.
+//
+// This settles a question that cannot be settled from either side alone. The simulation lives
+// in a native child window and the interface is drawn by Compose into the same top-level
+// window, so whether a click reaches the simulation depends on which of the two Win32
+// considers to be on top at that pixel -- and neither system knows about the other's
+// windows. Asking Windows directly is the only account of it that is not a guess, and it is
+// the difference between "the interface is over the simulation" and "the simulation is over
+// the interface and not receiving anything", which have opposite fixes.
+extern "C" JNIEXPORT jint JNICALL
+Java_com_cytarch_cellularity_desktop_nativebridge_DesktopNativeRenderer_nativeWindowAtPoint(
+        JNIEnv*, jclass, jint screenX, jint screenY) {
+    try {
+        POINT point{screenX, screenY};
+        const HWND hit = ::WindowFromPoint(point);
+        if (hit == nullptr) {
+            return -1;
+        }
+        if (isBridgeWindow(hit)) {
+            return 1;
+        }
+        // Walk up to the top-level window. A point inside a nested editor or a dialog would
+        // otherwise be compared against the wrong ancestor and read as "somewhere else".
+        HWND top = hit;
+        for (int hop = 0; hop < kMaximumAncestorHops; hop++) {
+            const HWND parent = ::GetAncestor(top, GA_PARENT);
+            if (parent == nullptr || parent == top || ::GetAncestor(parent, GA_PARENT) == nullptr) {
+                break;
+            }
+            top = parent;
+        }
+        // A bridge window that reaches the point through a child of its own is still the
+        // bridge's window, and the walk above may have started inside one.
+        if (isBridgeWindow(top)) {
+            return 1;
+        }
+        std::lock_guard<std::mutex> lock(gStateMutex);
+        for (const HWND window : gChildWindows) {
+            if (::IsWindow(window) != 0 && ::GetAncestor(window, GA_ROOT) == top) {
+                return 0;
+            }
+        }
+        return -1;
+    } catch (...) {
+        return -1;
+    }
 }
 
 // Reads the child window's rectangle and the client area of its parent.
