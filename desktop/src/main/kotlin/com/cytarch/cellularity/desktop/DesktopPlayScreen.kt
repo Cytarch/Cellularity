@@ -100,6 +100,17 @@ fun DesktopPlayScreen(
     val playStore = remember {
         DesktopPlayStore(source = PlayLaunchSource.New(configuration)) {
             pendingInput = pendingInput + SurfaceInputEvent.Reset
+        }.also { store ->
+            // An experiment opens on the plate, not on the panel that describes it.
+            //
+            // The phone opens on the substrate tab because that is where a person sets the
+            // environment up before starting, and the screen it opens on is the one they came for.
+            // On a desktop the same reasoning points the other way: the simulation is the reason
+            // the window exists, and the tab that shows it should be the one that is showing when
+            // the window appears. Opening on the substrate panel made the first thing a person saw
+            // a description of a world they had not looked at yet -- and, before the panel was
+            // reachable at all, a sentence saying it could not be read.
+            store.dispatch(PlayAction.SelectTab(PlayTab.MICROSCOPE))
         }
     }
     val playState = playStore.state
