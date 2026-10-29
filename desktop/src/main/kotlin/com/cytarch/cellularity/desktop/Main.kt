@@ -104,9 +104,11 @@ fun main() = application {
                         )
 
                     MainMenuEffect.ImportSucceeded -> notices.post(
-                        FileCollectionNotice(
-                            operation = FileCollectionOperation.IMPORT,
-                            feedback = FileCollectionFeedback.SAVED
+                        DesktopFileNotice(
+                            FileCollectionNotice(
+                                operation = FileCollectionOperation.IMPORT,
+                                feedback = FileCollectionFeedback.SAVED
+                            )
                         )
                     )
 
@@ -115,6 +117,7 @@ fun main() = application {
                     // whether it was a plate or a genome, and that mapping already exists
                     // and is already exhaustive. A copy would be a second place to be wrong.
                     is MainMenuEffect.ImportFailed -> notices.post(
+                        DesktopFileNotice(
                         storageNotice(
                             kind = when (effect.fileKind) {
                                 MainMenuImportedFileKind.GENOME -> FileCollectionKind.GENOMES
@@ -122,6 +125,7 @@ fun main() = application {
                             },
                             operation = FileCollectionOperation.IMPORT,
                             error = effect.error
+                        )
                         )
                     )
                 }

@@ -34,18 +34,34 @@ class DesktopNoticeTest {
         val queue = DesktopNoticeQueue()
         assertNull(queue.pending, "nothing has happened yet, so there is nothing to say")
 
-        val notice = FileCollectionNotice(
-            operation = FileCollectionOperation.RENAME,
-            feedback = FileCollectionFeedback.BAD_NAME
+        val notice = DesktopFileNotice(
+            FileCollectionNotice(
+                operation = FileCollectionOperation.RENAME,
+                feedback = FileCollectionFeedback.BAD_NAME
+            )
         )
         queue.post(notice)
 
-        assertNotNull(queue.pending, "a posted notice must wait to be shown")
-        assertEquals(notice, queue.pending)
+        assertEquals(notice, queue.pending, "a posted notice must wait to be shown")
 
         queue.clear()
 
         assertNull(queue.pending, "a shown notice must not be shown again")
+    }
+
+    @Test
+    fun `a notice from the settings screen shares the one queue`() {
+        // Both kinds travel through the same place, because both are shown by the same host
+        // and a second queue would be a second place for a message to be lost. The type is
+        // what makes that possible without the host having to know which page asked.
+        val queue = DesktopNoticeQueue()
+
+        queue.post(DesktopThemeNotice("Theme imported from polar.cltheme"))
+
+        assertEquals(
+            DesktopThemeNotice("Theme imported from polar.cltheme"),
+            queue.pending
+        )
     }
 
     @Test

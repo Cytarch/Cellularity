@@ -23,24 +23,41 @@ import com.cytarch.cellularity.shared.ui.main_menu.messageResource
 import org.jetbrains.compose.resources.getString
 
 /**
- * Where the launcher says what a file operation did.
+ * Something the launcher has to say, from whichever part of it asked.
+ *
+ * A file operation has words of its own in the shared resources, resolved from its reason; a
+ * theme export has only the sentence the file operation produced, because there is no
+ * failure taxonomy for "the dialog was cancelled" and inventing one would be worse than
+ * saying it plainly. Both are shown by the same host so there is one place that decides how
+ * a message appears and one queue that decides when.
+ */
+sealed interface DesktopNotice
+
+/** The outcome of a theme import or export, already in words. */
+data class DesktopThemeNotice(val message: String) : DesktopNotice
+
+/** What a stored-file operation did, in the terms the collection screens use. */
+data class DesktopFileNotice(val notice: FileCollectionNotice) : DesktopNotice
+
+/**
+ * Where the launcher says what it just did.
  *
  * Android shows these as a toast. A desktop window has no toast, so this is a snackbar at
  * the bottom of the same content -- the same words through the same resolver, on the surface
  * the platform does have.
  *
  * It exists because the alternative was already happening and was wrong: the launcher
- * received these notices and discarded them. Renaming a plate, deleting one, or failing to
- * import one would then complete with nothing said, which reads as the action having been
- * ignored. The message is not decoration; on the failure paths it is the only thing that
- * distinguishes "that name is taken" from "nothing happened".
+ * received these reports and discarded them. Renaming a plate, deleting one, importing a
+ * theme, or failing to do any of those would then complete with nothing said, which reads as
+ * the action having been ignored. The message is not decoration; on the failure paths it is
+ * the only thing that distinguishes "that name is taken" from "nothing happened".
  *
  * The cause is logged as well as shown, matching the phone, because the message is written
  * for a person and the storage code is what a report needs.
  */
 @Composable
 fun DesktopNoticeHost(
-    notice: FileCollectionNotice?,
+    notice: DesktopNotice?,
     onNoticeShown: () -> Unit,
     modifier: Modifier = Modifier,
     content: @Composable () -> Unit
@@ -49,15 +66,20 @@ fun DesktopNoticeHost(
 
     LaunchedEffect(notice) {
         val pending = notice ?: return@LaunchedEffect
-        pending.storageError?.let { error ->
-            System.err.println(
-                "Stored-file ${pending.operation} failed: ${error.code} ${error.detail}"
-            )
+        val message = when (pending) {
+            is DesktopThemeNotice -> pending.message
+
+            is DesktopFileNotice -> {
+                pending.notice.storageError?.let { error ->
+                    System.err.println(
+                        "Stored-file ${pending.notice.operation} failed: " +
+                            "${error.code} ${error.detail}"
+                    )
+                }
+                getString(pending.notice.feedback.messageResource())
+            }
         }
-        hostState.showSnackbar(
-            message = getString(pending.feedback.messageResource()),
-            duration = SnackbarDuration.Short
-        )
+        hostState.showSnackbar(message = message, duration = SnackbarDuration.Short)
         onNoticeShown()
     }
 
@@ -74,15 +96,15 @@ fun DesktopNoticeHost(
 /**
  * Remembers the last notice until something has shown it.
  *
- * Kept in one place because both collection pages need it and neither owns the other. The
- * notice is cleared by the host rather than by a timer, so a message is never replaced by a
- * later one before it has been read.
+ * Kept in one place because every page needs it and none owns another. The notice is cleared
+ * by the host rather than by a timer, so a message is never replaced by a later one before it
+ * has been read.
  */
 class DesktopNoticeQueue {
-    var pending by mutableStateOf<FileCollectionNotice?>(null)
+    var pending by mutableStateOf<DesktopNotice?>(null)
         private set
 
-    fun post(notice: FileCollectionNotice) {
+    fun post(notice: DesktopNotice) {
         pending = notice
     }
 

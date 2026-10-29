@@ -26,6 +26,7 @@ import com.cytarch.cellularity.shared.ui.main_menu.gene_bank.GeneBankAction
 import com.cytarch.cellularity.shared.ui.main_menu.gene_bank.GeneBankEffect
 import com.cytarch.cellularity.shared.ui.main_menu.gene_bank.GeneBankScreen
 import com.cytarch.cellularity.shared.ui.main_menu.gene_bank.GeneBankStore
+import com.cytarch.cellularity.shared.ui.main_menu.settings.SettingsAction
 import com.cytarch.cellularity.shared.ui.main_menu.settings.SettingsScreen
 import com.cytarch.cellularity.shared.ui.main_menu.settings.SettingsStore
 import kotlinx.coroutines.CoroutineScope
@@ -68,7 +69,11 @@ fun DesktopMainMenuPages(
             notices = notices
         )
 
-        MainMenuPage.SETTINGS -> DesktopSettingsPage(environment = environment, scope = scope)
+        MainMenuPage.SETTINGS -> DesktopSettingsPage(
+            environment = environment,
+            scope = scope,
+            notices = notices
+        )
 
         MainMenuPage.ABOUT -> Box(modifier = Modifier.fillMaxSize()) {
             AboutScreen(versionName = DESKTOP_VERSION_NAME)
@@ -106,7 +111,7 @@ private fun DesktopFreezerPage(
 
                 // Shown rather than dropped. A rename, a delete or a refused import that
                 // says nothing is indistinguishable from a button that does not work.
-                is FreezerEffect.ShowNotice -> notices.post(effect.notice)
+                is FreezerEffect.ShowNotice -> notices.post(DesktopFileNotice(effect.notice))
             }
         }
     }
@@ -160,7 +165,7 @@ private fun DesktopGeneBankPage(
                     GeneBankAction.ShareFinished(StoredFileShareOutcome.NoCompatibleTarget)
                 )
 
-                is GeneBankEffect.ShowNotice -> notices.post(effect.notice)
+                is GeneBankEffect.ShowNotice -> notices.post(DesktopFileNotice(effect.notice))
             }
         }
     }
@@ -186,7 +191,8 @@ private fun DesktopGeneBankPage(
 @Composable
 private fun DesktopSettingsPage(
     environment: DesktopEnvironment,
-    scope: CoroutineScope
+    scope: CoroutineScope,
+    notices: DesktopNoticeQueue
 ) {
     // The shared store already owns the read-modify-write of the document, so the
     // launcher does not restate those rules; it only says where the document lives.
@@ -195,16 +201,43 @@ private fun DesktopSettingsPage(
     }
     val settings by store.state.collectAsState()
 
+    // The platform's own window is the parent, so the picker belongs to the application
+    // rather than floating free of it.
+    val window = java.awt.KeyboardFocusManager.getCurrentKeyboardFocusManager()
+        .activeWindow as? java.awt.Frame
+
     SettingsScreen(
         state = settings,
         onAction = { action -> scope.launch { store.dispatch(action) } },
-        // Crash reports and theme files are platform features the desktop build does
-        // not have yet. The screen treats them as optional, so nothing is shown that
-        // would not work.
+        // Crash reports are a phone feature: this build has no crash reporter to list
+        // from, and the screen treats an empty list as "say nothing" rather than as "show
+        // a button that does nothing".
         crashReports = emptyList(),
         onExportDiagnostics = { },
-        onExportTheme = { },
-        onImportTheme = { }
+        onExportTheme = {
+            val message = DesktopThemeFiles.export(
+                parent = window,
+                colors = settings.theme,
+                components = settings.themeComponents
+            )
+            if (message != null) {
+                notices.post(DesktopThemeNotice(message))
+            }
+        },
+        onImportTheme = {
+            val imported = DesktopThemeFiles.import(window)
+            val colors = imported.colors
+            val components = imported.components
+            if (colors != null && components != null) {
+                // Applied through the store, so an imported theme is written to settings by
+                // the same code that writes an edited one. There is no second path to the
+                // file, and therefore no way for the two to disagree.
+                scope.launch {
+                    store.dispatch(SettingsAction.SetTheme(colors, components))
+                }
+            }
+            notices.post(DesktopThemeNotice(imported.message))
+        }
     )
 }
 
