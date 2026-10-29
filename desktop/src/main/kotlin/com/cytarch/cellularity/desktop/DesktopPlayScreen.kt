@@ -24,6 +24,8 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.unit.dp
+import com.cytarch.cellularity.desktop.nativebridge.DesktopCellDiagnosis
+import com.cytarch.cellularity.shared.ui.play.microscope.MicroscopeTool
 import com.cytarch.cellularity.desktop.files.DesktopCellularityFileRepository
 import com.cytarch.cellularity.desktop.nativebridge.DesktopAssetRoots
 import com.cytarch.cellularity.desktop.nativebridge.SurfaceInputEvent
@@ -223,6 +225,31 @@ fun DesktopPlayScreen(
             genomeContent = { GenomeTab(fileRepository) }
         )
     }
+
+    // Reading the selected cell is a read of the runtime's status, and the two are published
+    // together, so it is polled here rather than pushed from the render thread: the render
+    // thread owns the session and must not also be the thread that composes, and a status
+    // read is not a frame. The interval is the phone's, because the panel is the same panel
+    // and a person reading it cannot tell 250 ms from 500.
+    //
+    // Only the diagnosis tool is polled. The runtime answers "what is this cell" only while
+    // that tool is selected -- it publishes the flag that says so -- and asking during the
+    // other tools would be asking for a document that was never written.
+    LaunchedEffect(sessionHandle, microscopeState.selectedTool) {
+        val handle = sessionHandle
+        if (handle == 0L || microscopeState.selectedTool != MicroscopeTool.DIAGNOSIS) {
+            // Leaving the tool clears the panel: the runtime stops answering, and a panel
+            // still showing the last cell it described would be describing a selection that
+            // is no longer being read.
+            microscopeStore.dispatch(MicroscopeAction.InspectionObserved(null))
+            return@LaunchedEffect
+        }
+        while (true) {
+            val inspection = DesktopCellDiagnosis.inspectSelectedCell(handle)
+            microscopeStore.dispatch(MicroscopeAction.InspectionObserved(inspection))
+            kotlinx.coroutines.delay(CELL_DIAGNOSIS_INTERVAL_MILLIS)
+        }
+    }
 }
 
 /**
@@ -298,3 +325,10 @@ private fun GenomeTab(fileRepository: DesktopCellularityFileRepository) {
 private object NoMicroscopeGenome : GenomeProvider {
     override val genome: GenomeDraft? = null
 }
+/**
+ * How often the diagnosis panel is refreshed while it is showing.
+ *
+ * The phone's interval, because it is the same panel and the same runtime: a status read is
+ * cheap, and a person cannot tell four refreshes a second from two.
+ */
+private const val CELL_DIAGNOSIS_INTERVAL_MILLIS = 500L

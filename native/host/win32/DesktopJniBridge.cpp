@@ -1593,16 +1593,16 @@ Java_com_cytarch_cellularity_desktop_nativebridge_DesktopNativeRenderer_nativeAp
     }
 }
 
-// Reads the runtime's status as ten longs, in this order: revision, worldEpoch,
+// Reads the runtime's status as eleven longs, in this order: revision, worldEpoch,
 // completedUpdateCount, cellCount, foodAsWholeUnits, simulationTimeMillis,
-// temperatureMode, toolOrdinal, selectedCellId, failedFlag. Null when the handle is not
-// a live session.
+// temperatureMode, toolOrdinal, selectedCellId, failedFlag, diagnosisRequestedFlag. Null
+// when the handle is not a live session.
 //
-// One array rather than ten calls, because the runtime publishes these fields as one
-// snapshot: ten readings would be ten different moments, and a status line assembled from
-// them would show a cell count from before an update next to a revision from after it.
+// One array rather than eleven calls, because the runtime publishes these fields as one
+// snapshot: eleven readings would be eleven different moments, and a status line assembled
+// from them would show a cell count from before an update next to a revision from after it.
 //
-// Two of the ten are conversions, and both are done here rather than by each caller. The
+// Two of the eleven are conversions, and both are done here rather than by each caller. The
 // snapshot reports food as a total mass, which is the only food figure it carries -- there
 // is no food count in it -- and it is rounded to whole units so that a plate with food on
 // it does not read as zero. Simulation time is fractional seconds and is reported as whole
@@ -1642,6 +1642,11 @@ Java_com_cytarch_cellularity_desktop_nativebridge_DesktopNativeRenderer_nativeRe
                 // The managed declaration reads this as a flag, so a runtime that has
                 // failed reports 1 rather than the C++ bool's byte.
                 snapshot.failed ? 1 : 0,
+                // Whether the runtime is currently answering the question "what is this
+                // cell". It is true only while the diagnosis tool is selected and a cell is
+                // selected, which is exactly when a snapshot was written -- so a caller that
+                // reads it as a flag never asks for a document that was never produced.
+                snapshot.diagnosisRequested ? 1 : 0,
         };
         constexpr jsize kValueCount =
                 static_cast<jsize>(sizeof(values) / sizeof(values[0]));
@@ -1683,6 +1688,37 @@ Java_com_cytarch_cellularity_desktop_nativebridge_DesktopNativeRenderer_nativeIn
             return nullptr;
         }
         return toJavaByteArray(env, *document);
+    } catch (...) {
+        return nullptr;
+    }
+}
+
+// Reads the selected cell's genome as the same document the phone reads, or null when the
+// handle is not a live session, nothing is selected, or the read failed.
+//
+// The genome is a separate document from the cell snapshot because the runtime publishes them
+// separately and for different reasons: the cell changes every frame, the genome does not, and
+// the diagnosis panel shows both because they describe the same organism. Returning them as
+// one document would mean re-sending a genome whenever a cell moved.
+extern "C" JNIEXPORT jbyteArray JNICALL
+Java_com_cytarch_cellularity_desktop_nativebridge_DesktopNativeRenderer_nativeInspectSelectedGenome(
+        JNIEnv* env, jclass, jlong sessionHandle) {
+    const std::shared_ptr<DesktopSession> session = findSession(sessionHandle);
+    if (!session) {
+        return nullptr;
+    }
+    try {
+        const std::shared_ptr<NativeCellularityController> controller =
+                liveController(session);
+        if (!controller) {
+            return nullptr;
+        }
+        const std::optional<std::vector<std::uint8_t>> genome =
+                controller->inspectMicroscopeSelectedGenome();
+        if (!genome.has_value() || genome->empty()) {
+            return nullptr;
+        }
+        return toJavaByteArray(env, *genome);
     } catch (...) {
         return nullptr;
     }

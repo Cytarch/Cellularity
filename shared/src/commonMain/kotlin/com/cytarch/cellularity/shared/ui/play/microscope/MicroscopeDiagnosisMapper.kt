@@ -18,7 +18,11 @@ object MicroscopeDiagnosisMapper {
     fun map(inspection: CellInspectionSnapshot?): MicroscopeDiagnosis {
         if (inspection == null) return MicroscopeDiagnosis.noSelection()
         val cell = inspection.cell
-        val activeGene = inspection.genome.genes.getOrNull(cell.geneIndex)
+        // A genome that was not read is not a genome to invent. Everything below already has
+        // a path for "no gene": the sections that need one drop out and the rest of the panel
+        // still describes the cell, which is the honest reading of a cell whose genome has
+        // not arrived yet.
+        val activeGene = inspection.genome?.genes?.getOrNull(cell.geneIndex)
         val cellTypeText = MicroscopeText.cellType(cell.cellType)
 
         val cellItems = mutableListOf(

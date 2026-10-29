@@ -416,6 +416,15 @@ object DesktopNativeRenderer {
      */
     external fun nativeInspectCell(sessionHandle: Long, cellId: Int): ByteArray?
 
+    /**
+     * The selected cell's genome, in the same format the phone reads it in.
+     *
+     * Separate from the cell snapshot because the runtime publishes them separately: a cell
+     * changes every frame and a genome does not, so they are two documents rather than one.
+     * Null when nothing is selected, which is the ordinary state of a plate nobody has tapped.
+     */
+    external fun nativeInspectSelectedGenome(sessionHandle: Long): ByteArray?
+
     external fun nativeStopSession(sessionHandle: Long): Int
 
     external fun nativeDestroyWindow(windowHandle: Long): Int
