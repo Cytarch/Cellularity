@@ -24,8 +24,27 @@ import java.nio.file.Path
 object DesktopAssetRoots {
 
     data class Roots(val shaderRoot: Path, val textureRoot: Path) {
+        /**
+         * Whether the renderer would find its assets through this root pair.
+         *
+         * The renderer is given both roots and searches them in order for every resource it
+         * asks for, so a resource does not have to be in the root named after it. Both of the
+         * layouts in use rely on that and in opposite ways: a development run keeps the
+         * compiled shaders in the build tree and the textures beside the sources, so each
+         * asset is in a different root, while a package keeps both in one. What has to hold
+         * is that each required asset is in one of them.
+         *
+         * Existence of the directories alone is not enough. A staging step that creates the
+         * shader directory and copies nothing into it leaves a layout that looks complete and
+         * a session that cannot compile a program, so the assets themselves are asked for.
+         * The two named here are the ones the renderer opens before it can draw at all.
+         */
         val isValid: Boolean
-            get() = Files.isDirectory(shaderRoot) && Files.isDirectory(textureRoot)
+            get() = holds(REQUIRED_SHADER) && holds(REQUIRED_TEXTURE)
+
+        private fun holds(relative: String): Boolean =
+            Files.isRegularFile(shaderRoot.resolve(relative)) ||
+                Files.isRegularFile(textureRoot.resolve(relative))
     }
 
     fun resolve(): Roots? {
@@ -42,9 +61,8 @@ object DesktopAssetRoots {
         while (directory != null) {
             val shader = directory.resolve(SHADER_RELATIVE)
             val texture = directory.resolve(TEXTURE_RELATIVE)
-            if (Files.isDirectory(shader) && Files.isDirectory(texture)) {
-                return Roots(shader, texture)
-            }
+            val roots = Roots(shader, texture)
+            if (roots.isValid) return roots
             directory = directory.parent
         }
         return null
@@ -53,17 +71,14 @@ object DesktopAssetRoots {
     /**
      * The roots inside a packaged application, or null when this is not one.
      *
-     * The two roots are not siblings and are not the same directory. The renderer opens
-     * `vulkan/shaders/<name>.spv` inside the shader root and `textures/<name>.png` inside the
-     * texture root, so the shader root has to be the directory that *contains* `vulkan`, and
-     * the texture root the one that contains `textures`. The staging puts both under one
-     * `native` directory, which makes them look interchangeable here; they are not, and
-     * pointing the shader root at the texture directory produces a package that finds no
-     * shaders at all and fails while starting a session rather than at build time.
+     * Both halves are the same directory, because a package is staged with its shaders and
+     * its textures under one root. The pair is still reported as a pair rather than
+     * collapsed to a single value, so that the shape the rest of the code sees does not
+     * depend on which layout answered.
      *
-     * Both halves have to be present for this to answer: a resources directory that holds
-     * only one of them is an incomplete package, and falling through to the build-tree walk
-     * lets a development run that happens to have the property set still start.
+     * A package that does not hold both required assets is not accepted, and falling through
+     * to the build-tree walk is what lets a development run that happens to have the
+     * property set still start.
      */
     private fun packagedRoots(): Roots? {
         val resources = System.getProperty(RESOURCES_DIRECTORY_PROPERTY)
@@ -71,10 +86,7 @@ object DesktopAssetRoots {
             ?.let { Path.of(it) }
             ?: return null
         val native = resources.resolve(PACKAGED_NATIVE_DIRECTORY)
-        val roots = Roots(
-            shaderRoot = native,
-            textureRoot = native.resolve(PACKAGED_TEXTURE_RELATIVE)
-        )
+        val roots = Roots(shaderRoot = native, textureRoot = native)
         return roots.takeIf { it.isValid }
     }
 
@@ -83,7 +95,6 @@ object DesktopAssetRoots {
 
     /** The layout `stageNativeAssets` in desktop/build.gradle stages into. */
     private const val PACKAGED_NATIVE_DIRECTORY = "native"
-    private const val PACKAGED_TEXTURE_RELATIVE = "textures"
 
     /**
      * The shader root relative to the build tree, and the directory the renderer opens
@@ -92,4 +103,14 @@ object DesktopAssetRoots {
     private const val SHADER_RELATIVE =
         "build/win-cmake/generated/vulkanShaders/host/assets"
     private const val TEXTURE_RELATIVE = "native/rendering/assets"
+
+    /**
+     * Assets a usable root must hold to be worth choosing.
+     *
+     * The renderer opens the background program and the cell texture before it can draw
+     * anything, so their absence is what separates a root that works from one that only
+     * looks like it does.
+     */
+    private const val REQUIRED_SHADER = "vulkan/shaders/background.vert.spv"
+    private const val REQUIRED_TEXTURE = "textures/small_dots.png"
 }
