@@ -226,17 +226,41 @@ private fun reportSurfaceExtent() {
         println("LAYOUT presenting at ${surfaceWidth}x$surfaceHeight; canvas unknown")
         return
     }
+    // The canvas extent is what AWT counts in and the surface extent is what the display has.
+    // On a scaled display the two are supposed to differ, by exactly the scaling factor, so
+    // comparing them for equality reports correct behaviour as a defect -- which an earlier
+    // version of this did until the difference was understood and turned out to be the bug.
     val canvasWidth = canvas[1].toLong()
     val canvasHeight = canvas[2].toLong()
+    val scaleX = surfaceWidth.toDouble() / canvasWidth
+    val scaleY = surfaceHeight.toDouble() / canvasHeight
     println(
-        "LAYOUT presenting at ${surfaceWidth}x$surfaceHeight " +
-            "in a canvas of ${canvasWidth}x$canvasHeight " +
-            "fills=${surfaceWidth == canvasWidth && surfaceHeight == canvasHeight}"
+        "LAYOUT presenting at ${surfaceWidth}x$surfaceHeight for a canvas of " +
+            "${canvasWidth}x$canvasHeight, a scale of %.4f x %.4f".format(scaleX, scaleY)
     )
-    if (surfaceWidth != canvasWidth || surfaceHeight != canvasHeight) {
+    if (kotlin.math.abs(scaleX - scaleY) > 0.001) {
+        println("LAYOUT the two axes disagree, which no display scale explains")
+        return
+    }
+    if (scaleX == 1.0) {
+        println("LAYOUT the display is at its native scale, so the two are equal")
+    } else {
         println(
-            "LAYOUT the picture does not fill its viewport: it is drawn into " +
-                "${surfaceWidth}x$surfaceHeight of ${canvasWidth}x$canvasHeight"
+            ("LAYOUT the display draws %.0f per cent, so a surface built from the canvas " +
+                "extent alone would cover %.0f per cent of its window in each direction")
+                .format(scaleX * 100.0, 100.0 / scaleX)
+        )
+    }
+    val handle = Regex("window=(\\d+)").find(surfaceDescription())?.groupValues?.get(1)
+        ?.toLongOrNull()?.takeIf { it != 0L }
+    val window = handle?.let { nativeWindowGeometry(it) }
+    if (window != null && window.size >= 4) {
+        val windowWidth = window[2]
+        val windowHeight = window[3]
+        println(
+            "LAYOUT surface against the window Win32 gave it: ${surfaceWidth}x$surfaceHeight " +
+                "against ${windowWidth}x$windowHeight, equal=" +
+                "${surfaceWidth == windowWidth && surfaceHeight == windowHeight}"
         )
     }
 }

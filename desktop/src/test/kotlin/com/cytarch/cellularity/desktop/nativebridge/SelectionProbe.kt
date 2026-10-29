@@ -9,7 +9,6 @@ import androidx.compose.ui.awt.ComposePanel
 import androidx.compose.ui.awt.ComposeWindow
 import com.cytarch.cellularity.desktop.DesktopPlayScreen
 import com.cytarch.cellularity.desktop.files.DesktopCellularityFileRepository
-import com.cytarch.cellularity.shared.model.CellSnapshotWireCodec
 import com.cytarch.cellularity.shared.model.SimulationContract
 import java.awt.Dimension
 import java.nio.file.Files
@@ -18,26 +17,26 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicReference
 
 /**
- * Proves that a tap on the plate selects a cell and that the cell can be read back.
+ * Asks whether a tap reaches the simulation, by tapping where cells actually are.
  *
- * The objective this covers is "input reaches the simulation, not only the camera". Two
- * things have to be true for that and neither was ever checked on the desktop. A tap has to
- * change the simulation's own selection, which is only visible through the status the runtime
- * publishes. And `nativeInspectCell`, which the launcher has been able to call since the
- * bridge was written, has to return a document the managed side can actually decode -- it had
- * never been called even once, so a wrong byte order or a field the native side does not
- * write would have stayed invisible until someone clicked a cell and saw nothing.
+ * The first version of this probe tapped the middle of the plate and reported that nothing was
+ * selected, which was read as "input does not reach the simulation". That reading was wrong,
+ * and the reason is in the selection rule itself: a tap selects a cell only if there is a cell
+ * under it, and a plate seeded at random does not have one at its exact centre. Tapping the
+ * centre of an empty dish proves nothing about input, and reporting it as a failure would have
+ * sent the next hours of work after a fault that was not there.
  *
- * Both halves are checked here against a live session rather than against a fixture, because
- * the thing that could be wrong is the agreement between two implementations, and a fixture
- * written by one of them cannot disagree with itself.
+ * So the probe taps a grid across the dish and counts how many taps select a cell. A grid that
+ * selects nothing anywhere is a real fault: the taps are not arriving, or not being converted,
+ * or not being applied. A grid that selects at some points and not others is a working input
+ * path over a dish with gaps in it, which is what a dish of scattered cells is.
  *
- * The window is realised outside every monitor. AWT only creates peers for a window that is
- * shown, and without a peer there is no handle to parent the renderer to and no session, so
- * the run has to be a real one; parked off the desktop it is in front of nobody.
+ * A tap that selects is followed by reading that cell's document, because that is what the
+ * diagnosis panel will do: the two halves have to agree about which cell was read, and one of
+ * them is written by native code that no managed test can check on its own.
  *
- * Run through `:desktop:runSelectionProbe`. Exits non-zero when the tap does not select, when
- * the snapshot does not decode, or when the two disagree about which cell was read.
+ * The window is realised outside every monitor, so a real session runs while nothing appears
+ * in front of anybody. Run through `:desktop:runSelectionProbe`.
  */
 fun main() {
     val failure = AtomicReference<Throwable?>(null)
@@ -64,7 +63,7 @@ fun main() {
             }
             frame.contentPane.add(panel)
             frame.pack()
-            frame.setLocation(-4200, -4200)
+            frame.setLocation(-4950, -4950)
             window.set(frame)
             frame.isVisible = true
         } catch (thrown: Throwable) {
@@ -80,7 +79,6 @@ fun main() {
     }
     failure.get()?.let { thrown: Throwable ->
         println("SELECTION could not open the play screen: $thrown")
-        thrown.printStackTrace()
         kotlin.system.exitProcess(3)
     }
 
@@ -90,47 +88,90 @@ fun main() {
         println("SELECTION no session started; the surface said: ${SurfaceDiagnostics.describe()}")
         kotlin.system.exitProcess(4)
     }
-    println("SELECTION session started: ${SurfaceDiagnostics.describe()}")
-
-    val extent = canvasExtent()
+    val description = SurfaceDiagnostics.describe()
+    println("SELECTION session started: $description")
+    val extent = Regex("canvas=(\\d+)x(\\d+)").find(description)?.groupValues
     if (extent == null) {
         println("SELECTION the surface did not report its canvas extent")
         kotlin.system.exitProcess(5)
     }
-    val (width, height) = extent
+    val width = extent[1].toFloat()
+    val height = extent[2].toFloat()
+    val cells = DesktopNativeRenderer.nativeCellCount(session)
+    println("SELECTION the dish holds $cells cells, in a canvas of ${width.toInt()}x${height.toInt()}")
 
-    // The middle of the plate is where a person would click. A corner would land on the dish
-    // wall, which is a legitimate place to click and a poor place to expect a cell.
-    val before = readStats(session)
-    println("SELECTION before the tap: selectedCellId=${before?.getOrNull(8)} cells=${before?.getOrNull(3)}")
+    var selected = 0
+    var refused = 0
+    var firstSelectedId = -1
+    // A grid across the middle of the viewport. The dish is drawn centred and smaller than the
+    // canvas, so the outermost fractions are skipped: a tap outside the dish is a legitimate
+    // tap that finds nothing, and including those would only dilute the count this exists for.
+    val fractions = listOf(0.30f, 0.40f, 0.50f, 0.60f, 0.70f)
+    for (fractionY in fractions) {
+        val row = StringBuilder()
+        for (fractionX in fractions) {
+            val x = width * fractionX
+            val y = height * fractionY
+            val queued = DesktopNativeRenderer.nativeQueueTap(session, x, y)
+            if (queued != 1) {
+                refused++
+                row.append('R')
+                continue
+            }
+            val id = awaitSelection(session)
+            if (id == null) {
+                row.append('.')
+            } else {
+                selected++
+                if (firstSelectedId < 0) {
+                    // Left selected deliberately. The genome is read from whatever the
+                    // simulation currently has selected, so deselecting here -- as the first
+                    // version of this probe did, to keep later taps from toggling -- made the
+                    // genome read come back empty and look like a fault in the read rather
+                    // than in the order the two were done in.
+                    firstSelectedId = id
+                } else {
+                    // Tapped again to deselect, so a later tap is a selection rather than a
+                    // toggle that switches off the cell an earlier tap had selected.
+                    DesktopNativeRenderer.nativeQueueTap(session, x, y)
+                    awaitSelectionCleared(session)
+                }
+                row.append('#')
+            }
+        }
+        println("SELECTION tap row at y=${(height * fractionY).toInt()}: $row")
+    }
 
-    val queued = DesktopNativeRenderer.nativeQueueTap(
-        session,
-        width / 2f,
-        height / 2f
-    )
-    println("SELECTION tap queued: result=$queued")
+    println("SELECTION taps that selected a cell: $selected of ${fractions.size * fractions.size}")
+    if (refused > 0) {
+        println("SELECTION taps the bridge refused: $refused")
+    }
 
-    val selectedId = awaitSelection(session)
-    if (selectedId == null) {
-        println("SELECTION the tap did not select a cell; the status never reported one")
+    if (selected == 0) {
+        println(
+            "SELECTION no tap selected a cell anywhere on the dish: input is not reaching the " +
+                "simulation, or is not being applied"
+        )
         shutdown(frame)
         kotlin.system.exitProcess(6)
     }
-    println("SELECTION the tap selected cell $selectedId")
 
-    val document = DesktopNativeRenderer.nativeInspectCell(session, selectedId)
+    // The document for a cell the simulation itself says is selected. The two halves of this
+    // port have to agree about which cell that is: the identifier comes from the runtime's
+    // status and the document is written by the same runtime, so a mismatch means one of them
+    // is describing a different cell than the other.
+    val document = DesktopNativeRenderer.nativeInspectCell(session, firstSelectedId)
     if (document == null) {
-        println("SELECTION the runtime had no document for cell $selectedId")
+        println("SELECTION the runtime wrote no document for the selected cell $firstSelectedId")
         shutdown(frame)
         kotlin.system.exitProcess(7)
     }
-    println("SELECTION the runtime returned ${document.size} bytes for it")
-
     val decoded = try {
-        CellSnapshotWireCodec.decode(document)
+        com.cytarch.cellularity.shared.model.CellSnapshotWireCodec.decode(document)
     } catch (thrown: Throwable) {
-        println("SELECTION the document did not decode: ${thrown::class.simpleName}: ${thrown.message}")
+        println(
+            "SELECTION the document did not decode: ${thrown::class.simpleName}: ${thrown.message}"
+        )
         shutdown(frame)
         kotlin.system.exitProcess(8)
     }
@@ -139,22 +180,38 @@ fun main() {
         shutdown(frame)
         kotlin.system.exitProcess(9)
     }
-
-    // The two halves have to agree about which cell was read, or the panel would describe one
-    // cell while the interface had selected another.
-    if (decoded.id != selectedId) {
-        println("SELECTION the snapshot is for cell ${decoded.id}, not $selectedId")
+    if (decoded.id != firstSelectedId) {
+        println("SELECTION the snapshot is for cell ${decoded.id}, not $firstSelectedId")
         shutdown(frame)
         kotlin.system.exitProcess(10)
     }
-
     println(
         "SELECTION decoded cell ${decoded.id}: type=${decoded.cellType} " +
             "radius=${decoded.radius} mass=${decoded.mass} age=${decoded.age} " +
-            "position=(${decoded.positionX}, ${decoded.positionY}) mirrored=${decoded.mirrored}"
+            "geneIndex=${decoded.geneIndex} mirrored=${decoded.mirrored}"
     )
-    println("SELECTION input reached the simulation and the cell could be read back")
 
+    val genome = DesktopNativeRenderer.nativeInspectSelectedGenome(session)
+    if (genome == null) {
+        println("SELECTION the runtime wrote no genome for the selected cell")
+    } else {
+        val draft = try {
+            com.cytarch.cellularity.shared.model.GenomeDraftWireCodec.decode(genome)
+        } catch (thrown: Throwable) {
+            println(
+                "SELECTION the genome did not decode: ${thrown::class.simpleName}: ${thrown.message}"
+            )
+            shutdown(frame)
+            kotlin.system.exitProcess(11)
+        }
+        println(
+            "SELECTION decoded its genome: ${draft.genes.size} genes, " +
+                "and the cell's gene ${decoded.geneIndex} is " +
+                "${draft.genes.getOrNull(decoded.geneIndex)?.cellType}"
+        )
+    }
+
+    println("SELECTION input reaches the simulation and the selected cell can be read back")
     shutdown(frame)
     kotlin.system.exitProcess(0)
 }
@@ -175,66 +232,51 @@ private fun settle(millis: Long) {
     }
 }
 
-/** Waits for the surface to publish a session, up to a point where waiting is pointless. */
 private fun awaitSession(): Long {
     repeat(SESSION_WAIT_STEPS) {
-        sessionHandleFromDiagnostics()?.let { return it }
+        val match = Regex("session=(\\d+)").find(SurfaceDiagnostics.describe())
+        val value = match?.groupValues?.get(1)?.toLongOrNull() ?: 0L
+        if (value != 0L) return value
         settle(SESSION_WAIT_MILLIS)
     }
     return 0L
 }
 
 /**
- * The live session, taken from the surface's own report.
- *
- * Read out of the description rather than reached for through the composition: the probe is
- * outside the interface on purpose, so that what it measures is the renderer and not the
- * interface's opinion of it.
- */
-private fun sessionHandleFromDiagnostics(): Long? {
-    val match = Regex("session=(\\d+)").find(SurfaceDiagnostics.describe()) ?: return null
-    val value = match.groupValues[1].toLongOrNull() ?: return null
-    return value.takeIf { it != 0L }
-}
-
-private fun canvasExtent(): Pair<Int, Int>? {
-    val match = Regex("canvas=(\\d+)x(\\d+)").find(SurfaceDiagnostics.describe()) ?: return null
-    val width = match.groupValues[1].toIntOrNull() ?: return null
-    val height = match.groupValues[2].toIntOrNull() ?: return null
-    if (width <= 0 || height <= 0) return null
-    return width to height
-}
-
-private fun readStats(session: Long): LongArray? =
-    DesktopNativeRenderer.nativeReadStats(session)
-
-/**
  * Waits for the runtime to report a selected cell.
  *
  * The tap is queued and applied on the runtime's own thread, so the selection appears in the
  * status some frames later; polling is the only way to see it, and the timeout is what turns
- * "not yet" into "never".
+ * "not yet" into "no".
  */
 private fun awaitSelection(session: Long): Int? {
     repeat(SELECTION_WAIT_STEPS) {
-        val stats = readStats(session)
-        val selected = stats?.getOrNull(STATUS_SELECTED_CELL_ID)?.toInt()
-        if (selected != null && selected >= 0) return selected
+        val selected = selectedCellId(session)
+        if (selected != null) return selected
         settle(SELECTION_WAIT_MILLIS)
     }
     return null
 }
 
+private fun awaitSelectionCleared(session: Long) {
+    repeat(SELECTION_WAIT_STEPS) {
+        if (selectedCellId(session) == null) return
+        settle(SELECTION_WAIT_MILLIS)
+    }
+}
+
+private fun selectedCellId(session: Long): Int? {
+    val stats = DesktopNativeRenderer.nativeReadStats(session) ?: return null
+    if (stats.size <= STATUS_SELECTED_CELL_ID) return null
+    val selected = stats[STATUS_SELECTED_CELL_ID].toInt()
+    return selected.takeIf { it != NO_SELECTION }
+}
+
 private const val SESSION_WAIT_STEPS = 60
 private const val SESSION_WAIT_MILLIS = 500L
-private const val SELECTION_WAIT_STEPS = 40
-private const val SELECTION_WAIT_MILLIS = 250L
+private const val SELECTION_WAIT_STEPS = 20
+private const val SELECTION_WAIT_MILLIS = 200L
 
-/**
- * Where the selected cell appears in the runtime's status.
- *
- * The order is the bridge's, documented where the array is filled: revision, worldEpoch,
- * completedUpdateCount, cellCount, foodAsWholeUnits, simulationTimeMillis, temperatureMode,
- * toolOrdinal, selectedCellId, failedFlag.
- */
+/** Where the runtime publishes this, documented where the array is filled in the bridge. */
 private const val STATUS_SELECTED_CELL_ID = 8
+private const val NO_SELECTION = -1

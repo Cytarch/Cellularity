@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.unit.dp
 import java.awt.Canvas
+import kotlin.math.roundToInt
 import java.awt.Color as AwtColor
 import java.awt.Component
 import java.awt.IllegalComponentStateException
@@ -403,6 +404,14 @@ private class SurfaceHolder(
             private var dragging = false
             private var moved = false
 
+            // Pointer positions arrive in the pixels the interface counts in, and the
+            // simulation converts them through a viewport measured in the pixels the display
+            // has. Passing one to the other unscaled puts every tap at a fraction of where the
+            // cursor was -- the same mistake as sizing the surface from the logical extent,
+            // and it has the same cause, so it is corrected the same way and in one place.
+            private fun physical(value: Int): Float =
+                (value * deviceScale(surface)).toFloat()
+
             override fun mousePressed(event: MouseEvent) {
                 dragging = true
                 moved = false
@@ -423,7 +432,7 @@ private class SurfaceHolder(
                 // applied frame by frame, and must not also count as a click or every pan
                 // would end by selecting whatever it stopped over.
                 if (!moved) {
-                    enqueue(SurfaceInputEvent.Tap(event.x.toFloat(), event.y.toFloat()))
+                    enqueue(SurfaceInputEvent.Tap(physical(event.x), physical(event.y)))
                 }
             }
 
@@ -435,7 +444,10 @@ private class SurfaceHolder(
                 lastY = event.y
                 if (dx == 0 && dy == 0) return
                 moved = true
-                enqueue(SurfaceInputEvent.Pan(dx.toFloat(), dy.toFloat()))
+                // A pan is a difference, so it scales by the same factor: a drag of a hundred
+                // interface pixels is a hundred and seventy-five display pixels of movement,
+                // and the plate has to follow the cursor rather than outrun it.
+                enqueue(SurfaceInputEvent.Pan(physical(dx), physical(dy)))
             }
 
             override fun mouseWheelMoved(event: MouseWheelEvent) {
@@ -443,10 +455,28 @@ private class SurfaceHolder(
                 // zooming in then out returns exactly where it started.
                 val factor = if (event.wheelRotation < 0) 1.1f else 1f / 1.1f
                 enqueue(
-                    SurfaceInputEvent.Zoom(factor, event.x.toFloat(), event.y.toFloat())
+                    SurfaceInputEvent.Zoom(factor, physical(event.x), physical(event.y))
                 )
             }
         }
+
+    /**
+     * How many physical pixels the display draws for each one the interface counts.
+     *
+     * The two are equal on a display at its native scale and differ by the user's scaling
+     * setting everywhere else, which is why this has to be asked rather than assumed. One is
+     * the answer when there is nothing to ask -- a component that is not showing yet -- since
+     * a wrong scale is worse than no correction at all and a scale of one is the only value
+     * that is right when nothing is known.
+     */
+    private fun deviceScale(component: Component): Double {
+        val configuration = component.graphicsConfiguration ?: return 1.0
+        val transform = configuration.defaultTransform
+        if (transform.scaleX <= 0.0 || transform.scaleY <= 0.0) return 1.0
+        // The two axes are equal on every display Windows produces, and the interface is not
+        // drawn anisotropically, so the horizontal scale is the one that describes both.
+        return transform.scaleX
+    }
 
     /**
      * Where the canvas sits inside the component whose native window the renderer was
@@ -484,8 +514,20 @@ private class SurfaceHolder(
     /** Records the canvas's extent, its offset and its parent, for the render thread. */
     private fun publishGeometry(component: Component) {
         if (released) return
-        val width = component.width
-        val height = component.height
+        val logicalWidth = component.width
+        val logicalHeight = component.height
+        if (logicalWidth <= 0 || logicalHeight <= 0) return
+
+        // Physical pixels, not the ones AWT counts in. On a display at 175 per cent AWT
+        // reports a 1100 pixel wide canvas while the window Win32 gives the renderer is 1925
+        // pixels wide, and a swapchain built from the first number presents into the top-left
+        // portion of the second -- which is exactly what a simulation drawn small in the
+        // corner of its own viewport is. It is also why the defect disappears at 100 per cent,
+        // where the two numbers happen to be equal, and why nothing else about the port
+        // changes with the setting.
+        val scale = deviceScale(component)
+        val width = (logicalWidth * scale).roundToInt()
+        val height = (logicalHeight * scale).roundToInt()
         if (width <= 0 || height <= 0) return
         requestedExtent.set(pack(width, height))
 
