@@ -419,10 +419,6 @@ private class SurfaceHolder(
         // forever and the renderer would never get a window. Asking once here covers that
         // case; the listener covers every later one.
         publishGeometry(surface)
-        // Created after the geometry is published, not before: the window is parented to the
-        // canvas's own handle, and publishing the geometry is what records that handle. Creating
-        // it first would ask for a window owned by nothing.
-        createWindowOnThisThread(surface)
         // Nothing can be presented until the canvas is laid out, so the loop is started
         // here rather than before there is anything for it to wait for.
         start()
@@ -441,7 +437,7 @@ private class SurfaceHolder(
      * the render thread, which is what the renderer requires, and the window is handed over as a
      * number. Nothing is presented until the loop picks it up, which is one frame later.
      */
-    private fun createWindowOnThisThread(surface: Canvas) {
+    private fun createWindowOnThisThread(surface: Component) {
         if (!DesktopNativeRenderer.isAvailable) return
         val owner = nativeWindowHandleOf(surface)
         if (owner == 0L) return
@@ -623,6 +619,15 @@ private class SurfaceHolder(
             placementKnown.set(true)
         }
 
+        // Created here rather than where the canvas is attached, because this is the first moment
+        // the extent is known to be real. A canvas that has been built but not laid out reports a
+        // width of zero, and a window created from that cannot be presented into -- and the render
+        // loop, which sizes the session from the window it is given, then builds a swapchain of
+        // nothing and draws no picture at all. The surface is attached before layout and laid out
+        // after it, so attaching is too early by exactly one event.
+        if (createdWindow == 0L) {
+            createWindowOnThisThread(component)
+        }
         // Moved and resized here, on the event thread, rather than by the render loop.
         //
         // Two things make this the only safe place. Windows delivers a window's messages to the
