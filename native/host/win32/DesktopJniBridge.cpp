@@ -93,6 +93,7 @@
 #include "core/SimulationMemoryPolicy.h"
 #include "core/SimulationWorld.h"
 #include "formats/DecodedWorldValidation.h"
+#include "formats/NativeSubstrateLoader.h"
 #include "render/backend/abi/CellularityVulkanBackendAbi.h"
 #include "render/backend/abi/VulkanBackendSession.h"
 #include "render/backend/abi/VulkanRenderSurfaceSessionAdapter.h"
@@ -656,7 +657,7 @@ Java_com_cytarch_cellularity_desktop_nativebridge_DesktopNativeRenderer_nativeDe
 // this returns 0.
 [[nodiscard]] static jlong startSession(JNIEnv* env, jlong windowHandle, jint width,
         jint height, jint maxCellCount, jint maxFoodCount, jdouble dishRadius,
-        jstring shaderRoot, jstring textureRoot) {
+        jstring shaderRoot, jstring textureRoot, jstring substratePath) {
     try {
         const HWND window = windowFromHandle(windowHandle);
         if (!isBridgeWindow(window)) {
@@ -669,6 +670,16 @@ Java_com_cytarch_cellularity_desktop_nativebridge_DesktopNativeRenderer_nativeDe
         std::string textureRootValue;
         if (!readUtf8String(env, shaderRoot, shaderRootValue)
                 || !readUtf8String(env, textureRoot, textureRootValue)) {
+            return 0;
+        }
+        // A null path means "a new plate"; an empty one is a caller mistake rather than a
+        // request for the current directory, so it is refused instead of being handed to
+        // the decoder.
+        std::string substratePathValue;
+        const bool openStoredPlate = substratePath != nullptr;
+        if (openStoredPlate
+                && (!readUtf8String(env, substratePath, substratePathValue)
+                        || substratePathValue.empty())) {
             return 0;
         }
 
@@ -703,20 +714,39 @@ Java_com_cytarch_cellularity_desktop_nativebridge_DesktopNativeRenderer_nativeDe
 
             Environment environment = Environment::constructDefaultEnvironment(
                     maxCellCount, maxFoodCount, dishRadius);
-            // A fresh substrate with no cells is a valid world but a poor first
-            // impression, and the application's own "new substrate" path seeds life
-            // the same way.
             environment.addRandom = true;
             cellularity::snapshot_codec::validateEnvironmentForAllocation(
                     environment);
 
-            controller = std::make_shared<NativeCellularityController>(
-                    false, environment);
-            {
-                auto access = controller->writeWorld();
-                access.world().mCreatedAtUnixMillis = currentUnixMillis();
-                cellularity::snapshot_codec::preserveEnvironmentRuntimeFields(
-                        access.world(), environment);
+            if (openStoredPlate) {
+                // A saved plate is decoded rather than approximated. The counts above are
+                // the plate's own named allocation, so they are the fallback the loader
+                // needs if the file predates recording them; the file's world supplies
+                // everything else, including when it was created, which is the whole point
+                // of opening a stored plate rather than starting a new one.
+                NativeSubstrateLoadResult loaded = loadNativeSubstrateFromPath(
+                        substratePathValue, /*previewMode=*/false, environment);
+                if (loaded.world == nullptr) {
+                    return 0;
+                }
+                if (loaded.world->mCreatedAtUnixMillis <= 0) {
+                    loaded.world->mCreatedAtUnixMillis = currentUnixMillis();
+                }
+                environment = loaded.world->mEnvironment;
+                controller = std::make_shared<NativeCellularityController>(
+                        std::move(loaded.world));
+            } else {
+                // A fresh substrate with no cells is a valid world but a poor first
+                // impression, and the application's own "new substrate" path seeds life
+                // the same way.
+                controller = std::make_shared<NativeCellularityController>(
+                        false, environment);
+                {
+                    auto access = controller->writeWorld();
+                    access.world().mCreatedAtUnixMillis = currentUnixMillis();
+                    cellularity::snapshot_codec::preserveEnvironmentRuntimeFields(
+                            access.world(), environment);
+                }
             }
             controller->installRenderSurfaceSession(
                     std::make_unique<cellularity::render::abi::
@@ -782,7 +812,7 @@ Java_com_cytarch_cellularity_desktop_nativebridge_DesktopNativeRenderer_nativeSt
         jint maxCellCount, jint maxFoodCount, jdouble dishRadius, jstring shaderRoot,
         jstring textureRoot) {
     return startSession(env, windowHandle, width, height, maxCellCount, maxFoodCount,
-            dishRadius, shaderRoot, textureRoot);
+            dishRadius, shaderRoot, textureRoot, nullptr);
 }
 
 // The same entry point under the second name the managed side uses for it. The
@@ -797,7 +827,22 @@ Java_com_cytarch_cellularity_desktop_nativebridge_DesktopNativeRenderer_nativeCr
         jint maxCellCount, jint maxFoodCount, jdouble dishRadius, jstring shaderRoot,
         jstring textureRoot) {
     return startSession(env, windowHandle, width, height, maxCellCount, maxFoodCount,
-            dishRadius, shaderRoot, textureRoot);
+            dishRadius, shaderRoot, textureRoot, nullptr);
+}
+
+// The same thing, opening a plate that was saved earlier.
+//
+// A separate entry point rather than an extra argument on the two above, because the JVM
+// resolves these by name and a changed signature is not a compile error on the native side
+// -- it is an UnsatisfiedLinkError on the first click. The extra name costs a jump and makes
+// the difference visible in the export table.
+extern "C" JNIEXPORT jlong JNICALL
+Java_com_cytarch_cellularity_desktop_nativebridge_DesktopNativeRenderer_nativeCreateSessionFromSubstrate(
+        JNIEnv* env, jclass, jlong windowHandle, jint width, jint height,
+        jint maxCellCount, jint maxFoodCount, jdouble dishRadius, jstring shaderRoot,
+        jstring textureRoot, jstring substratePath) {
+    return startSession(env, windowHandle, width, height, maxCellCount, maxFoodCount,
+            dishRadius, shaderRoot, textureRoot, substratePath);
 }
 
 // Draws the newest frame the simulation has published. Returns 0 when the outcome is
