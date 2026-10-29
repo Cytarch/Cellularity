@@ -200,6 +200,15 @@ tasks.register('runResponsivenessProbe', JavaExec) {
 // test: it is the last step of the port that no assertion covers, because the journey
 // from the menu into a running plate is something only a window can show. Keeping it as a
 // task rather than a test means the suite stays free of a ten-minute sleep.
+tasks.register('runSurface', JavaExec) {
+    group = 'verification'
+    description = 'Opens the render viewport on its own and asks Windows whether it is visible.'
+    dependsOn 'testClasses'
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'com.cytarch.cellularity.desktop.SurfaceProbeKt'
+    systemProperty 'java.library.path', nativeOutputDirectory.absolutePath
+    jvmArgs(*(requiredOpens.split(' ').findAll { !it.isBlank() } as String[]))
+}
 tasks.register('runPlayScreen', JavaExec) {
     group = 'verification'
     description = 'Opens the desktop play screen on a live simulation, for observation.'
