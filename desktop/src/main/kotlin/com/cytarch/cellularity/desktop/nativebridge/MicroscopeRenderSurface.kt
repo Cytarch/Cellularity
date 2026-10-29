@@ -321,7 +321,9 @@ private class SurfaceHolder(
         append(publishedSession.get())
         append(" reported=")
         append(reported)
-        append(" visibleWanted=")
+        append(" windowCallsOnEventThread=")
+    append(lastWindowCallOnEventThread)
+    append(" visibleWanted=")
     append(requestedVisible.get())
     append(" showCalls=")
     append(visibilityApplications.get())
@@ -410,6 +412,10 @@ private class SurfaceHolder(
     // a request that was never made or one that was refused, and the two are told apart by counting
     // the attempts rather than by reading the code that makes them.
     private val visibilityApplications = AtomicLong(0L)
+
+    /** Whether the last call that touched the window came from the thread that owns it. */
+    @Volatile
+    private var lastWindowCallOnEventThread = false
     private val lastFrameStatus = AtomicLong(0L)
     @Volatile
     private var released = false
@@ -728,6 +734,12 @@ private class SurfaceHolder(
         val wanted = requestedVisible.get()
         if (!appliedVisibilityOnce || wanted != appliedVisible) {
             visibilityApplications.incrementAndGet()
+            // The thread is recorded, not assumed. Every call the renderer makes to a window waits
+            // for the thread that owns it, so a window call made from the wrong thread is the
+            // difference between a visible picture and an application Windows marks as not
+            // responding -- and the two are indistinguishable from inside this code.
+            lastWindowCallOnEventThread =
+                javax.swing.SwingUtilities.isEventDispatchThread()
             DesktopNativeRenderer.nativeShowWindow(window, wanted)
             appliedVisible = wanted
             appliedVisibilityOnce = true

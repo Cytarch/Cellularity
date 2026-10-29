@@ -13,6 +13,7 @@ import com.cytarch.cellularity.shared.settings.SettingsRecoveryState
 import com.cytarch.cellularity.shared.settings.SettingsResult
 import java.io.IOException
 import java.nio.charset.StandardCharsets
+import java.nio.file.AtomicMoveNotSupportedException
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.StandardCopyOption
@@ -283,12 +284,31 @@ class DesktopCellularitySettingsRepository(
                         "Encoded settings failed validation: ${decoded.error.code}"
                     )
                 }
-                Files.move(
-                    temporary,
-                    settingsFile,
-                    StandardCopyOption.REPLACE_EXISTING,
-                    StandardCopyOption.ATOMIC_MOVE
-                )
+                // Replacing an existing file atomically is asked for first and tolerated when it
+                // is refused. Not every file system can replace a file in one step, and the ones
+                // that cannot say so by refusing the call rather than by doing it badly -- so the
+                // refusal is caught and answered with the ordinary move, which is not atomic
+                // between the unlink and the rename but is what every platform can do.
+                //
+                // Asking for both options and expecting them all to be honoured is how a settings
+                // document that already exists becomes one that can never be written again: the
+                // file is there, the replacement is refused, and every later attempt fails the
+                // same way for the same reason. The fallback is the difference between a
+                // preference and a requirement.
+                try {
+                    Files.move(
+                        temporary,
+                        settingsFile,
+                        StandardCopyOption.REPLACE_EXISTING,
+                        StandardCopyOption.ATOMIC_MOVE
+                    )
+                } catch (atomic: AtomicMoveNotSupportedException) {
+                    Files.move(
+                        temporary,
+                        settingsFile,
+                        StandardCopyOption.REPLACE_EXISTING
+                    )
+                }
             } catch (failure: Exception) {
                 Files.deleteIfExists(temporary)
                 throw failure
