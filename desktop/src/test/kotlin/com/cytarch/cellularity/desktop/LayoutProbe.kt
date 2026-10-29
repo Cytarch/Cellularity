@@ -152,6 +152,8 @@ private fun reportCoverage(frame: ComposeWindow) {
         println("LAYOUT the navigation bar has its ${barHeight} px to itself")
     }
     reportNativeGeometry()
+    reportWindowStack()
+    System.out.flush()
 }
 
 /**
@@ -253,6 +255,32 @@ private fun nativeSurfaceExtent(session: Long): LongArray? = try {
 } catch (thrown: ReflectiveOperationException) {
     println("LAYOUT could not read the surface extent: $thrown")
     null
+}
+
+/**
+ * Prints the process's windows in their real stacking order.
+ *
+ * This is the measurement that says whether the simulation is underneath the interface or
+ * merely next to it: a window listed above the renderer takes clicks before the renderer sees
+ * them, and no amount of layout reasoning can show that.
+ */
+private fun reportWindowStack() {
+    val report = try {
+        val renderer = Class.forName(
+            "com.cytarch.cellularity.desktop.nativebridge.DesktopNativeRenderer"
+        )
+        val instance = renderer.getField("INSTANCE").get(null)
+        renderer.getMethod("nativeDescribeWindows").invoke(instance) as? String
+    } catch (thrown: ReflectiveOperationException) {
+        println("LAYOUT could not read the window stack: $thrown")
+        null
+    }
+    if (report.isNullOrBlank()) {
+        println("LAYOUT the process reported no windows")
+        return
+    }
+    println("LAYOUT --- this process's windows, topmost first ---")
+    report.trim().lines().forEach { println("LAYOUT   $it") }
 }
 
 /**

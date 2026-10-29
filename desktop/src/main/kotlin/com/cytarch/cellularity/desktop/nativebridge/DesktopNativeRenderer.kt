@@ -256,6 +256,16 @@ object DesktopNativeRenderer {
     external fun nativeCaptureWindow(windowHandle: Long, path: String): Int
 
     /**
+     * The process's top-level windows in their real stacking order, topmost first.
+     *
+     * Neither half of this port can report a z-order about itself: Compose knows which of its
+     * own surfaces is above which, Win32 knows which window is above which, and "is the
+     * simulation underneath the interface" is the second question. A window that appears
+     * above the renderer here takes clicks before the renderer sees them.
+     */
+    external fun nativeDescribeWindows(): String?
+
+    /**
      * Places the child window at a screen point with an extent, in one call.
      *
      * The point is in screen coordinates and is converted to the parent's client space by the

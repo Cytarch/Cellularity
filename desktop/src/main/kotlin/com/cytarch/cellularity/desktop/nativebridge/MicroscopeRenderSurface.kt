@@ -449,56 +449,60 @@ private class SurfaceHolder(
         }
 
     /**
-     * Where the canvas sits inside the window that holds it, in that window's client area.
+     * Where the canvas sits inside the component whose native window the renderer was
+     * parented to.
      *
-     * Walked rather than converted, because every step of the walk is an addition inside one
-     * coordinate space. Going out to the screen and back was tried and does not survive
-     * display scaling: AWT counts logical pixels and Win32 counts physical ones, so the two
-     * sides disagree about what a number means and the window ends up somewhere nobody asked
-     * for. Nothing here has to agree about a scale.
+     * The parent is an HWND, and the component that owns it is not necessarily the frame: AWT
+     * creates a peer for the composable's host as well, and the renderer is parented to
+     * whichever one it was handed. Guessing that it is the frame is what made the first
+     * version of this return (0,0) -- it walked up to the top looking for a `Window`, never
+     * found one under a `JPanel`, fell out of the loop, and reported the canvas as sitting at
+     * its own origin. The ancestor is therefore identified by asking each of them for its
+     * handle and comparing, which cannot be wrong about which one it is.
+     *
+     * The conversion itself is `convertPoint`, which adds up the positions of the containers
+     * in between. Adding them up by hand was the other half of the same mistake: it is the
+     * same arithmetic, done in a place where a missed container is invisible.
      */
-    private fun offsetWithinWindow(component: Component): Pair<Int, Int> {
-        var x = 0
-        var y = 0
+    private fun offsetWithinWindow(component: Component, ownerHandle: Long): Pair<Int, Int> {
         var current: Component? = component
         while (current != null) {
-            x += current.x
-            y += current.y
-            val parent = current.parent
-            if (parent is java.awt.Window) {
-                // The window's own origin is its decorated corner; the child belongs to the
-                // client area, which starts inside the frame's border and title bar.
-                val insets = parent.insets
-                return (x - insets.left) to (y - insets.top)
+            if (nativeWindowHandleOf(current) == ownerHandle) {
+                val point = javax.swing.SwingUtilities.convertPoint(
+                    component,
+                    0,
+                    0,
+                    current
+                )
+                return point.x to point.y
             }
-            current = parent
+            current = current.parent
         }
-        return x to y
+        return 0 to 0
     }
 
-    /** Records the canvas's extent and parent, for the render thread to act on. */
+    /** Records the canvas's extent, its offset and its parent, for the render thread. */
     private fun publishGeometry(component: Component) {
         if (released) return
         val width = component.width
         val height = component.height
         if (width <= 0 || height <= 0) return
         requestedExtent.set(pack(width, height))
-        // The offset is measured from the canvas up to the window it lives in, in AWT's own
-        // coordinates on both sides. Reaching the same place through screen coordinates was
-        // tried and is wrong under display scaling: AWT counts logical pixels while Win32
-        // counts physical ones, so a conversion done on either side alone lands the window
-        // somewhere it was never asked to be. Additions inside one coordinate space cannot
-        // disagree about the scale, and the bridge takes the window's client origin off the
-        // result itself.
-        val offset = offsetWithinWindow(component)
-        requestedPlacement.set(pack(offset.first, offset.second))
-        placementKnown.set(true)
 
-        // Not an error yet when this is zero: AWT realises the peer asynchronously and the
-        // listener calls back once it has. It stays an error if it never does, which is why
-        // the screen reports that the renderer is unavailable rather than nothing.
+        // The parent is this canvas's own peer, which is the handle the renderer is given as
+        // its owner. Read before the offset, because the offset is measured relative to
+        // whichever component owns that handle -- and that is not always the frame.
         val handle = nativeWindowHandleOf(component)
-        if (handle != 0L) ownerHandle.set(handle)
+        if (handle != 0L) {
+            ownerHandle.set(handle)
+            // Measured in AWT's own coordinates on both sides. Going out to the screen and
+            // back was tried and does not survive display scaling: AWT counts logical pixels
+            // while Win32 counts physical ones, so the conversion turned a viewport offset
+            // into a negative one. Nothing here has to agree about a scale.
+            val offset = offsetWithinWindow(component, handle)
+            requestedPlacement.set(pack(offset.first, offset.second))
+            placementKnown.set(true)
+        }
     }
 
     /** Publishes the queue this composition is using. */

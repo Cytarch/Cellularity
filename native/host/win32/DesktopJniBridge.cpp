@@ -739,6 +739,79 @@ Java_com_cytarch_cellularity_desktop_nativebridge_DesktopNativeRenderer_nativeCa
         return -1;
     }
 }
+// Narrows a wide Win32 string for a report. Window class names and titles are UTF-16 and the
+// report is read by a person, so anything that cannot be represented is replaced rather than
+// dropped: a missing character in a class name would be more confusing than a substituted one.
+[[nodiscard]] std::string narrowFromWide(const wchar_t* value) {
+    if (value == nullptr) {
+        return {};
+    }
+    const int needed = ::WideCharToMultiByte(CP_UTF8, 0, value, -1, nullptr, 0, nullptr, nullptr);
+    if (needed <= 1) {
+        return {};
+    }
+    std::string narrowed(static_cast<std::size_t>(needed - 1), '\0');
+    ::WideCharToMultiByte(CP_UTF8, 0, value, -1, narrowed.data(), needed, nullptr, nullptr);
+    return narrowed;
+}
+// Describes the top-level windows of this process in their real stacking order, topmost
+// first, as one string per window: handle, class name, title and screen rectangle.
+//
+// A z-order is not something either half of this port can report about itself. Compose knows
+// which of its own surfaces is over which; Win32 knows which window is over which; and the
+// question "is the simulation underneath the interface" is about the second, asked of the
+// windows rather than inferred from the layout. GetTopWindow followed by repeated
+// GetWindow(GW_HWNDNEXT) enumerates exactly that order, and a window that appears above the
+// renderer in it is a window that takes clicks before the renderer sees them.
+extern "C" JNIEXPORT jstring JNICALL
+Java_com_cytarch_cellularity_desktop_nativebridge_DesktopNativeRenderer_nativeDescribeWindows(
+        JNIEnv* env, jclass, jlong ownerProcessWindow) {
+    try {
+        const DWORD processId = ::GetCurrentProcessId();
+        std::string report;
+        int index = 0;
+        for (HWND window = ::GetTopWindow(nullptr); window != nullptr;
+                window = ::GetWindow(window, GW_HWNDNEXT)) {
+            DWORD windowProcess = 0;
+            ::GetWindowThreadProcessId(window, &windowProcess);
+            // Only this process's windows: another application's window is not part of what
+            // this port is composed of, and on a machine somebody is using there would be
+            // many of them between the relevant ones.
+            if (windowProcess != processId) {
+                continue;
+            }
+            wchar_t className[256] = {};
+            ::GetClassNameW(window, className, 256);
+            wchar_t title[256] = {};
+            ::GetWindowTextW(window, title, 256);
+            RECT bounds{};
+            ::GetWindowRect(window, &bounds);
+            report += std::to_string(index);
+            report += " hwnd=";
+            report += std::to_string(handleFromWindow(window));
+            report += " class=";
+            report += narrowFromWide(className);
+            report += " title=";
+            report += narrowFromWide(title);
+            report += " rect=";
+            report += std::to_string(bounds.left);
+            report += ",";
+            report += std::to_string(bounds.top);
+            report += " ";
+            report += std::to_string(bounds.right - bounds.left);
+            report += "x";
+            report += std::to_string(bounds.bottom - bounds.top);
+            report += " visible=";
+            report += ::IsWindowVisible(window) != 0 ? "yes" : "no";
+            report += "\n";
+            index++;
+        }
+        const jstring result = env->NewStringUTF(report.c_str());
+        return result;
+    } catch (...) {
+        return nullptr;
+    }
+}
 // Reports what Win32 would deliver a click at a screen point to, among the windows this
 // bridge made: 1 when the point belongs to one of them, 0 when it belongs to some other
 // window inside the same top-level window (which is what the interface drawing over the
