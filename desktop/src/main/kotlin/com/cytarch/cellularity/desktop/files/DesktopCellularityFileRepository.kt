@@ -154,6 +154,32 @@ class DesktopCellularityFileRepository(
             deleteFile(file)
         }
 
+    /**
+     * Where a stored substrate actually is, for the one caller that opens a file itself.
+     *
+     * The native renderer decodes a plate from a path, so opening a saved experiment needs
+     * the absolute path and not the bytes: handing over the file would mean reading a
+     * substrate into the heap only for the renderer to stream it back out. That is also why
+     * this is not part of the shared contract -- a phone has no path to give, because its
+     * storage is a content provider rather than a directory.
+     *
+     * The path is produced by the same resolution the reading and writing paths use, so a
+     * name that would escape the storage directory is refused here for the same reason it
+     * is refused there, and the refusal is a storage failure like any other rather than a
+     * thrown exception the caller has to know about.
+     */
+    suspend fun substrateFilePath(id: StoredSubstrateId): StorageResult<Path> =
+        storageOperation {
+            val file = resolve(CellularityFileNames.substrateFileName(id.value))
+            if (!Files.isRegularFile(file)) {
+                throw StorageOperationException(
+                    StorageErrorCode.NOT_FOUND,
+                    "Substrate file does not exist"
+                )
+            }
+            file
+        }
+
     override suspend fun renameSubstrate(
         id: StoredSubstrateId,
         newDisplayName: String

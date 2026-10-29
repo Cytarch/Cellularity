@@ -27,6 +27,8 @@ import androidx.compose.ui.unit.dp
 import com.cytarch.cellularity.desktop.files.DesktopCellularityFileRepository
 import com.cytarch.cellularity.desktop.nativebridge.DesktopAssetRoots
 import com.cytarch.cellularity.desktop.nativebridge.SurfaceInputEvent
+import com.cytarch.cellularity.shared.files.StorageResult
+import com.cytarch.cellularity.shared.files.StoredSubstrateId
 import com.cytarch.cellularity.shared.model.GenomeDraft
 import com.cytarch.cellularity.shared.model.SimulationConfiguration
 import com.cytarch.cellularity.shared.ui.play.PlayAction
@@ -51,10 +53,33 @@ fun DesktopPlayScreen(
     configuration: SimulationConfiguration,
     fileRepository: DesktopCellularityFileRepository,
     onExit: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    /**
+     * A saved plate to continue, or null for a new one.
+     *
+     * Named by the substrate's display name rather than by a path, because that is what the
+     * rest of the application calls a plate and because resolving it is the repository's
+     * job: the name-to-path mapping, and the refusal of a name that would leave the storage
+     * directory, belong in one place and are already there.
+     */
+    storedPlateName: String? = null
 ) {
     val microscopeStore = remember { MicroscopeStore() }
     val microscopeState by microscopeStore.state.collectAsState()
+
+    // The path the renderer will decode. Held as state because it is read from the disk, and
+    // the surface must not be created before it is known: a surface told "new plate" cannot
+    // become one told "this file", so arriving late is the same as not arriving.
+    var substratePath by remember(storedPlateName) { mutableStateOf<String?>(null) }
+    var plateFailure by remember(storedPlateName) { mutableStateOf<String?>(null) }
+    LaunchedEffect(storedPlateName) {
+        val name = storedPlateName ?: return@LaunchedEffect
+        when (val resolved = fileRepository.substrateFilePath(StoredSubstrateId(name))) {
+            is StorageResult.Success -> substratePath = resolved.value.toString()
+            is StorageResult.Failure -> plateFailure =
+                "The saved plate could not be found (${resolved.error.code})."
+        }
+    }
 
     // Input is handed to the surface as an immutable list rather than appended to a
     // mutable one. The surface republishes the queue whenever the list changes, and a
@@ -162,7 +187,11 @@ fun DesktopPlayScreen(
                     configuration = configuration,
                     pendingInput = pendingInput,
                     cellCount = cellCount,
-                    failure = failure,
+                    // A failure to resolve the plate is reported through the same channel
+                    // as a failure to open it, so a person sees one message either way
+                    // rather than a screen that looks fine and never draws anything.
+                    failure = failure ?: plateFailure,
+                    substratePath = substratePath,
                     onPlateActionClick = onPlateActionClick,
                     onAction = { action -> microscopeStore.dispatch(action) },
                     onCellCount = { count -> cellCount = count },

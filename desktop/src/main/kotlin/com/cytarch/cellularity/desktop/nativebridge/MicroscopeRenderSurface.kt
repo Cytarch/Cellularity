@@ -109,6 +109,14 @@ fun MicroscopeRenderSurface(
     onCellCount: (Long) -> Unit,
     onFailure: (String) -> Unit,
     onSessionReady: (Long) -> Unit = { },
+    /**
+     * A saved plate to open, or null to start a new one.
+     *
+     * The choice is made once, when the surface is created, and not revisited: a session
+     * is a running world and cannot become a different one, so the alternative to opening
+     * the file would be tearing the world down and building another.
+     */
+    substratePath: String? = null,
     modifier: Modifier = Modifier
 ) {
     if (!DesktopNativeRenderer.isAvailable || assetRoots == null) {
@@ -138,6 +146,7 @@ fun MicroscopeRenderSurface(
             textureRoot = assetRoots.textureRoot.toString(),
             onCellCount = onCellCount,
             onFailure = onFailure,
+            substratePath = substratePath,
             onSessionReady = onSessionReady
         ).also(SurfaceDiagnostics::register)
     }
@@ -227,6 +236,7 @@ private class SurfaceHolder(
     private val dishRadius: Double,
     private val shaderRoot: String,
     private val textureRoot: String,
+    private val substratePath: String?,
     private val onCellCount: (Long) -> Unit,
     private val onFailure: (String) -> Unit,
     private val onSessionReady: (Long) -> Unit
@@ -508,18 +518,43 @@ private class SurfaceHolder(
                 }
 
                 if (sessionHandle == 0L) {
-                    sessionHandle = DesktopNativeRenderer.nativeCreateSession(
-                        windowHandle,
-                        unpackWidth(appliedExtent),
-                        unpackHeight(appliedExtent),
-                        maxCellCount,
-                        maxFoodCount,
-                        dishRadius,
-                        shaderRoot,
-                        textureRoot
-                    )
+                    // A saved plate is decoded from its file; a new one is built from the
+                    // allocation the caller named. The decision is made here, once, because
+                    // the renderer takes a path or does not and there is no later moment at
+                    // which a running world could become a different one.
+                    val stored = substratePath
+                    sessionHandle = if (stored != null) {
+                        DesktopNativeRenderer.nativeCreateSessionFromSubstrate(
+                            windowHandle,
+                            unpackWidth(appliedExtent),
+                            unpackHeight(appliedExtent),
+                            maxCellCount,
+                            maxFoodCount,
+                            dishRadius,
+                            shaderRoot,
+                            textureRoot,
+                            stored
+                        )
+                    } else {
+                        DesktopNativeRenderer.nativeCreateSession(
+                            windowHandle,
+                            unpackWidth(appliedExtent),
+                            unpackHeight(appliedExtent),
+                            maxCellCount,
+                            maxFoodCount,
+                            dishRadius,
+                            shaderRoot,
+                            textureRoot
+                        )
+                    }
                     if (sessionHandle == 0L) {
-                        failOnce("The simulation could not be started.")
+                        failOnce(
+                            if (substratePath != null) {
+                                "The saved plate could not be opened."
+                            } else {
+                                "The simulation could not be started."
+                            }
+                        )
                         return
                     }
                     publishedSession.set(sessionHandle)

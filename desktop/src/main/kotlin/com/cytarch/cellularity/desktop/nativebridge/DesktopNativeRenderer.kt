@@ -230,6 +230,31 @@ object DesktopNativeRenderer {
         textureRoot: String
     ): Long
 
+    /**
+     * The same, opening a plate that was saved earlier rather than starting a new one.
+     *
+     * A separate entry point rather than an extra parameter on [nativeCreateSession],
+     * because the JVM resolves these by name: widening the signature of the existing one
+     * would not be a compile error anywhere, it would be an UnsatisfiedLinkError on the
+     * first click. Two names make the difference visible where it can be checked.
+     *
+     * The counts are still passed, and they are not redundant: they are the allocation the
+     * plate was saved with, and the loader needs a fallback for a file that predates
+     * recording it. What the file does supply is the world itself, including when it was
+     * created -- which is the difference between continuing an experiment and starting one.
+     */
+    external fun nativeCreateSessionFromSubstrate(
+        windowHandle: Long,
+        width: Int,
+        height: Int,
+        maxCellCount: Int,
+        maxFoodCount: Int,
+        dishRadius: Double,
+        shaderRoot: String,
+        textureRoot: String,
+        substratePath: String
+    ): Long
+
     external fun nativeRenderFrame(sessionHandle: Long): Int
 
     external fun nativeQueuePan(sessionHandle: Long, dx: Float, dy: Float): Int
