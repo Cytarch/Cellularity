@@ -270,6 +270,13 @@ fun DesktopPlayScreen(
  * The window between opening a plate and the first frame is short, but the panel has no
  * environment to show during it, and building it against one that does not exist yet
  * would mean reading a world nobody has created.
+ *
+ * This is not the panel. The panel is `SubstrateTab` in its own file, and it reads and edits
+ * the world that is running. It used to be called `SubstrateTab` as well, and being private to
+ * this file it won over the real one in the same package -- so the panel was written,
+ * compiled, and never called, and the tab showed a sentence about the desktop build instead.
+ * Two functions with one name in one package is a mistake the compiler is happy with, which is
+ * why the name now says what it is.
  */
 @Composable
 private fun SubstrateTabUnavailable(isVisible: Boolean) {
@@ -277,25 +284,6 @@ private fun SubstrateTabUnavailable(isVisible: Boolean) {
     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         Text(
             text = "Waiting for the simulation to start.",
-            modifier = Modifier.padding(24.dp)
-        )
-    }
-}
-
-/**
- * The substrate panel.
- *
- * The screen needs a confirmed environment snapshot, which arrives over the native
- * environment contract. Until the desktop bridge reads it, this says so instead of
- * showing the loading message forever, which is what the screen would otherwise do and
- * would look like a hang rather than a gap.
- */
-@Composable
-private fun SubstrateTab(isVisible: Boolean, onPlateActionClick: () -> Unit) {
-    if (!isVisible) return
-    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Text(
-            text = "The substrate environment is not readable from the desktop build yet.",
             modifier = Modifier.padding(24.dp)
         )
     }
