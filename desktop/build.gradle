@@ -147,9 +147,153 @@ tasks.register('runSubstrateTab', JavaExec) {
     environment 'PATH', "${nativeOutputDirectory.absolutePath};${System.getenv('PATH')}"
 }
 
+// The renderer's native half is built by CMake into the build tree, where a packaged
+// application can never find it: the JVM searches the library path, the native loader
+// searches the executable's directory, and neither of those is build/win-cmake. The
+// shaders and textures have the same problem for the same reason -- the discovery a
+// development run uses walks up from the working directory, and a packaged launch has no
+// working directory it can rely on.
+//
+// So the three of them are staged into a directory Compose Desktop turns into
+// $APPDIR/resources, in a layout the runtime knows (see DesktopNativeRenderer and
+// DesktopAssetRoots). The plugin's own prepareAppResources task syncs <root>/common,
+// <root>/<os> and <root>/<target> from appResourcesRootDir, so staging below windows-x64 --
+// the target id for this machine -- puts the tree at resources/native/... in the
+// distributable, and -Dcompose.application.resources.dir=$APPDIR/resources, which the
+// generated launcher config already carries, is all the plumbing it needs.
+//
+// The shaders keep the directory they are generated in. The renderer asks its asset root
+// for `vulkan/shaders/<name>` -- that relative path is fixed in the native backend, and
+// the host build tree carries it at
+// build/win-cmake/generated/vulkanShaders/host/assets/vulkan/shaders -- so copying the
+// .spv files alone into a directory of their own would produce a package whose shader root
+// exists and holds nothing the renderer will open.
+//
+// The copy is deliberately forgiving. CMake is built separately and by hand, so the files
+// may legitimately not exist yet: the task packages whatever is there and names each missing
+// input together with the command that produces it. Failing the build would make a
+// distributable impossible to produce before the native side is compiled, and saying nothing
+// would produce one that cannot render and give no reason why.
+def nativeLibraryCommand = 'cmake --build build/win-cmake'
+def cmakeOutputDirectory = rootProject.file('build/win-cmake')
+def textureSourceDirectory = rootProject.file('native/rendering/assets/textures')
+def shaderSourceDirectory =
+        rootProject.file('build/win-cmake/generated/vulkanShaders/host/assets')
+
+// Owned by this build rather than by the Compose plugin, because the plugin creates its own
+// resource task too late in configuration to be asked for its output directory here.
+def packagedResourcesDirectory = layout.buildDirectory.dir('compose/nativeAppResources')
+def packagedTargetDirectory = packagedResourcesDirectory.map { it.dir('windows-x64') }
+def packagedNativeDirectory = packagedTargetDirectory.map { it.dir('native') }
+
+/** The regular files directly inside [directory], or none when it is not there yet. */
+def filesIn = { File directory, String pattern ->
+    directory.isDirectory()
+            ? (directory.listFiles() ?: new File[0])
+            .findAll { it.isFile() && it.name ==~ pattern }
+            .sort { it.name }
+            : []
+}
+
+// Everything the renderer needs at run time, as source files whose names are the names they
+// keep in the packaged resources. The two Vulkan-support libraries are here because
+// cellularity_desktop.dll imports them by name: it needs vulkan-1.dll for the loader and
+// z.dll for the archive reader, and neither is part of a JRE image, so a packaged launch
+// would otherwise pick up a system copy or fail outright.
+def nativeRuntimeFileNames = ['cellularity_desktop.dll', 'vulkan-1.dll', 'z.dll']
+def nativeRuntimeFiles =
+        nativeRuntimeFileNames.collect { new File(cmakeOutputDirectory, it) }
+def nativeShaderFiles = filesIn(new File(shaderSourceDirectory, 'vulkan/shaders'), /(?i).*\.spv/)
+def nativeTextureFiles = filesIn(textureSourceDirectory, /(?i).*\.png/)
+
+// The staged tree the runtime expects. A contribution whose sources are absent is still
+// declared: copying nothing is what makes the packaging step succeed with a warning rather
+// than refuse to run before the native side has been compiled.
+def stagedNativeContributions = [
+        [sources: nativeRuntimeFiles, target: 'native'],
+        [sources: nativeShaderFiles, target: 'native/vulkan/shaders'],
+        [sources: nativeTextureFiles, target: 'native/textures']
+]
+
+// Named at configuration time rather than inside the task action, so the warning can say
+// which files are absent without the task reaching back into the project while it runs.
+def missingNativeAssets = []
+nativeRuntimeFiles.each { source ->
+    if (!source.isFile()) {
+        missingNativeAssets.add("'${source.name}' (${source.absolutePath})".toString())
+    }
+}
+if (nativeShaderFiles.isEmpty()) {
+    missingNativeAssets.add(
+        "'compiled shaders (*.spv) under ${shaderSourceDirectory.absolutePath}'".toString()
+    )
+}
+if (nativeTextureFiles.isEmpty()) {
+    missingNativeAssets.add(
+        "'renderer textures (*.png) under ${textureSourceDirectory.absolutePath}'".toString()
+    )
+}
+def stagedNativeAssetCount =
+        nativeRuntimeFiles.count { it.isFile() } +
+                nativeShaderFiles.size() +
+                nativeTextureFiles.size()
+def stagedNativeAssetRoot = packagedNativeDirectory.get().asFile.absolutePath
+
+// A Sync whose input files are all absent is skipped as NO-SOURCE without running its
+// action, and "nothing has been compiled yet" is exactly that case. One file that is
+// certainly there is mixed into the contributions so the task always has something to read
+// and the warnings below always get their chance to speak: this build script, which Gradle
+// has just read. It costs one extra byte-for-byte copy into the resources directory.
+def buildScriptFile = buildFile
+
+def stageNativeAssets = tasks.register('stageNativeAssets', Sync) {
+    group = 'build'
+    description = 'Stages the renderer library, shaders and textures for the distributable.'
+    stagedNativeContributions.each { contribution ->
+        from(contribution.sources) {
+            into contribution.target
+        }
+    }
+    from(buildScriptFile)
+    into { packagedTargetDirectory.get().asFile }
+    // build/win-cmake is written by hand rather than by Gradle, so there is nothing here
+    // that would let the task be safely reused between builds.
+    outputs.upToDateWhen { false }
+
+    doLast {
+        if (stagedNativeAssetCount == 0) {
+            logger.warn(
+                "Cellularity packaging: no native renderer assets were staged, so the " +
+                    "distributable will start but cannot draw a simulation."
+            )
+        }
+        missingNativeAssets.each { missing ->
+            logger.warn(
+                "Cellularity packaging: ${missing} is not in the build tree, so it will " +
+                    "not be in the distributable and the packaged application will report " +
+                    "the renderer as unavailable. Produce it with: ${nativeLibraryCommand}"
+            )
+        }
+        if (stagedNativeAssetCount > 0) {
+            logger.lifecycle(
+                "Cellularity packaging: staged ${stagedNativeAssetCount} renderer file(s) " +
+                    "into ${stagedNativeAssetRoot}"
+            )
+        }
+    }
+}
+
 compose.desktop {
     application {
         mainClass = 'com.cytarch.cellularity.desktop.MainKt'
+
+        // The application reads the package-private AWT peer field to find the native
+        // window to present into, and JDK 21 removed the accessor that used to make that
+        // unnecessary. These reach the JVM only through JDK_JAVA_OPTIONS today, which the
+        // Gradle launch tasks set and a packaged launcher does not inherit, so without
+        // them here the packaged application finds no window handle and shows the
+        // renderer-unavailable message instead of a picture.
+        jvmArgs(*(requiredOpens.split(' ').findAll { !it.isBlank() } as String[]))
 
         nativeDistributions {
             targetFormats(
@@ -159,6 +303,45 @@ compose.desktop {
             packageVersion = libs.versions.appVersionName.get().replaceAll(/-.*$/, '')
             description = 'Cellularity microscope simulation'
             vendor = 'Cytarch'
+
+            appResourcesRootDir.set(packagedResourcesDirectory)
         }
+    }
+}
+
+// The plugin's resource task is the only reader of appResourcesRootDir, and it has to run
+// after the staging rather than before it. It is looked up after this project has been
+// evaluated because that is when the Compose plugin registers it; the name is built from the
+// build type, so a version of the plugin that renamed it should say so here rather than fail
+// a build whose assets would silently be left out.
+afterEvaluate {
+    def appResourcesTaskName = 'prepareAppResources'
+    def appResourcesTasks = tasks.matching { it.name == appResourcesTaskName }
+    if (appResourcesTasks.isEmpty()) {
+        logger.warn(
+            "Cellularity packaging: no '${appResourcesTaskName}' task exists, so the staged " +
+                "renderer assets will not reach appResourcesRootDir. Check the task names " +
+                "the Compose Gradle plugin ${libs.versions.composeMultiplatform.get()} " +
+                "generates."
+        )
+    }
+    appResourcesTasks.configureEach {
+        dependsOn stageNativeAssets
+    }
+}
+
+// Everything that turns the prepared resources into an application image waits for the
+// renderer files to be added to them. Naming the tasks by string lets Gradle resolve the
+// dependency while it builds the graph, so each one gets it whether or not it is being run.
+[
+        'createDistributable',
+        'packageDistributionForCurrentOS',
+        'packageMsi',
+        'packageReleaseDistributionForCurrentOS',
+        'packageReleaseMsi',
+        'runDistributable'
+].each { taskName ->
+    tasks.matching { it.name == taskName }.configureEach {
+        dependsOn stageNativeAssets
     }
 }

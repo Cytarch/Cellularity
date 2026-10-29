@@ -4,6 +4,7 @@
 
 package com.cytarch.cellularity.desktop.nativebridge
 
+import java.io.File
 import java.nio.file.Files
 import java.nio.file.Path
 
@@ -31,6 +32,28 @@ import java.nio.file.Path
  */
 object DesktopNativeRenderer {
 
+    /** Where Compose Desktop leaves a packaged application's resources. */
+    private const val RESOURCES_DIRECTORY_PROPERTY = "compose.application.resources.dir"
+
+    /** The directory `stageNativeAssets` in desktop/build.gradle stages into. */
+    private const val PACKAGED_NATIVE_DIRECTORY = "native"
+
+    /** Where a CMake build tree keeps the library, relative to the tree's root. */
+    private val DEVELOPMENT_LIBRARY_LOCATIONS = listOf(
+        "build/win-cmake",
+        "build/win-cmake/Release",
+        "build/win-cmake/Debug"
+    )
+
+    /**
+     * The libraries the renderer imports that a JRE image does not already provide.
+     *
+     * They are named rather than discovered because a JNI load gives no chance to discover
+     * them: the import is resolved while `System.load` runs, and by then it is too late to
+     * load anything.
+     */
+    private val SUPPORT_LIBRARIES = listOf("vulkan-1.dll", "z.dll")
+
     /**
      * Loads the library, or records why it could not be loaded.
      *
@@ -38,19 +61,47 @@ object DesktopNativeRenderer {
      * message in the interface instead of a crash on startup. A user whose build is
      * incomplete should see what is missing, not a stack trace.
      *
-     * The library is built by CMake, so a development copy lives in the build tree where
-     * the JVM does not search. It is found by walking up from the working directory, but
-     * only inside a directory that still holds a CMake cache: that marker is what
-     * separates a build tree from an installed layout, and without it this would happily
-     * load a stale library left behind by an old build.
+     * The layouts are tried in turn, and the first that holds the library wins.
+     *
+     * A packaged application keeps the library beside its shaders and textures, under the
+     * resource directory Compose Desktop passes as `compose.application.resources.dir`.
+     * That one is tried first because it is the only layout a user's install has: the
+     * discovery below walks up from the working directory, and a packaged launch has
+     * whatever working directory the user happened to start it from.
+     *
+     * A development run keeps it in the CMake build tree, where the JVM does not search at
+     * all. That one is found by walking up from the working directory, but only inside a
+     * directory that still holds a CMake cache: that marker is what separates a build tree
+     * from an installed layout, and without it this would happily load a stale library left
+     * behind by an old build.
+     *
+     * CELLULARITY_NATIVE_DIR still names the directory directly, and the launcher's own
+     * library path is the last resort for a hand-assembled install.
      */
     private val loadFailure: Throwable? = try {
+        val packaged = packagedNativeDirectory()?.let(::libraryIn)
         val fromEnvironment = System.getenv("CELLULARITY_NATIVE_DIR")
             ?.takeIf { it.isNotBlank() }
             ?.let { Path.of(it) }
             ?.let(::libraryIn)
-        val discovered = fromEnvironment ?: findDevelopmentLibrary()
+        val fromBuildTree = findDevelopmentLibrary()
+        // The application directory is the fallback for a copy made beside the launcher
+        // rather than into the resources tree. It is read from java.library.path instead of
+        // being assumed, so an install that points somewhere else still resolves.
+        val fromApplicationDirectory = applicationLibraryDirectories()
+            .firstNotNullOfOrNull(::libraryIn)
+        val discovered = packaged
+            ?: fromEnvironment
+            ?: fromBuildTree
+            ?: fromApplicationDirectory
         if (discovered != null) {
+            // The support libraries the renderer imports have to be resolvable before it is
+            // loaded, and Windows resolves an import against the directory of the module
+            // being loaded last of all. Loading them from the same directory first makes
+            // the packaged copy win over whatever happens to be installed, which is the
+            // difference between using the Vulkan loader this build was tested against and
+            // using a stranger's.
+            loadSupportLibrariesBeside(discovered.parent)
             System.load(discovered.toAbsolutePath().toString())
         } else {
             System.loadLibrary("cellularity_desktop")
@@ -66,6 +117,55 @@ object DesktopNativeRenderer {
     private fun libraryIn(directory: Path): Path? =
         directory.resolve(System.mapLibraryName("cellularity_desktop"))
             .takeIf { Files.isRegularFile(it) }
+
+    /**
+     * The resource directory Compose Desktop gives a packaged application.
+     *
+     * The property is set from the launcher's configuration, so its presence is also what
+     * tells this process that it is running from an install rather than from the
+     * repository.
+     */
+    private fun packagedNativeDirectory(): Path? {
+        val resources = System.getProperty(RESOURCES_DIRECTORY_PROPERTY)
+            ?.takeIf { it.isNotBlank() }
+            ?.let { Path.of(it) }
+            ?: return null
+        val native = resources.resolve(PACKAGED_NATIVE_DIRECTORY)
+        return native.takeIf { Files.isDirectory(it) }
+    }
+
+    /**
+     * The directories a packaged launcher puts on the library path.
+     *
+     * Every entry is returned rather than the first one that exists, because the launcher
+     * lists the bundled runtime's `bin` as well as the application directory and the
+     * library could legitimately be in either.
+     */
+    private fun applicationLibraryDirectories(): List<Path> =
+        System.getProperty("java.library.path")
+            ?.split(File.pathSeparator)
+            ?.asSequence()
+            ?.filter { it.isNotBlank() }
+            ?.map { Path.of(it) }
+            ?.filter { Files.isDirectory(it) }
+            ?.toList()
+            ?: emptyList()
+
+    /** Loads any support library [directory] holds, skipping the ones already loaded. */
+    private fun loadSupportLibrariesBeside(directory: Path?) {
+        if (directory == null) return
+        for (library in SUPPORT_LIBRARIES) {
+            val candidate = directory.resolve(library)
+            if (!Files.isRegularFile(candidate)) continue
+            try {
+                System.load(candidate.toAbsolutePath().toString())
+            } catch (ignored: UnsatisfiedLinkError) {
+                // A support library that will not load is not necessarily fatal: Windows
+                // may already have resolved the import from the system, and the load of the
+                // renderer itself is what reports whether it did.
+            }
+        }
+    }
 
     /**
      * The library in the build tree, if this is running from one.
@@ -85,12 +185,6 @@ object DesktopNativeRenderer {
         }
         return null
     }
-
-    private val DEVELOPMENT_LIBRARY_LOCATIONS = listOf(
-        "build/win-cmake",
-        "build/win-cmake/Release",
-        "build/win-cmake/Debug"
-    )
 
     val isAvailable: Boolean
         get() = loadFailure == null
