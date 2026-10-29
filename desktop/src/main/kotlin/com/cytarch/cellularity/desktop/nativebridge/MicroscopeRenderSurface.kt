@@ -674,12 +674,19 @@ private class SurfaceHolder(
         val handle = nativeWindowHandleOf(component)
         if (handle != 0L) {
             ownerHandle.set(handle)
-            // Measured in AWT's own coordinates on both sides. Going out to the screen and
-            // back was tried and does not survive display scaling: AWT counts logical pixels
-            // while Win32 counts physical ones, so the conversion turned a viewport offset
-            // into a negative one. Nothing here has to agree about a scale.
+            // Measured in AWT's coordinates and then converted, because the window is not placed
+            // in AWT's coordinates. `SetWindowPos` takes physical pixels, and the size that
+            // travels beside this offset is already in physical pixels -- so an offset left in
+            // logical ones places the window wrongly, and on a display at 175 per cent it places
+            // it three quarters of the distance too far out in both directions.
+            //
+            // Mixing the two in one call is the fault this replaces, and it is the same fault as
+            // the size one: the two numbers travel together and have to be counted the same way.
+            // At 100 per cent they are equal and none of it can be seen.
             val offset = offsetWithinWindow(component, handle)
-            requestedPlacement.set(pack(offset.first, offset.second))
+            requestedPlacement.set(
+                pack((offset.first * scale).roundToInt(), (offset.second * scale).roundToInt())
+            )
             placementKnown.set(true)
         }
 

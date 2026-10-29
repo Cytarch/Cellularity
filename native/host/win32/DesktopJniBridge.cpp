@@ -631,6 +631,7 @@ Java_com_cytarch_cellularity_desktop_nativebridge_DesktopNativeRenderer_nativeDe
                 report += ",";
                 report += std::to_string(onScreen.top);
             }
+
             RECT client{};
             if (::GetClientRect(window, &client) != 0) {
                 report += " childClient=";
@@ -646,6 +647,27 @@ Java_com_cytarch_cellularity_desktop_nativebridge_DesktopNativeRenderer_nativeDe
                 report += std::to_string(bounds.bottom - bounds.top);
             }
             const HWND parent = ::GetParent(window);
+            // Where the child sits inside its parent, which is the number that decides whether it
+            // covers something the interface drew. A child window is in front of everything the
+            // interface paints, so a viewport one row too high is a viewport on top of the bar
+            // beneath it -- and the two rectangles being the same size says nothing about it.
+            //
+            // Both sides of this subtraction are Win32 screen coordinates, so no scale is involved
+            // and none is applied. Adding one is what made an earlier measurement of this kind
+            // meaningless.
+            if (parent != nullptr) {
+                RECT parentBounds{};
+                if (::GetWindowRect(parent, &parentBounds) != 0) {
+                    report += " offsetInParent=";
+                    report += std::to_string(onScreen.left - parentBounds.left);
+                    report += ",";
+                    report += std::to_string(onScreen.top - parentBounds.top);
+                    report += " parentSize=";
+                    report += std::to_string(parentBounds.right - parentBounds.left);
+                    report += "x";
+                    report += std::to_string(parentBounds.bottom - parentBounds.top);
+                }
+            }
             if (parent != nullptr) {
                 RECT parentClient{};
                 if (::GetClientRect(parent, &parentClient) != 0) {
