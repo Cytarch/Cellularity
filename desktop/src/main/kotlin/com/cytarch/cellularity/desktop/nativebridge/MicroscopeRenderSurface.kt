@@ -440,9 +440,13 @@ private class SurfaceHolder(
                 pressedY = event.y
                 lastX = event.x
                 lastY = event.y
-                // The canvas has to ask for focus explicitly, otherwise the keyboard
-                // shortcuts (temperature, tool, reset) go to whichever component had it.
-                surface.requestFocusInWindow()
+                // Asked for on a later turn of the event queue rather than during this one.
+                // A focus change is a request to the native window, and this handler runs on
+                // the event thread while the window's own messages are handled by the render
+                // thread -- so asking synchronously makes one thread wait for the other at
+                // exactly the moment something was clicked. Deferring it costs one turn and
+                // takes the wait out of the click.
+                javax.swing.SwingUtilities.invokeLater { surface.requestFocusInWindow() }
             }
 
             override fun mouseReleased(event: MouseEvent) {
