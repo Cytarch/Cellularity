@@ -108,53 +108,64 @@ fun main() {
     val childScreenY = geometry[1].toInt()
     val width = geometry[2].toInt()
     val height = geometry[3].toInt()
-    println("HIT child window on screen at ${childScreenX},${childScreenY} ${width}x$height")
+    val visible = if (geometry.size > 8) geometry[8] != 0L else true
+    val hasParent = if (geometry.size > 9) geometry[9] != 0L else true
+    println(
+        "HIT child window on screen at ${childScreenX},${childScreenY} ${width}x$height " +
+            "visible=$visible hasParent=$hasParent"
+    )
 
-    // A grid rather than a single point: the corner is where the report says the picture is,
-    // and the middle is where a person would click, and they can disagree.
-    val fractions = listOf(0.05, 0.25, 0.5, 0.75, 0.95)
+    // A vertical scan through the middle of the window's column, from well above its top edge
+    // to well below its bottom edge. What it looks for is where the answer changes, because the
+    // boundary is the finding: everything above the first "simulation" belongs to the
+    // interface, and if the navigation bar is interface at the bottom, the two are no longer
+    // fighting over the same pixels. A scan rather than a grid, because the question is where
+    // the edge is, not how much of an area is one thing.
+    println("HIT scaling: ${describeScaling()}")
+    val columnX = childScreenX + width / 2
+    val above = 120
+    val below = 120
     var bridgePoints = 0
     var otherPoints = 0
     var elsewherePoints = 0
-    for (fractionY in fractions) {
-        val row = fractions.joinToString(" ") { fractionX ->
-            val x = childScreenX + (width * fractionX).toInt()
-            val y = childScreenY + (height * fractionY).toInt()
-            when (windowAtPoint(x, y)) {
+    val scan = StringBuilder()
+    for (offset in -above..(height + below) step 20) {
+        val y = childScreenY + offset
+        val answer = windowAtPoint(columnX, y)
+        scan.append(
+            when (answer) {
                 1 -> {
                     bridgePoints++
-                    "sim"
+                    's'
                 }
                 0 -> {
                     otherPoints++
-                    "UI "
+                    'u'
                 }
                 else -> {
                     elsewherePoints++
-                    "?  "
+                    '.'
                 }
             }
-        }
-        println("HIT y=${(height * fractionY).toInt()}: $row")
+        )
     }
+    println("HIT column at x=$columnX, from ${childScreenY - above} to ${childScreenY + height + below}, step 20:")
+    println("HIT $scan")
+    println("HIT legend: s=simulation u=interface .=elsewhere, first character at y=${childScreenY - above}")
     println(
-        "HIT over the viewport: simulation=$bridgePoints interface=$otherPoints elsewhere=$elsewherePoints"
+        "HIT over the scan: simulation=$bridgePoints interface=$otherPoints elsewhere=$elsewherePoints"
     )
-
-    // A vertical scan along one column, so the boundary between what the interface owns and
-    // what the simulation owns is visible as a change of answer rather than inferred from two
-    // samples. Step 20 px upward from the window's top edge, so the interface above it is
-    // included: if a run of "interface" appears there, the window no longer reaches over it.
-    val columnX = childScreenX + 40
-    val scanAbove = (0..80 step 20).reversed().joinToString(" ") { back ->
-        when (windowAtPoint(columnX, childScreenY - back)) {
-            1 -> "s"
-            0 -> "u"
-            else -> "."
-        }
+    // The first and last simulation answers, which are the window's real edges as Windows sees
+    // them rather than the rectangle the bridge reported.
+    val answers = scan.toString()
+    val firstSim = answers.indexOf('s')
+    val lastSim = answers.lastIndexOf('s')
+    if (firstSim >= 0) {
+        println(
+            "HIT the simulation is reachable from y=${childScreenY - above + firstSim * 20} " +
+                "to y=${childScreenY - above + lastSim * 20}"
+        )
     }
-    println("HIT above the window (80px up to its top edge, step 20): $scanAbove")
-    println("HIT legend: s=simulation u=interface .=elsewhere")
     val reached = bridgePoints > 0
     println(
         if (reached) {
@@ -217,6 +228,19 @@ private fun invokeDiagnostics(name: String): Any? = try {
 } catch (thrown: ReflectiveOperationException) {
     println("HIT could not reach the surface: $thrown")
     null
+}
+
+private fun describeScaling(): String = try {
+    val renderer = Class.forName(
+        "com.cytarch.cellularity.desktop.nativebridge.DesktopNativeRenderer"
+    )
+    val instance = renderer.getField("INSTANCE").get(null)
+    val handle = Regex("window=(\\d+)").find(surfaceDescription())?.groupValues?.get(1)
+        ?.toLongOrNull() ?: 0L
+    renderer.getMethod("nativeDescribeScaling", java.lang.Long.TYPE).invoke(instance, handle)
+        as? String ?: "no scaling report"
+} catch (thrown: ReflectiveOperationException) {
+    "could not describe the scaling: $thrown"
 }
 
 private fun invokeRendererValues(

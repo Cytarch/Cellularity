@@ -65,6 +65,12 @@ fun MicroscopeTab(
                 onFailure = onFailure,
                 onSessionReady = onSessionReady,
                 substratePath = substratePath,
+                // The simulation is drawn by a native window, which is in front of everything
+                // the interface draws. Staying mounted while another tab shows is deliberate --
+                // the session owns the device and the simulation thread -- but staying visible
+                // is not: it would cover whatever tab is actually open, and take the clicks
+                // meant for it.
+                isVisible = isVisible,
                 modifier = Modifier.fillMaxSize()
             )
             // A quiet readout: the phone puts these behind a diagnostics screen, but on

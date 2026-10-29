@@ -11,6 +11,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.LaunchedEffect
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -227,10 +230,17 @@ fun DesktopPlayScreen(
     }
 
     // Reading the selected cell is a read of the runtime's status, and the two are published
-    // together, so it is polled here rather than pushed from the render thread: the render
-    // thread owns the session and must not also be the thread that composes, and a status
-    // read is not a frame. The interval is the phone's, because the panel is the same panel
-    // and a person reading it cannot tell 250 ms from 500.
+    // together, so it is polled rather than pushed by the render thread: the render thread owns
+    // the session and must not also be the thread that composes, and a status read is not a
+    // frame. The interval is the phone's, because the panel is the same panel and a person
+    // reading it cannot tell 250 ms from 500.
+    //
+    // The reads are blocking, and that is the whole reason this runs on the IO dispatcher. A
+    // status read is answered by the thread that owns the session, so the caller waits for it;
+    // a composition that waited would stop drawing and stop taking input, and a window that
+    // stops taking input for long enough is reported by Windows as not responding. That is the
+    // same shape as the fault this whole port is being debugged for, which is why it is worth
+    // being explicit: nothing that waits for the runtime may run on the thread that draws.
     //
     // Only the diagnosis tool is polled. The runtime answers "what is this cell" only while
     // that tool is selected -- it publishes the flag that says so -- and asking during the
@@ -245,9 +255,11 @@ fun DesktopPlayScreen(
             return@LaunchedEffect
         }
         while (true) {
-            val inspection = DesktopCellDiagnosis.inspectSelectedCell(handle)
+            val inspection = withContext(Dispatchers.IO) {
+                DesktopCellDiagnosis.inspectSelectedCell(handle)
+            }
             microscopeStore.dispatch(MicroscopeAction.InspectionObserved(inspection))
-            kotlinx.coroutines.delay(CELL_DIAGNOSIS_INTERVAL_MILLIS)
+            delay(CELL_DIAGNOSIS_INTERVAL_MILLIS)
         }
     }
 }

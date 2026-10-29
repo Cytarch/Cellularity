@@ -562,6 +562,101 @@ Java_com_cytarch_cellularity_desktop_nativebridge_DesktopNativeRenderer_nativeCr
 // extent to follow the window has to recreate the session at the new size. Leaving it
 // as a window-only operation keeps the two handles independent and keeps this call
 // safe to make before a session exists.
+// Describes how this process relates to the display's scaling, and how large the child
+// window's client area actually is, as one string.
+//
+// This is the fact that decides whether any of the other numbers mean what they appear to.
+// A process that declares itself aware of the display's scaling is given real pixels by every
+// Win32 call; one that does not is given virtualised ones, and the same value then means two
+// different things depending on who is asked. A window sized from one space and hit-tested in
+// the other lands somewhere neither side intended -- and every attempt to reason about it from
+// the managed side alone has produced a confident answer that the next measurement contradicted.
+extern "C" JNIEXPORT jstring JNICALL
+Java_com_cytarch_cellularity_desktop_nativebridge_DesktopNativeRenderer_nativeDescribeScaling(
+        JNIEnv* env, jclass, jlong windowHandle) {
+    try {
+        std::string report;
+        const DPI_AWARENESS_CONTEXT context = ::GetThreadDpiAwarenessContext();
+        const DPI_AWARENESS awareness = ::GetAwarenessFromDpiAwarenessContext(context);
+        report += "awareness=";
+        switch (awareness) {
+            case DPI_AWARENESS_UNAWARE:
+                report += "unaware";
+                break;
+            case DPI_AWARENESS_SYSTEM_AWARE:
+                report += "system";
+                break;
+            case DPI_AWARENESS_PER_MONITOR_AWARE:
+                report += "per-monitor";
+                break;
+            default:
+                report += "unknown";
+                break;
+        }
+        report += " systemDpi=";
+        report += std::to_string(::GetDpiForSystem());
+        const HWND window = windowFromHandle(windowHandle);
+        if (window != nullptr && isBridgeWindow(window)) {
+            const UINT windowDpi = ::GetDpiForWindow(window);
+            report += " windowDpi=";
+            report += std::to_string(windowDpi);
+            RECT client{};
+            if (::GetClientRect(window, &client) != 0) {
+                report += " childClient=";
+                report += std::to_string(client.right - client.left);
+                report += "x";
+                report += std::to_string(client.bottom - client.top);
+            }
+            RECT bounds{};
+            if (::GetWindowRect(window, &bounds) != 0) {
+                report += " childWindow=";
+                report += std::to_string(bounds.right - bounds.left);
+                report += "x";
+                report += std::to_string(bounds.bottom - bounds.top);
+            }
+            const HWND parent = ::GetParent(window);
+            if (parent != nullptr) {
+                RECT parentClient{};
+                if (::GetClientRect(parent, &parentClient) != 0) {
+                    report += " parentClient=";
+                    report += std::to_string(parentClient.right - parentClient.left);
+                    report += "x";
+                    report += std::to_string(parentClient.bottom - parentClient.top);
+                }
+            }
+        }
+        return env->NewStringUTF(report.c_str());
+    } catch (...) {
+        return nullptr;
+    }
+}
+// Shows or hides the child window. Returns 0 on success, 1 if Win32 refused, and 2 if the
+// handle is not a live window this bridge created.
+//
+// A child window is not clipped by what the interface draws, so it is in front of the
+// interface wherever it lies -- which is what lets the simulation be visible at all, and also
+// what made it cover every other tab. The surface stays mounted while another tab is showing
+// because it owns the Vulkan device and the simulation thread, and tearing it down to hide a
+// picture would stop the world and start a different one when the tab came back. Hiding the
+// window is what keeps the session alive without keeping the picture in front of everything.
+extern "C" JNIEXPORT jint JNICALL
+Java_com_cytarch_cellularity_desktop_nativebridge_DesktopNativeRenderer_nativeShowWindow(
+        JNIEnv*, jclass, jlong windowHandle, jboolean visible) {
+    try {
+        const HWND window = windowFromHandle(windowHandle);
+        if (!isBridgeWindow(window)) {
+            return kStatusInvalidHandle;
+        }
+        if (::ShowWindow(window, visible != 0 ? SW_SHOWNA : SW_HIDE) == 0) {
+            // ShowWindow reports the previous visibility rather than success, so a zero here
+            // only means the window was already hidden. The call itself cannot fail for a
+            // window this bridge created.
+        }
+        return kStatusOk;
+    } catch (...) {
+        return kStatusFailed;
+    }
+}
 // Reports the extent the surface is presenting at, as {width, height}, or null when the
 // handle is not a live session or no frame has been presented yet.
 //
@@ -905,7 +1000,7 @@ Java_com_cytarch_cellularity_desktop_nativebridge_DesktopNativeRenderer_nativeWi
                 return nullptr;
             }
         }
-        const jlong values[8] = {
+        const jlong values[10] = {
                 static_cast<jlong>(windowRect.left),
                 static_cast<jlong>(windowRect.top),
                 static_cast<jlong>(windowRect.right - windowRect.left),
@@ -913,12 +1008,18 @@ Java_com_cytarch_cellularity_desktop_nativebridge_DesktopNativeRenderer_nativeWi
                 static_cast<jlong>(clientRect.right - clientRect.left),
                 static_cast<jlong>(clientRect.bottom - clientRect.top),
                 static_cast<jlong>(windowRect.left - clientOrigin.x),
-                static_cast<jlong>(windowRect.top - clientOrigin.y)};
-        jlongArray result = env->NewLongArray(8);
+                static_cast<jlong>(windowRect.top - clientOrigin.y),
+                // Whether Win32 considers the window visible. A hidden window still has a
+                // rectangle and is still reported by GetWindowRect, but WindowFromPoint
+                // ignores it entirely -- so a scan that finds no window anywhere is
+                // indistinguishable from a scan of a hidden one unless this is known.
+                ::IsWindowVisible(window) != 0 ? 1 : 0,
+                static_cast<jlong>(::GetParent(window) != nullptr ? 1 : 0)};
+        jlongArray result = env->NewLongArray(10);
         if (result == nullptr) {
             return nullptr;
         }
-        env->SetLongArrayRegion(result, 0, 8, values);
+        env->SetLongArrayRegion(result, 0, 10, values);
         return result;
     } catch (...) {
         return nullptr;

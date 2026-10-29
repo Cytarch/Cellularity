@@ -273,6 +273,29 @@ object DesktopNativeRenderer {
      * interface put the viewport but not where the parent's client area begins or how the two
      * spaces are scaled, and guessing either is how a window ends up over the interface.
      */
+    /**
+     * Shows or hides the renderer's window.
+     *
+     * A child window is not clipped by what the interface draws, so it is in front of the
+     * interface wherever it lies. That is what makes the simulation visible and also what made
+     * it cover every other tab: the surface stays mounted while another tab is showing,
+     * because it owns the device and the simulation thread, and the picture has to be taken
+     * out of the way without the session being torn down.
+     */
+    external fun nativeShowWindow(windowHandle: Long, visible: Boolean): Int
+
+    /**
+     * How this process relates to the display's scaling, and how large the child window's
+     * client area really is.
+     *
+     * This decides whether every other number means what it appears to. A process that declares
+     * itself aware of the display's scaling is given real pixels by Win32; one that does not is
+     * given virtualised ones, so the same value means two different things depending on who is
+     * asked. A window sized from one space and hit-tested in the other lands where neither side
+     * intended, and no amount of reasoning from one side alone can tell which space is which.
+     */
+    external fun nativeDescribeScaling(windowHandle: Long): String?
+
     external fun nativeSetChildWindowBounds(
         windowHandle: Long,
         screenX: Int,

@@ -120,6 +120,15 @@ fun MicroscopeRenderSurface(
      * the file would be tearing the world down and building another.
      */
     substratePath: String? = null,
+    /**
+     * Whether the viewport is the part of the interface being shown.
+     *
+     * The session is not tied to this: it stays alive while another tab is open, because it
+     * owns the device and the simulation thread and tearing it down to hide a picture would
+     * end the run. What follows this is the picture, which is drawn by a native window and
+     * would otherwise sit in front of whichever tab is actually open.
+     */
+    isVisible: Boolean = true,
     modifier: Modifier = Modifier
 ) {
     if (!DesktopNativeRenderer.isAvailable || assetRoots == null) {
@@ -156,6 +165,13 @@ fun MicroscopeRenderSurface(
 
     DisposableEffect(holder) {
         onDispose { holder.release() }
+    }
+
+    // Told on every change of the visible tab, and on the first composition, because the
+    // surface starts out visible and a tab that opens on something else would otherwise leave
+    // the picture in front of it until the first switch.
+    LaunchedEffect(holder, isVisible) {
+        holder.setVisible(isVisible)
     }
 
     Box(modifier = modifier) {
@@ -257,6 +273,11 @@ private class SurfaceHolder(
     // is: two numbers in one atomic so a frame can never read half of an update and place the
     // window at a mixture of two layouts.
     private val requestedPlacement = AtomicLong(0L)
+
+    // Whether the viewport is on the screen the interface is showing. The session stays alive
+    // either way; only the picture is taken out of the way, because a child window is in front
+    // of everything the interface draws and would otherwise cover every other tab.
+    private val requestedVisible = AtomicBoolean(true)
 
     // Whether a placement has been published at all. Kept apart from the value so that a
     // viewport in the top-left corner is not mistaken for a viewport whose place is unknown.
@@ -547,6 +568,17 @@ private class SurfaceHolder(
         }
     }
 
+    /**
+     * Takes the picture in or out of the interface's way without stopping the world.
+     *
+     * The session owns the Vulkan device and the simulation thread, so unmounting the surface
+     * to hide it would end the run and start a different one when the tab came back. Hiding the
+     * window keeps the run and removes only the thing that was in front of the other tabs.
+     */
+    fun setVisible(visible: Boolean) {
+        requestedVisible.set(visible)
+    }
+
     /** Publishes the queue this composition is using. */
     fun hold(events: List<SurfaceInputEvent>) {
         pendingInput.set(events)
@@ -577,6 +609,8 @@ private class SurfaceHolder(
         var appliedExtent = 0L
         var appliedPlacement = 0L
         var appliedPlacementKnown = false
+        var appliedVisible = true
+        var appliedVisibilityOnce = false
         try {
             while (!released) {
                 val pointer = queuedPointerInput.getAndSet(emptyList())
@@ -696,6 +730,23 @@ private class SurfaceHolder(
                     // Reported from the thread that owns the session, which is the only
                     // thread that may speak to it. Callers treat it as a publication.
                     onSessionReady(sessionHandle)
+                }
+
+                // Applied before the frame is drawn rather than after, so a tab that has just
+                // been switched away from stops being covered in the same frame it stopped
+                // being the visible one.
+                // Applied on the first frame unconditionally, and only on a change afterwards.
+                // Tracking it as "has it changed from the last value I applied" was wrong at
+                // the start, because the last value was an assumption: the window is created
+                // visible, and a surface whose tab opens on something else would record that it
+                // wanted it hidden only after the window already existed. A window left in the
+                // wrong state is also invisible to Win32's own hit testing, which is how the
+                // discrepancy was found.
+                val visible = requestedVisible.get()
+                if (!appliedVisibilityOnce || visible != appliedVisible) {
+                    DesktopNativeRenderer.nativeShowWindow(windowHandle, visible)
+                    appliedVisible = visible
+                    appliedVisibilityOnce = true
                 }
 
                 val result = DesktopNativeRenderer.nativeRenderFrame(sessionHandle)
