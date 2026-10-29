@@ -8,128 +8,75 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.size
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.ui.ImageComposeScene
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * Looks at what the interface draws, without a window and without a screen.
+ * Checks the frame reader against drawings whose contents are known.
  *
- * Every report about this port so far has been resolved by somebody looking at it: the surface
- * was in the wrong place, the simulation covered the tabs, the panel that should have been
- * shown was a placeholder. None of those were visible in a test, because a test can check what
- * a function returns and not what a frame contains -- and the difference between "the screen is
- * drawn" and "the screen is drawn correctly" is the whole of what has been going wrong.
+ * Every report about this port has been settled by somebody looking at it: the surface was in
+ * the wrong place, the simulation covered the tabs, the panel that should have been on screen was
+ * a placeholder. None of those were visible in a test, because a test checks what a function
+ * returns and not what a frame contains -- and the difference between "the screen is drawn" and
+ * "the screen is drawn correctly" is the whole of what has been going wrong.
  *
- * `ImageComposeScene` closes that gap: it composes and draws into an image in memory, with no
- * window, no monitor and nothing in front of anybody. What the image contains can then be read
- * back as pixels and asserted on, which turns "the panel shows a white rectangle" from a
- * sentence into a number.
- *
- * This is the check that the mechanism works at all. A drawing that is one flat colour and a
- * drawing that has content in it have to be told apart before anything can be said about a real
- * screen, because a reader that cannot tell those apart would report every screen as fine.
+ * Compose can draw into an image in memory, which closes that gap without a window, a monitor or
+ * anything appearing in front of anybody. But a reader of frames is itself a thing that can be
+ * wrong, and one that reports every frame as fine would be worse than no reader at all: it would
+ * turn every following measurement into a false reassurance. So it is checked first against
+ * drawings whose answers are known in advance, and only then pointed at a real screen.
  */
 class DesktopFrameInspectionTest {
 
     private val width = 400
     private val height = 300
 
-    /** Draws a composable into an image and returns its pixels as 0xRRGGBB values. */
-    private fun draw(content: @androidx.compose.runtime.Composable () -> Unit): IntArray {
-        val scene = ImageComposeScene(
-            width = width,
-            height = height,
-            density = Density(1f)
-        )
-        return try {
-            scene.setContent { MaterialTheme { content() } }
-            val image = scene.render()
-            val bitmap = org.jetbrains.skia.Bitmap()
-            bitmap.allocN32Pixels(width, height)
-            image.readPixels(bitmap)
-            val pixels = IntArray(width * height)
-            for (y in 0 until height) {
-                for (x in 0 until width) {
-                    pixels[y * width + x] = bitmap.getColor(x, y) and 0xFFFFFF
-                }
-            }
-            pixels
-        } finally {
-            scene.close()
-        }
-    }
-
-    private fun distinctColours(pixels: IntArray): Int = pixels.toHashSet().size
-
-    /**
-     * The colour most of the frame is, which is what "the background" means for a drawing.
-     *
-     * Counted rather than assumed, because a screen that is mostly one colour and a screen that
-     * is mostly another are different screens and neither is known in advance.
-     */
-    private fun mostCommonColour(pixels: IntArray): Int {
-        val counts = HashMap<Int, Int>()
-        for (pixel in pixels) {
-            counts[pixel] = (counts[pixel] ?: 0) + 1
-        }
-        var best = pixels[0]
-        var bestCount = -1
-        for ((colour, count) in counts) {
-            if (count > bestCount) {
-                best = colour
-                bestCount = count
-            }
-        }
-        return best
-    }
-
     @Test
     fun aFlatDrawingIsRecognisedAsFlat() {
-        val pixels = draw {
+        val frame = FrameInspection.inspect(width, height) {
             Box(modifier = Modifier.fillMaxSize().background(Color(0xFFFFFFFF)))
         }
 
         assertTrue(
-            "a drawing of one colour has to be reported as having one colour, but " +
-                "found ${distinctColours(pixels)}",
-            distinctColours(pixels) == 1
+            "a drawing of one colour has to be reported as flat, but it was described as " +
+                "$frame",
+            frame.isFlat
         )
+        assertEquals("a flat drawing has no content to measure", 0, frame.contentWidth)
     }
 
     @Test
     fun aDrawingWithContentIsNotFlat() {
-        val pixels = draw {
+        val frame = FrameInspection.inspect(width, height) {
             Box(modifier = Modifier.fillMaxSize().background(Color(0xFFFFFFFF))) {
                 Text(text = "content", modifier = Modifier.size(200.dp, 100.dp))
             }
         }
 
         assertTrue(
-            "a drawing with text on it has to have more than one colour, but found " +
-                "${distinctColours(pixels)}",
-            distinctColours(pixels) > 1
+            "a drawing with text on it has to have more than one colour, but it was " +
+                "described as $frame",
+            !frame.isFlat
         )
     }
 
     /**
      * The bounding box of everything that differs from the background.
      *
-     * This is the number that would have described the reported faults directly: a picture
-     * drawn into the corner of its own viewport is a bounding box much smaller than the frame,
-     * and a screen that is one flat rectangle is a bounding box that does not exist. Measuring
-     * it here is what makes it possible to say which of those a screen is instead of describing
-     * it to somebody and waiting.
+     * This is the number that would have described the reported faults directly: a picture drawn
+     * into the corner of its own viewport is a bounding box much smaller than the frame, and a
+     * screen that is one flat rectangle is a bounding box that does not exist. Measuring it here
+     * on a rectangle whose size is known is what makes it trustworthy when it is pointed at a
+     * screen.
      */
     @Test
-    fun theExtentOfTheContentCanBeMeasured() {
-        val pixels = draw {
+    fun theExtentOfTheContentIsMeasured() {
+        val frame = FrameInspection.inspect(width, height) {
             Box(modifier = Modifier.fillMaxSize().background(Color(0xFFFFFFFF))) {
                 Box(
                     modifier = Modifier
@@ -139,27 +86,28 @@ class DesktopFrameInspectionTest {
             }
         }
 
-        val background = mostCommonColour(pixels)
-        var minX = width
-        var minY = height
-        var maxX = -1
-        var maxY = -1
-        for (y in 0 until height) {
-            for (x in 0 until width) {
-                if (pixels[y * width + x] != background) {
-                    if (x < minX) minX = x
-                    if (y < minY) minY = y
-                    if (x > maxX) maxX = x
-                    if (y > maxY) maxY = y
-                }
+        assertEquals(
+            "the content of a 100 by 60 rectangle has to measure 100 by 60, but it measured " +
+                "${frame.contentWidth} by ${frame.contentHeight}",
+            100,
+            frame.contentWidth
+        )
+        assertEquals(60, frame.contentHeight)
+        assertTrue(
+            "a rectangle smaller than the frame must not be reported as filling it: $frame",
+            !frame.fills
+        )
+    }
+
+    /** A drawing that covers the frame has to be reported as covering it. */
+    @Test
+    fun aDrawingThatFillsTheFrameIsReportedAsFillingIt() {
+        val frame = FrameInspection.inspect(width, height) {
+            Box(modifier = Modifier.fillMaxSize().background(Color(0xFFFFFFFF))) {
+                Box(modifier = Modifier.fillMaxSize().background(Color(0xFF102030)))
             }
         }
 
-        assertTrue("the small rectangle has to be found somewhere", maxX >= 0)
-        assertTrue(
-            "the content of a quarter-sized rectangle must not span the whole frame, but " +
-                "found ${maxX - minX + 1}x${maxY - minY + 1} in ${width}x$height",
-            (maxX - minX + 1) < width && (maxY - minY + 1) < height
-        )
+        assertTrue("a full-frame drawing has to be reported as filling it: $frame", frame.fills)
     }
 }
