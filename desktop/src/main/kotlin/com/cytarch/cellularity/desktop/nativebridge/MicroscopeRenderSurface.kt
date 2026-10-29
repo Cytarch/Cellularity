@@ -281,8 +281,11 @@ private class SurfaceHolder(
         append(ownerHandle.get() != 0L)
         append(" window=")
         append(publishedWindow.get() != 0L)
+        // The handle itself, not whether there is one: a probe outside the composition can
+        // only ask the renderer about a session it can name, and publishing a boolean would
+        // leave it unable to name anything.
         append(" session=")
-        append(publishedSession.get() != 0L)
+        append(publishedSession.get())
         append(" reported=")
         append(reported)
         append(" cells=")

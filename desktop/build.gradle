@@ -110,6 +110,45 @@ if (existingJavaOptions == null || !existingJavaOptions.contains('java.desktop/j
 // Reports where the native child window would land, without showing a window. The report it
 // exists for is "the interface disappears when an experiment starts", and geometry is the
 // part of that a screenshot cannot settle.
+// Proves that a tap selects a cell and that the cell can be read back. Two implementations
+// have to agree for that -- the runtime that writes the document and the codec that reads it
+// -- and neither can be checked against the other without a live session.
+// Dumps the AWT component tree of the play screen in paint order. Structure is what settles
+// "the simulation is in a corner" and "the interface does not answer"; a screenshot settles
+// neither and costs the machine it is taken on.
+// Measures whether the event thread is still being serviced while the simulation runs. A
+// frozen window is a claim about that one thread, and it is checkable without looking at
+// anything: post work to its queue and time the round trip.
+tasks.register('runEventThreadProbe', JavaExec) {
+    group = 'verification'
+    description = 'Reports whether the interface thread answers while the world runs.'
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'com.cytarch.cellularity.desktop.EventThreadProbeKt'
+    environment 'JDK_JAVA_OPTIONS', "${existingJavaOptions ?: ''} ${requiredOpens}".trim()
+    systemProperty 'java.library.path', nativeOutputDirectory.absolutePath
+    environment 'CELLULARITY_NATIVE_DIR', nativeOutputDirectory.absolutePath
+    environment 'PATH', "${nativeOutputDirectory.absolutePath};${System.getenv('PATH')}"
+}
+tasks.register('runTreeProbe', JavaExec) {
+    group = 'verification'
+    description = 'Prints the component tree of the running play screen.'
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'com.cytarch.cellularity.desktop.TreeProbeKt'
+    environment 'JDK_JAVA_OPTIONS', "${existingJavaOptions ?: ''} ${requiredOpens}".trim()
+    systemProperty 'java.library.path', nativeOutputDirectory.absolutePath
+    environment 'CELLULARITY_NATIVE_DIR', nativeOutputDirectory.absolutePath
+    environment 'PATH', "${nativeOutputDirectory.absolutePath};${System.getenv('PATH')}"
+}
+tasks.register('runSelectionProbe', JavaExec) {
+    group = 'verification'
+    description = 'Taps the plate and reports the cell the runtime selected.'
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'com.cytarch.cellularity.desktop.nativebridge.SelectionProbeKt'
+    environment 'JDK_JAVA_OPTIONS', "${existingJavaOptions ?: ''} ${requiredOpens}".trim()
+    systemProperty 'java.library.path', nativeOutputDirectory.absolutePath
+    environment 'CELLULARITY_NATIVE_DIR', nativeOutputDirectory.absolutePath
+    environment 'PATH', "${nativeOutputDirectory.absolutePath};${System.getenv('PATH')}"
+}
 tasks.register('runLayoutProbe', JavaExec) {
     group = 'verification'
     description = 'Reports the layout the renderer would be parented into.'
