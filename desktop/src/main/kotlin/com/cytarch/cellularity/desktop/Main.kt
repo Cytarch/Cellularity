@@ -69,6 +69,9 @@ fun main() = application {
         }
 
         val mainMenuStore = remember { MainMenuStore() }
+        // One queue for both collection pages, so a notice from the gene bank and one from
+        // the freezer are shown the same way and cannot appear at once.
+        val notices = remember { DesktopNoticeQueue() }
         val mainMenuState by mainMenuStore.state.collectAsState()
         val settings by environment.settingsRepository.settings.collectAsState()
 
@@ -80,12 +83,17 @@ fun main() = application {
             themeColors = settings.theme,
             themeComponents = settings.themeComponents
         ) { page, collectionRevision ->
+            DesktopNoticeHost(
+                notice = notices.pending,
+                onNoticeShown = notices::clear
+            ) {
             DesktopMainMenuPages(
                 page = page,
                 collectionRevision = collectionRevision,
                 settings = settings,
                 environment = environment,
                 scope = scope,
+                notices = notices,
                 onOpenPlate = { request ->
                     // The freezer reports which plate to open; the launcher decides
                     // that "open" means showing the simulation in this window. The
@@ -101,6 +109,7 @@ fun main() = application {
                     } ?: SimulationContract.defaultConfiguration
                 }
             )
+            }
         }
     }
 }

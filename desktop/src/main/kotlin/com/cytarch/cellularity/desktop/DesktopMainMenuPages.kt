@@ -47,6 +47,7 @@ fun DesktopMainMenuPages(
     settings: CellularitySettings,
     environment: DesktopEnvironment,
     scope: CoroutineScope,
+    notices: DesktopNoticeQueue,
     onOpenPlate: (FreezerOpenRequest) -> Unit
 ) {
     when (page) {
@@ -55,6 +56,7 @@ fun DesktopMainMenuPages(
             settings = settings,
             environment = environment,
             scope = scope,
+            notices = notices,
             onOpenPlate = onOpenPlate
         )
 
@@ -62,7 +64,8 @@ fun DesktopMainMenuPages(
             collectionRevision = collectionRevision,
             settings = settings,
             environment = environment,
-            scope = scope
+            scope = scope,
+            notices = notices
         )
 
         MainMenuPage.SETTINGS -> DesktopSettingsPage(environment = environment, scope = scope)
@@ -79,6 +82,7 @@ private fun DesktopFreezerPage(
     settings: CellularitySettings,
     environment: DesktopEnvironment,
     scope: CoroutineScope,
+    notices: DesktopNoticeQueue,
     onOpenPlate: (FreezerOpenRequest) -> Unit
 ) {
     val store = remember(environment) { FreezerStore(environment.fileRepository) }
@@ -100,7 +104,9 @@ private fun DesktopFreezerPage(
                     FreezerAction.ShareFinished(StoredFileShareOutcome.NoCompatibleTarget)
                 )
 
-                is FreezerEffect.ShowNotice -> Unit
+                // Shown rather than dropped. A rename, a delete or a refused import that
+                // says nothing is indistinguishable from a button that does not work.
+                is FreezerEffect.ShowNotice -> notices.post(effect.notice)
             }
         }
     }
@@ -141,7 +147,8 @@ private fun DesktopGeneBankPage(
     collectionRevision: Long,
     settings: CellularitySettings,
     environment: DesktopEnvironment,
-    scope: CoroutineScope
+    scope: CoroutineScope,
+    notices: DesktopNoticeQueue
 ) {
     val store = remember(environment) { GeneBankStore(environment.fileRepository) }
     val state by store.state.collectAsState()
@@ -153,7 +160,7 @@ private fun DesktopGeneBankPage(
                     GeneBankAction.ShareFinished(StoredFileShareOutcome.NoCompatibleTarget)
                 )
 
-                is GeneBankEffect.ShowNotice -> Unit
+                is GeneBankEffect.ShowNotice -> notices.post(effect.notice)
             }
         }
     }
