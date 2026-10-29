@@ -9,13 +9,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.awt.SwingPanel
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.material3.Text
 import androidx.compose.foundation.layout.Arrangement
@@ -32,7 +28,8 @@ import java.awt.event.ComponentEvent
 import java.awt.event.MouseAdapter
 import java.awt.event.MouseEvent
 import java.awt.event.MouseWheelEvent
-import kotlinx.coroutines.isActive
+import java.util.concurrent.atomic.AtomicLong
+import java.util.concurrent.atomic.AtomicReference
 
 /**
  * The simulation's input, in the surface's own client pixels.
@@ -51,6 +48,41 @@ sealed interface SurfaceInputEvent {
 }
 
 /**
+ * The most recently mounted surface, so a probe can ask what it established.
+ *
+ * A window that shows no simulation can be in several states that look identical from
+ * outside -- no canvas laid out yet, no native window, no session -- and a cell count of
+ * zero does not say which. This is held as a weak reference because it exists for
+ * diagnosis only: a probe that never runs must not keep a surface, and with it a Vulkan
+ * device, alive.
+ *
+ * It is deliberately not a parameter of the composable. Those say what the surface is for;
+ * this says what happened to it, and mixing the two would put a testing concern into every
+ * caller.
+ */
+object SurfaceDiagnostics {
+    private var latest: java.lang.ref.WeakReference<Any>? = null
+
+    internal fun register(holder: Any) {
+        latest = java.lang.ref.WeakReference(holder)
+    }
+
+    /** What the newest surface established, or a note that there is no surface. */
+    fun describe(): String {
+        val holder = latest?.get() ?: return "no surface has been mounted"
+        return try {
+            val describe = holder.javaClass.getDeclaredMethod("describe")
+            describe.isAccessible = true
+            describe.invoke(holder) as? String ?: "the surface did not describe itself"
+        } catch (thrown: ReflectiveOperationException) {
+            "the surface could not be described: $thrown"
+        } catch (thrown: RuntimeException) {
+            "the surface could not be described: $thrown"
+        }
+    }
+}
+
+/**
  * The live simulation, rendered by the native renderer inside the Compose window.
  *
  * The renderer presents into a Win32 child window, and the child window is parented to
@@ -62,6 +94,10 @@ sealed interface SurfaceInputEvent {
  * The canvas is deliberately heavyweight. A lightweight Swing component would be painted
  * by Skia and have no native window of its own, and then there would be nothing to parent
  * the renderer to.
+ *
+ * Everything the renderer is asked to do happens on a thread of this surface's own, never
+ * on the thread that draws the interface. See [SurfaceHolder] for why that is not an
+ * optimisation.
  */
 @Composable
 fun MicroscopeRenderSurface(
@@ -74,7 +110,8 @@ fun MicroscopeRenderSurface(
     onFailure: (String) -> Unit,
     onSessionReady: (Long) -> Unit = { },
     modifier: Modifier = Modifier
-) {    if (!DesktopNativeRenderer.isAvailable || assetRoots == null) {
+) {
+    if (!DesktopNativeRenderer.isAvailable || assetRoots == null) {
         RendererUnavailable(
             reason = if (!DesktopNativeRenderer.isAvailable) {
                 DesktopNativeRenderer.failureDescription
@@ -102,7 +139,7 @@ fun MicroscopeRenderSurface(
             onCellCount = onCellCount,
             onFailure = onFailure,
             onSessionReady = onSessionReady
-        )
+        ).also(SurfaceDiagnostics::register)
     }
 
     DisposableEffect(holder) {
@@ -127,16 +164,18 @@ fun MicroscopeRenderSurface(
         onDispose { holder.clearHold(inputEvents) }
     }
 
-    // The frame loop. Drawing is what presents, and the presenter blocks on the display
-    // refresh, so this loop paces itself rather than needing a timer.
+    // The interface's view of the world is refreshed here rather than from the render
+    // thread. The count is written by that thread and read here, so the two never touch
+    // the same state.
     LaunchedEffect(holder) {
-        while (isActive) {
-            if (!holder.renderOnce()) {
-                break
-            }
+        while (true) {
+            kotlinx.coroutines.delay(CELL_COUNT_REFRESH_MILLIS)
+            holder.publishCellCount()
         }
     }
 }
+
+private const val CELL_COUNT_REFRESH_MILLIS = 250L
 
 @Composable
 private fun RendererUnavailable(reason: String, modifier: Modifier = Modifier) {
@@ -153,11 +192,34 @@ private fun RendererUnavailable(reason: String, modifier: Modifier = Modifier) {
 }
 
 /**
- * Owns the native window and session for one place in the interface.
+ * Owns the native window, the session, and the thread that drives them.
  *
- * This is not state and is not remembered by key: it is created once and released once,
- * because both resources are expensive and neither tolerates being recreated while an
- * older copy is still presenting.
+ * ## Why there is a thread here
+ *
+ * The native bridge requires one calling thread for the whole life of a session: the
+ * backend records the thread that created it and refuses every later call from another,
+ * and the swapchain and command buffers are single-owner for the same reason. What that
+ * thread must not be is the one drawing the interface.
+ *
+ * It was, and the result is what a person saw: opening an experiment left the simulation
+ * drawing and the interface gone. Presenting blocks until the display is ready, so a loop
+ * that draws and then waits runs the event thread out of time to handle a single click;
+ * and while the session did not exist yet the loop slept, which is worse, because sleeping
+ * in the event thread stops the interface completely rather than merely slowing it. The
+ * window could not even be closed by its own button, because the click had nowhere to be
+ * delivered.
+ *
+ * So the thread is created here, once, and everything the renderer is asked to do goes
+ * through it: creating the window and the session, presenting frames, stopping. The AWT
+ * callbacks publish what they see and return immediately, and the composition only reads.
+ *
+ * ## What may be touched from where
+ *
+ * [pendingInput] and the two size fields are the crossing points and are atomic; the
+ * native handles below are read and written only by the render thread. The one exception
+ * is the AWT peer handle, which is looked up where the event that reveals it arrives and
+ * published, because that lookup reflects over an AWT component and belongs on the thread
+ * that owns it.
  */
 private class SurfaceHolder(
     private val maxCellCount: Int,
@@ -169,25 +231,97 @@ private class SurfaceHolder(
     private val onFailure: (String) -> Unit,
     private val onSessionReady: (Long) -> Unit
 ) {
+    @Volatile
     private var canvas: Canvas? = null
-    private var windowHandle: Long = 0L
-    private var sessionHandle: Long = 0L
-    private var width: Int = 0
-    private var height: Int = 0
-    private var reported = false
-    private var released = false
 
-    /** Input published by the composition, consumed by the frame loop. */
-    private val pendingInput =
-        java.util.concurrent.atomic.AtomicReference<List<SurfaceInputEvent>>(emptyList())
+    /** Everything the interface has queued for the renderer, consumed once per frame. */
+    private val pendingInput = AtomicReference<List<SurfaceInputEvent>>(emptyList())
+
+    /** The renderer's viewport, as the interface last observed it, or zero for none yet. */
+    private val requestedExtent = AtomicLong(0L)
+
+    /** The parent window handle, published by the AWT callback that learned it. */
+    private val ownerHandle = AtomicLong(0L)
+
+    /** The newest cell count, written by the render thread and read by the composition. */
+    private val latestCellCount = AtomicLong(0L)
+
+    /** Pointer input from the AWT callbacks, drained by the frame loop. */
+    private val queuedPointerInput = AtomicReference<List<SurfaceInputEvent>>(emptyList())
+
+    /** The live session, published so a caller can see whether there is one. */
+    private val publishedSession = AtomicLong(0L)
 
     /**
-     * Creates the heavyweight canvas and, once AWT has realised it, the native window
-     * inside it.
+     * What the surface has managed to establish so far.
      *
-     * The native window cannot be created here: a component that is not yet displayable
-     * has no native peer, and therefore no handle to parent to. The listener waits for
-     * that to become true rather than assuming it.
+     * Answered from the render thread's own view, because that is the only thread whose
+     * progress decides whether a session exists. A caller that sees a surface with no window
+     * and no session can tell "nothing has been laid out yet" from "the renderer refused",
+     * which a cell count of zero cannot express.
+     */
+    fun describe(): String = buildString {
+        append("thread=")
+        append(if (threadStarted.get() != 0L) "started" else "not started")
+        append(" extent=")
+        append(unpackWidth(requestedExtent.get()))
+        append('x')
+        append(unpackHeight(requestedExtent.get()))
+        append(" owner=")
+        append(ownerHandle.get() != 0L)
+        append(" window=")
+        append(publishedWindow.get() != 0L)
+        append(" session=")
+        append(publishedSession.get() != 0L)
+        append(" reported=")
+        append(reported)
+        append(" cells=")
+        append(latestCellCount.get())
+    }
+
+    private val threadStarted = AtomicLong(0L)
+
+    private val publishedWindow = AtomicLong(0L)
+
+    @Volatile
+    private var released = false
+
+    @Volatile
+    private var reported = false
+
+    /**
+     * The render thread.
+     *
+     * A plain thread rather than a coroutine dispatcher: this is one blocking loop whose
+     * whole purpose is to keep a particular thread alive and identical for the renderer,
+     * and nothing about it is asynchronous.
+     *
+     * Started on first use rather than in the constructor, so that every field it reads is
+     * initialised before it can read one. A thread started from a constructor can run
+     * before the constructor has finished, and the loop would then read fields that are
+     * still null.
+     */
+    private val thread: Thread by lazy {
+        Thread(::runFrameLoop, "cellularity-render").apply {
+            isDaemon = true
+            start()
+        }
+    }
+
+    fun start() {
+        // Touching the lazy value is what starts the thread; the loop itself waits for the
+        // canvas to be laid out.
+        thread
+        threadStarted.set(thread.id)
+    }
+
+    /**
+     * Creates the heavyweight canvas and tells the render thread where to put its window.
+     *
+     * The native window cannot be created here. A component that is not yet displayable has
+     * no native peer, and therefore no handle to parent to, so the listener waits for that
+     * to become true rather than assuming it. What it does here is only what has to happen
+     * on this thread: reading the handle and the extent, and publishing them.
      */
     fun attachCanvas(): Component {
         val surface = Canvas().apply {
@@ -199,31 +333,37 @@ private class SurfaceHolder(
         }
         surface.addComponentListener(object : ComponentAdapter() {
             override fun componentResized(event: ComponentEvent) {
-                onSizeChanged(event.component)
+                publishGeometry(event.component)
             }
 
             override fun componentShown(event: ComponentEvent) {
-                onSizeChanged(event.component)
+                publishGeometry(event.component)
             }
         })
         surface.addMouseListener(surfaceMouseHandler(surface))
         surface.addMouseMotionListener(surfaceMouseHandler(surface))
         surface.addMouseWheelListener(surfaceMouseHandler(surface))
         canvas = surface
-        // The listeners above only fire on a change. A canvas that Swing has already
-        // laid out was resized before they were attached, so waiting for the event would
-        // wait forever and the renderer would never get a window. Asking once here covers
-        // that case; the listener covers every later one.
-        onSizeChanged(surface)
+        // The listeners above only fire on a change. A canvas that Swing has already laid
+        // out was resized before they were attached, so waiting for the event would wait
+        // forever and the renderer would never get a window. Asking once here covers that
+        // case; the listener covers every later one.
+        publishGeometry(surface)
+        // Nothing can be presented until the canvas is laid out, so the loop is started
+        // here rather than before there is anything for it to wait for.
+        start()
         return surface
     }
 
     /**
      * Translates pointer events into queued simulation input.
      *
-     * One handler serves all three listener roles so the drag state is shared: a press
-     * has to be remembered across a motion event and then judged on release, and two
-     * separate handlers could not see each other's state.
+     * One handler serves all three listener roles so the drag state is shared: a press has
+     * to be remembered across a motion event and then judged on release, and two separate
+     * handlers could not see each other's state.
+     *
+     * The handlers queue rather than call, for the same reason the composition does: this
+     * runs on the event thread, and the renderer may only be spoken to from the other one.
      */
     private fun surfaceMouseHandler(surface: Canvas): MouseAdapter =
         object : MouseAdapter() {
@@ -249,16 +389,12 @@ private class SurfaceHolder(
             override fun mouseReleased(event: MouseEvent) {
                 if (!dragging) return
                 dragging = false
-                // A press that never moved is a click, which is the gesture that selects
-                // a cell or places one. A press that moved was a pan, which has already
-                // been applied frame by frame, and must not also count as a click or
-                // every pan would end by selecting whatever it stopped over.
+                // A press that never moved is a click, which is the gesture that selects a
+                // cell or places one. A press that moved was a pan, which has already been
+                // applied frame by frame, and must not also count as a click or every pan
+                // would end by selecting whatever it stopped over.
                 if (!moved) {
-                    DesktopNativeRenderer.nativeQueueTap(
-                        sessionHandle,
-                        event.x.toFloat(),
-                        event.y.toFloat()
-                    )
+                    enqueue(SurfaceInputEvent.Tap(event.x.toFloat(), event.y.toFloat()))
                 }
             }
 
@@ -270,121 +406,35 @@ private class SurfaceHolder(
                 lastY = event.y
                 if (dx == 0 && dy == 0) return
                 moved = true
-                DesktopNativeRenderer.nativeQueuePan(sessionHandle, dx.toFloat(), dy.toFloat())
+                enqueue(SurfaceInputEvent.Pan(dx.toFloat(), dy.toFloat()))
             }
 
             override fun mouseWheelMoved(event: MouseWheelEvent) {
                 // Multiplicative, matching the wheel on the phone and the native host:
                 // zooming in then out returns exactly where it started.
                 val factor = if (event.wheelRotation < 0) 1.1f else 1f / 1.1f
-                DesktopNativeRenderer.nativeQueueZoom(
-                    sessionHandle,
-                    factor,
-                    event.x.toFloat(),
-                    event.y.toFloat()
+                enqueue(
+                    SurfaceInputEvent.Zoom(factor, event.x.toFloat(), event.y.toFloat())
                 )
             }
         }
 
-    private fun onSizeChanged(component: Component) {
+    /** Records the canvas's extent and parent, for the render thread to act on. */
+    private fun publishGeometry(component: Component) {
         if (released) return
-        val newWidth = component.width
-        val newHeight = component.height
+        val width = component.width
+        val height = component.height
+        if (width <= 0 || height <= 0) return
+        requestedExtent.set(pack(width, height))
 
-        if (newWidth <= 0 || newHeight <= 0) return
-
-        // There is deliberately no "size unchanged" guard here. The session is created
-        // with the extent the window had when it was made, and that moment can precede
-        // the layout that settles the final size, so the surface has to be told the size
-        // every time it is offered rather than only when it differs from the last one
-        // this listener saw. Skipping the call leaves the session presenting at its
-        // creation extent, which looks like a stretched or cropped picture rather than
-        // like a missed resize.
-        val ownerHandle = nativeWindowHandleOf(component)
-        if (ownerHandle == 0L) {
-            // Not an error yet: AWT realises the peer asynchronously, and the listener
-            // calls back once it has. It stays an error if it never does, which is why
-            // the screen reports that the renderer is unavailable rather than nothing.
-            return
-        }
-
-        if (windowHandle == 0L) {
-
-            windowHandle = DesktopNativeRenderer.nativeCreateWindow(
-                ownerHandle,
-                0,
-                0,
-                newWidth,
-                newHeight
-            )
-
-            if (windowHandle == 0L) {
-                failOnce("The renderer could not create its window.")
-                return
-            }
-        } else if (width != newWidth || height != newHeight) {
-            DesktopNativeRenderer.nativeResizeWindow(windowHandle, newWidth, newHeight)
-        }
-        width = newWidth
-        height = newHeight
-
-        if (sessionHandle == 0L) {
-            sessionHandle = DesktopNativeRenderer.nativeCreateSession(
-                windowHandle,
-                newWidth,
-                newHeight,
-                maxCellCount,
-                maxFoodCount,
-                dishRadius,
-                shaderRoot,
-                textureRoot
-            )
-            if (sessionHandle == 0L) {
-                failOnce("The simulation could not be started.")
-            } else {
-                // Reported once, from the thread AWT called us on. Callers treat it as a
-                // publication rather than a callback they may block in.
-                onSessionReady(sessionHandle)
-            }
-        }
+        // Not an error yet when this is zero: AWT realises the peer asynchronously and the
+        // listener calls back once it has. It stays an error if it never does, which is why
+        // the screen reports that the renderer is unavailable rather than nothing.
+        val handle = nativeWindowHandleOf(component)
+        if (handle != 0L) ownerHandle.set(handle)
     }
 
-    /** Draws one frame and applies whatever input has arrived since the last one. */
-    fun renderOnce(): Boolean {
-        if (released) return false
-        val pending = pendingInput.getAndSet(emptyList())
-        for (event in pending) {
-            apply(event)
-        }
-        if (sessionHandle == 0L) {
-            // The canvas may have been laid out after attachCanvas asked, so the attempt
-            // is repeated here until it succeeds. Without this a late layout leaves the
-            // screen waiting for a window that will never be created, and waiting is
-            // indistinguishable from rendering nothing.
-            canvas?.let { onSizeChanged(it) }
-        }
-        if (sessionHandle == 0L) {
-            // Still waiting for the canvas to be realised and the session to start.
-            Thread.sleep(8)
-            return true
-        }
-        val result = DesktopNativeRenderer.nativeRenderFrame(sessionHandle)
-        if (result == 2) return false
-        if (result == 1) {
-            failOnce("The renderer reported a failed frame.")
-            return false
-        }
-        onCellCount(DesktopNativeRenderer.nativeCellCount(sessionHandle))
-        return true
-    }
-
-    /**
-     * Publishes the queue this composition is using.
-     *
-     * The queue is rebuilt on every input event, so the reference is swapped rather than
-     * the list mutated: the frame loop always sees either the old list or the new one,
-     * never a list being written to while it is read.
-     */
+    /** Publishes the queue this composition is using. */
     fun hold(events: List<SurfaceInputEvent>) {
         pendingInput.set(events)
     }
@@ -394,8 +444,113 @@ private class SurfaceHolder(
         pendingInput.compareAndSet(events, emptyList())
     }
 
-    fun apply(event: SurfaceInputEvent) {
-        if (sessionHandle == 0L) return
+    /** Hands an event from an AWT callback to the render thread. */
+    private fun enqueue(event: SurfaceInputEvent) {
+        // Appending to the queue the composition published would be lost the next time it
+        // republishes, so pointer input goes to a queue of its own that the frame loop also
+        // drains. A single-slot swap is enough because a person cannot generate pointer
+        // events faster than frames.
+        queuedPointerInput.updateAndGet { current -> current + event }
+    }
+
+    /** Reads the newest count. Called from the composition. */
+    fun publishCellCount() {
+        onCellCount(latestCellCount.get())
+    }
+
+    private fun runFrameLoop() {
+        var windowHandle = 0L
+        var sessionHandle = 0L
+        var appliedExtent = 0L
+        try {
+            while (!released) {
+                val pointer = queuedPointerInput.getAndSet(emptyList())
+                val fromComposition = pendingInput.getAndSet(emptyList())
+                if (sessionHandle != 0L) {
+                    for (event in pointer) apply(sessionHandle, event)
+                    for (event in fromComposition) apply(sessionHandle, event)
+                }
+
+                val requested = requestedExtent.get()
+                if (requested == 0L) {
+                    // The canvas has not been laid out yet, so there is nothing to present
+                    // into. This is the wait that used to happen in the event thread.
+                    sleepFrame()
+                    continue
+                }
+
+                if (windowHandle == 0L) {
+                    val owner = ownerHandle.get()
+                    if (owner == 0L) {
+                        sleepFrame()
+                        continue
+                    }
+                    windowHandle = DesktopNativeRenderer.nativeCreateWindow(
+                        owner,
+                        0,
+                        0,
+                        unpackWidth(requested),
+                        unpackHeight(requested)
+                    )
+                    if (windowHandle == 0L) {
+                        failOnce("The renderer could not create its window.")
+                        return
+                    }
+                    publishedWindow.set(windowHandle)
+                    appliedExtent = requested
+                } else if (requested != appliedExtent) {
+                    DesktopNativeRenderer.nativeResizeWindow(
+                        windowHandle,
+                        unpackWidth(requested),
+                        unpackHeight(requested)
+                    )
+                    appliedExtent = requested
+                }
+
+                if (sessionHandle == 0L) {
+                    sessionHandle = DesktopNativeRenderer.nativeCreateSession(
+                        windowHandle,
+                        unpackWidth(appliedExtent),
+                        unpackHeight(appliedExtent),
+                        maxCellCount,
+                        maxFoodCount,
+                        dishRadius,
+                        shaderRoot,
+                        textureRoot
+                    )
+                    if (sessionHandle == 0L) {
+                        failOnce("The simulation could not be started.")
+                        return
+                    }
+                    publishedSession.set(sessionHandle)
+                    // Reported from the thread that owns the session, which is the only
+                    // thread that may speak to it. Callers treat it as a publication.
+                    onSessionReady(sessionHandle)
+                }
+
+                val result = DesktopNativeRenderer.nativeRenderFrame(sessionHandle)
+                if (result == 2) return
+                if (result == 1) {
+                    failOnce("The renderer reported a failed frame.")
+                    return
+                }
+                latestCellCount.set(DesktopNativeRenderer.nativeCellCount(sessionHandle))
+            }
+        } catch (thrown: Throwable) {
+            failOnce("The renderer stopped: $thrown")
+        } finally {
+            // Teardown happens here rather than in release(), because stopping a session is
+            // a call like any other and the bridge requires it from the owning thread.
+            if (sessionHandle != 0L) {
+                DesktopNativeRenderer.nativeStopSession(sessionHandle)
+            }
+            if (windowHandle != 0L) {
+                DesktopNativeRenderer.nativeDestroyWindow(windowHandle)
+            }
+        }
+    }
+
+    private fun apply(sessionHandle: Long, event: SurfaceInputEvent) {
         when (event) {
             is SurfaceInputEvent.Pan ->
                 DesktopNativeRenderer.nativeQueuePan(sessionHandle, event.dx, event.dy)
@@ -417,16 +572,22 @@ private class SurfaceHolder(
         }
     }
 
+    /**
+     * Ends the frame loop and waits for it to finish tearing the session down.
+     *
+     * Waiting matters: the loop's last act is to stop the session and destroy the window on
+     * the thread that owns them, and returning before that finished would let a new surface
+     * be built against a renderer still shutting the old one down. The wait is bounded so a
+     * renderer that has stopped answering cannot hang the interface that is closing.
+     */
     fun release() {
         if (released) return
         released = true
-        if (sessionHandle != 0L) {
-            DesktopNativeRenderer.nativeStopSession(sessionHandle)
-            sessionHandle = 0L
-        }
-        if (windowHandle != 0L) {
-            DesktopNativeRenderer.nativeDestroyWindow(windowHandle)
-            windowHandle = 0L
+        thread.interrupt()
+        try {
+            thread.join(RELEASE_WAIT_MILLIS)
+        } catch (interrupted: InterruptedException) {
+            Thread.currentThread().interrupt()
         }
         canvas = null
     }
@@ -437,20 +598,39 @@ private class SurfaceHolder(
         onFailure(message)
     }
 
+    private fun sleepFrame() {
+        try {
+            Thread.sleep(FRAME_WAIT_MILLIS)
+        } catch (interrupted: InterruptedException) {
+            Thread.currentThread().interrupt()
+        }
+    }
+
     private companion object {
+        const val FRAME_WAIT_MILLIS = 8L
+        const val RELEASE_WAIT_MILLIS = 4000L
+
+        /** Both extents in one long, so a reader never sees half of a size change. */
+        fun pack(width: Int, height: Int): Long =
+            (width.toLong() shl 32) or (height.toLong() and 0xFFFFFFFFL)
+
+        fun unpackWidth(packed: Long): Int = (packed ushr 32).toInt()
+
+        fun unpackHeight(packed: Long): Int = (packed and 0xFFFFFFFFL).toInt()
+
         /**
          * The AWT peer's native window handle, which is the parent the renderer needs.
          *
-         * There is no supported way to get this. `Component.getPeer` was removed in JDK
-         * 21, so the package-private `peer` field is the only route left, and reading it
-         * needs `--add-opens java.desktop/java.awt=ALL-UNNAMED` on the command line --
-         * see the note in the launcher. `getHWnd` is the accessor AWT itself uses on
-         * Windows, and the peer's type lives in a package the module system does not
-         * export, so the value can be held as `Any` but its type cannot be named.
+         * There is no supported way to get this. `Component.getPeer` was removed in JDK 21,
+         * so the package-private `peer` field is the only route left, and reading it needs
+         * `--add-opens java.desktop/java.awt=ALL-UNNAMED` on the command line -- see the
+         * note in the launcher. `getHWnd` is the accessor AWT itself uses on Windows, and
+         * the peer's type lives in a package the module system does not export, so the
+         * value can be held as `Any` but its type cannot be named.
          *
-         * When the open is missing this returns zero, and the interface reports the
-         * renderer as unavailable rather than crashing, which is the right failure for a
-         * packaging mistake.
+         * When the open is missing this returns zero, and the interface reports the renderer
+         * as unavailable rather than crashing, which is the right failure for a packaging
+         * mistake.
          */
         fun nativeWindowHandleOf(component: Component): Long {
             if (!component.isShowing) return 0L

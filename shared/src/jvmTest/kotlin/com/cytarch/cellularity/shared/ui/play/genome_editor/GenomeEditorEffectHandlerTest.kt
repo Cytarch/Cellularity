@@ -1,18 +1,13 @@
-package com.cytarch.cellularity.ui.play_menu.screens.genome_editor
+package com.cytarch.cellularity.shared.ui.play.genome_editor
 
 import com.cytarch.cellularity.shared.files.StorageError
 import com.cytarch.cellularity.shared.files.StorageErrorCode
 import com.cytarch.cellularity.shared.files.StorageResult
 import com.cytarch.cellularity.shared.model.GenomeDraft
-import com.cytarch.cellularity.shared.ui.play.genome_editor.GenomeEditorAction
-import com.cytarch.cellularity.shared.ui.play.genome_editor.GenomeEditorEffect
-import com.cytarch.cellularity.shared.ui.play.genome_editor.GenomeFileFailureReason
-import com.cytarch.cellularity.shared.ui.play.genome_editor.GenomeLoadChoice
-import com.cytarch.cellularity.shared.ui.play.genome_editor.GenomeLoadOrigin
 import kotlinx.coroutines.runBlocking
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertSame
-import org.junit.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertSame
+import kotlin.test.Test
 
 class GenomeEditorEffectHandlerTest {
     @Test

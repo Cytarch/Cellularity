@@ -102,6 +102,21 @@ if (existingJavaOptions == null || !existingJavaOptions.contains('java.desktop/j
     }
 }
 
+// Measures whether the interface still answers while the simulation runs. The failure this
+// covers was not a wrong picture but a frozen window: presenting frames on the event thread
+// left the interface with no time to handle a click, and no screenshot can tell that apart
+// from a working screen. This posts work to the event queue and reports how long it waited.
+tasks.register('runResponsivenessProbe', JavaExec) {
+    group = 'verification'
+    description = 'Measures whether the interface answers while the simulation is running.'
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'com.cytarch.cellularity.desktop.ResponsivenessProbeKt'
+    environment 'JDK_JAVA_OPTIONS', "${existingJavaOptions ?: ''} ${requiredOpens}".trim()
+    systemProperty 'java.library.path', nativeOutputDirectory.absolutePath
+    environment 'CELLULARITY_NATIVE_DIR', nativeOutputDirectory.absolutePath
+    environment 'PATH', "${nativeOutputDirectory.absolutePath};${System.getenv('PATH')}"
+}
+
 // Runs the play screen in a window so it can be watched while it draws. This is not a
 // test: it is the last step of the port that no assertion covers, because the journey
 // from the menu into a running plate is something only a window can show. Keeping it as a

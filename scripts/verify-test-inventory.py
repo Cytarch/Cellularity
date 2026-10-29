@@ -19,9 +19,9 @@ NATIVE_MANIFEST = REPO_ROOT / "native/tests/baseline/native-parity-cases-v1.txt"
 JVM_MANIFEST = REPO_ROOT / "app/src/test/baseline/jvm-expectations-v1.txt"
 TEST_SOURCE_SETS = (
     ("shared common", REPO_ROOT / "shared/src/commonTest", 145),
-    ("shared JVM", REPO_ROOT / "shared/src/jvmTest", 51),
+    ("shared JVM", REPO_ROOT / "shared/src/jvmTest", 55),
     ("shared Android host", REPO_ROOT / "shared/src/androidHostTest", 7),
-    ("app unit", REPO_ROOT / "app/src/test", 220),
+    ("app unit", REPO_ROOT / "app/src/test", 216),
 )
 PYRAMID_EXPECTATIONS = (
     "shared/src/commonTest/kotlin/com/cytarch/cellularity/shared/settings/CellularitySettingsJsonTest.kt#currentSchemaRoundTripsAndIgnoresUnknownCurrentSchemaFields",
