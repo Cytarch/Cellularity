@@ -187,5 +187,14 @@
     <string name="genome_editor_signal_name_format">%1$s%2$d</string>
     <string name="genome_editor_signed_signal_name_format">%1$s%2$s%3$d</string>
     <string name="genome_editor_gene_with_type_format">%1$s%2$d %3$s</string>
+    <string name="genome_editor_gene_list_header_format">유전자 (%1$d)</string>
+    <string name="genome_editor_genome_unchanged_message">이 유전체는 만들거나 불러온 뒤로 변경되지 않았습니다.</string>
+    <string name="genome_editor_genome_unsaved_message">이 유전체에는 저장하지 않은 변경 사항이 있습니다.</string>
+    <string name="genome_editor_reading_stored_genomes_message">저장된 유전체를 읽는 중…</string>
+    <string name="genome_editor_choose_genome_message">불러올 유전체를 선택하세요.</string>
+    <string name="genome_editor_name_genome_message">이 유전체의 이름을 입력하세요.</string>
+    <string name="genome_editor_loading_message">불러오는 중…</string>
+    <string name="genome_editor_saving_message">저장하는 중…</string>
+    <string name="genome_editor_working_message">작업 중…</string>
 
 </resources>

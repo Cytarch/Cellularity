@@ -16,6 +16,7 @@ import com.cytarch.cellularity.shared.model.GenomeContract
 import com.cytarch.cellularity.shared.model.GenomeDraft
 import com.cytarch.cellularity.shared.model.GenomeDraftWireCodec
 import java.io.ByteArrayOutputStream
+import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.Path
 import java.util.concurrent.Executors
@@ -28,6 +29,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
+import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -527,6 +529,268 @@ class DesktopCellularityFileRepositoryTest {
                 }
             )
         }
+    }
+
+    /**
+     * A genome the user opened the application with, as Windows hands it over.
+     *
+     * The road is the phone's: the name is resolved first and the bytes are copied second, and what
+     * has to hold at the end is that the file is in the collection under its own name and that the
+     * adapter can read it back -- an import that produced a file the gene bank lists and cannot
+     * open would be worse than a refusal, because it would look like success.
+     */
+    @Test
+    fun anOpenedGenomeIsBroughtIntoTheStorageDirectory() = runBlocking {
+        val storage = storageDirectory()
+        val repository = repository(storage)
+        val outside = temporaryFolder.newFolder("outside").toPath()
+        val source = outside.resolve("From a Friend.genome")
+        val genome = smallGenome()
+        Files.write(source, GenomeDraftWireCodec.encode(genome))
+
+        val opened = value(repository.resolveExternalFile(source))
+        assertEquals("From a Friend", opened.displayName)
+        assertEquals("From a Friend.genome", opened.fileName)
+        assertEquals(DesktopExternalFileKind.GENOME, opened.kind)
+
+        value(repository.importExternalFile(opened))
+
+        val stored = storage.resolve("From a Friend.genome")
+        assertTrue("the opened genome was not stored", Files.isRegularFile(stored))
+        assertArrayEquals(Files.readAllBytes(source), Files.readAllBytes(stored))
+        assertEquals(genome.genes.size, value(repository.readGenomeDraft("From a Friend")).genes.size)
+        // The copy is the whole of what an import leaves behind: no temporary file, and the
+        // collection lists what the user opened and nothing else.
+        assertEquals(
+            listOf("From a Friend.genome"),
+            Files.newDirectoryStream(storage).use { stream ->
+                stream.map { it.fileName.toString() }.sorted()
+            }
+        )
+    }
+
+    @Test
+    fun anOpenedSubstrateIsBroughtIntoTheStorageDirectory() = runBlocking {
+        val storage = storageDirectory()
+        val repository = repository(storage)
+        val outside = temporaryFolder.newFolder("outside").toPath()
+        val source = outside.resolve("Someone's Dish.substrate")
+        Files.write(source, releaseContainerBytes(geneCount = 5, documentKind = SUBSTRATE_KIND))
+
+        val opened = value(repository.resolveExternalFile(source))
+        assertEquals("Someone's Dish", opened.displayName)
+        assertEquals(DesktopExternalFileKind.SUBSTRATE, opened.kind)
+
+        value(repository.importExternalFile(opened))
+
+        val stored = storage.resolve("Someone's Dish.substrate")
+        assertTrue("the opened plate was not stored", Files.isRegularFile(stored))
+        assertArrayEquals(Files.readAllBytes(source), Files.readAllBytes(stored))
+        // Readable through the same inspection a plate that was already here goes through, which
+        // is what makes the imported file a plate rather than a file with a plate's name.
+        assertEquals(
+            FileLoadCompatibility.LOADABLE,
+            value(repository.readSubstrateInfo(StoredSubstrateId("Someone's Dish"))).compatibility
+        )
+    }
+
+    /**
+     * An import never overwrites, and says so.
+     *
+     * The name that is already in the directory is the one file the user was trying to keep; a copy
+     * over it would be reported as a successful import of a plate that has just been destroyed.
+     */
+    @Test
+    fun anOpenedFileDoesNotReplaceOneAlreadyInTheStorageDirectory() = runBlocking {
+        val storage = storageDirectory()
+        val repository = repository(storage)
+        value(repository.writeGenomeDraft("Kept", smallGenome(geneCount = 3)))
+        val outside = temporaryFolder.newFolder("outside").toPath()
+        val source = outside.resolve("Kept.genome")
+        Files.write(source, GenomeDraftWireCodec.encode(smallGenome(geneCount = 5)))
+
+        val opened = value(repository.resolveExternalFile(source))
+
+        assertEquals(
+            StorageErrorCode.NAME_EXISTS,
+            failure(repository.importExternalFile(opened))
+        )
+        assertEquals(
+            "the stored genome was replaced by the import",
+            3,
+            value(repository.readGenomeDraft("Kept")).genes.size
+        )
+    }
+
+    /**
+     * A file is not accepted because of what it is called.
+     *
+     * This is as far as the desktop can check: the phone asks the native codecs to verify a genome
+     * and read a plate's metadata, and this side links neither. Recognising that a document is not
+     * the kind its name claims is the least an import can do, and it is the difference between a
+     * refusal the user can act on and a plate that fails to open much later.
+     */
+    @Test
+    fun aFileThatIsNotWhatItsNameClaimsIsRefused() = runBlocking {
+        val storage = storageDirectory()
+        val repository = repository(storage)
+        val outside = temporaryFolder.newFolder("outside").toPath()
+        val notes = outside.resolve("Notes.substrate")
+        Files.write(notes, "these are notes, not a plate".toByteArray())
+        val fakeGenome = outside.resolve("Fake.genome")
+        Files.write(fakeGenome, "and this is not a genome".toByteArray())
+
+        assertEquals(
+            StorageErrorCode.UNSUPPORTED_FORMAT,
+            failure(repository.importExternalFile(value(repository.resolveExternalFile(notes))))
+        )
+        assertEquals(
+            StorageErrorCode.UNSUPPORTED_FORMAT,
+            failure(
+                repository.importExternalFile(value(repository.resolveExternalFile(fakeGenome)))
+            )
+        )
+        assertEquals(
+            emptyList<String>(),
+            Files.newDirectoryStream(storage).use { stream ->
+                stream.map { it.fileName.toString() }.sorted()
+            }
+        )
+    }
+
+    @Test
+    fun anOpenedPathWithoutAFileOrWithoutANameIsRefused() = runBlocking {
+        val repository = repository(storageDirectory())
+        val outside = temporaryFolder.newFolder("outside").toPath()
+        val nameless = outside.resolve(".genome")
+        Files.write(nameless, GenomeDraftWireCodec.encode(smallGenome()))
+
+        assertEquals(
+            StorageErrorCode.NOT_FOUND,
+            failure(repository.resolveExternalFile(outside.resolve("Not Here.genome")))
+        )
+        // A file whose whole name is the extension has no name left to store it under, and a name
+        // that cannot be stored is refused before anything is copied.
+        assertEquals(
+            StorageErrorCode.BAD_NAME,
+            failure(repository.resolveExternalFile(nameless))
+        )
+    }
+
+    /**
+     * A save is a plate appearing under the name it was given, written whole or not at all.
+     *
+     * The producer here stands in for the native writer: it is handed a temporary path and writes
+     * a container into it, which is exactly what the save does with the real writer behind it.
+     */
+    @Test
+    fun aSavedPlateAppearsUnderItsNameAndIsWhole() = runBlocking {
+        val storage = storageDirectory()
+        val repository = repository(storage)
+        val container = releaseContainerBytes(geneCount = 5, documentKind = SUBSTRATE_KIND)
+
+        val result = repository.saveSubstrate(
+            id = StoredSubstrateId("Probe Plate"),
+            replaceExisting = false
+        ) { temporary -> Files.write(temporary, container) }
+
+        assertTrue(result is StorageResult.Success)
+        val stored = storage.resolve(CellularityFileNames.substrateFileName("Probe Plate"))
+        assertArrayEquals(container, Files.readAllBytes(stored))
+        // Nothing is left behind: a save that worked leaves the plate and no scaffolding.
+        assertEquals(
+            listOf(stored.fileName.toString()),
+            Files.newDirectoryStream(storage).use { stream ->
+                stream.map { it.fileName.toString() }.sorted()
+            }
+        )
+    }
+
+    /**
+     * A save refuses a name another plate already has, and does not touch that plate.
+     *
+     * This is the rule the phone applies and it is the one that matters: overwriting is allowed only
+     * for the plate being saved, so a name typed by mistake cannot destroy a run the person is not
+     * looking at. The refusal is checked by the file's own bytes rather than by the error code, since
+     * a refusal that had already damaged the file would report the same code.
+     */
+    @Test
+    fun aSavedPlateDoesNotReplaceOneAlreadyInTheStorageDirectory() = runBlocking {
+        val storage = storageDirectory()
+        val repository = repository(storage)
+        val existing = releaseContainerBytes(geneCount = 5, documentKind = SUBSTRATE_KIND)
+        val stored = storage.resolve(CellularityFileNames.substrateFileName("Taken"))
+        Files.write(stored, existing)
+
+        val result = repository.saveSubstrate(
+            id = StoredSubstrateId("Taken"),
+            replaceExisting = false
+        ) { temporary ->
+            Files.write(
+                temporary,
+                releaseContainerBytes(geneCount = 9, documentKind = SUBSTRATE_KIND)
+            )
+        }
+
+        assertEquals(StorageErrorCode.NAME_EXISTS, failure(result))
+        assertArrayEquals(existing, Files.readAllBytes(stored))
+        assertEquals(
+            listOf(stored.fileName.toString()),
+            Files.newDirectoryStream(storage).use { stream ->
+                stream.map { it.fileName.toString() }.sorted()
+            }
+        )
+    }
+
+    /** A save of the plate that already owns the name replaces exactly that file. */
+    @Test
+    fun aSavedPlateReplacesItsOwnFileWhenToldTo() = runBlocking {
+        val storage = storageDirectory()
+        val repository = repository(storage)
+        val stored = storage.resolve(CellularityFileNames.substrateFileName("Mine"))
+        Files.write(stored, releaseContainerBytes(geneCount = 5, documentKind = SUBSTRATE_KIND))
+        val rewritten = releaseContainerBytes(geneCount = 9, documentKind = SUBSTRATE_KIND)
+
+        val result = repository.saveSubstrate(
+            id = StoredSubstrateId("Mine"),
+            replaceExisting = true
+        ) { temporary -> Files.write(temporary, rewritten) }
+
+        assertTrue(result is StorageResult.Success)
+        assertArrayEquals(rewritten, Files.readAllBytes(stored))
+    }
+
+    /**
+     * A writer that fails, or that produces something which is not a plate, leaves nothing behind.
+     *
+     * Both cases end the same way and for the same reason: what a person must never find is a file
+     * in the collection that looks like their plate and is not. The second case is the subtler one --
+     * the writer reported success -- which is why the file itself is asked what it is before it is
+     * moved into place.
+     */
+    @Test
+    fun aSaveThatDoesNotProduceAPlateLeavesNothingBehind() = runBlocking {
+        val storage = storageDirectory()
+        val repository = repository(storage)
+
+        val thrown = repository.saveSubstrate(
+            id = StoredSubstrateId("Broken"),
+            replaceExisting = false
+        ) { temporary -> Files.write(temporary, byteArrayOf(1, 2, 3)) }
+        assertEquals(StorageErrorCode.CORRUPTED, failure(thrown))
+
+        val refused = repository.saveSubstrate(
+            id = StoredSubstrateId("Angry"),
+            replaceExisting = false
+        ) { throw IOException("the writer gave up") }
+        assertEquals(StorageErrorCode.IO_FAILURE, failure(refused))
+
+        assertEquals(
+            emptyList<String>(),
+            Files.newDirectoryStream(storage).use { stream ->
+                stream.map { it.fileName.toString() }.sorted()
+            }
+        )
     }
 
     companion object {

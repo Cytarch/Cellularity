@@ -103,6 +103,16 @@ public:
             const cellularity::render::RenderPresentationState& presentation,
             const cellularity::microscope::MicroscopeDebugHudTelemetry*
                     debugHudTelemetry = nullptr);
+    // Draws the same frame into caller storage instead of the surface. Returns
+    // false when there is nothing to draw yet, in which case `written` stays
+    // zero and the caller keeps the picture it already has. Throws when the
+    // backend refuses the frame, because that is a fault and not an idle state.
+    [[nodiscard]] bool drawMicroscopeIntoRgba(
+            const cellularity::render::RenderPresentationState& presentation,
+            std::uint8_t* destination, std::size_t destinationSize,
+            std::size_t rowStride, std::size_t& written,
+            const cellularity::microscope::MicroscopeDebugHudTelemetry*
+                    debugHudTelemetry = nullptr);
     [[nodiscard]] cellularity::render::RenderFrameResult
     clearMicroscopeNoRender(const NativeViewport& viewport);
     [[nodiscard]] cellularity::render::RenderFrameResult

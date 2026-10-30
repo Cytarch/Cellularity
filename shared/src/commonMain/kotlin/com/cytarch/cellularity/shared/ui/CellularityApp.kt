@@ -17,6 +17,10 @@ fun CellularityApp(
     avoidCameraCutout: Boolean = false,
     themeColors: CellularityThemeColors = CellularityThemeColors.Default,
     themeComponents: CellularityThemeComponents = CellularityThemeComponents.Default,
+    /**
+     * The platform's file chooser, where there is one; see [MainMenuScreen].
+     */
+    onImportRequest: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
     mainMenuPageContent: @Composable (
         page: MainMenuPage,
@@ -29,6 +33,7 @@ fun CellularityApp(
             onAction = onMainMenuAction,
             avoidCameraCutout = avoidCameraCutout,
             modifier = modifier,
+            onImportRequest = onImportRequest,
             pageContent = mainMenuPageContent
         )
     }

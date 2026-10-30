@@ -37,7 +37,9 @@ public:
                     debugHudTelemetry = nullptr) override;
     [[nodiscard]] RenderPassStatus drawMicroscopeOffscreenPass(
             const RenderPresentationState& presentation,
-            const PreparedRenderFrame& frame) override;
+            const PreparedRenderFrame& frame,
+            const cellularity::microscope::MicroscopeDebugHudTelemetry*
+                    debugHudTelemetry = nullptr) override;
     [[nodiscard]] RenderFrameResult clearSurface(
             const RenderViewportState& viewport,
             const std::array<float, 4>& color) override;
@@ -64,10 +66,14 @@ public:
     [[nodiscard]] std::vector<std::uint8_t> finishOffscreenRgba(
             OffscreenRenderTarget target) override;
     void cancelOffscreenRgba(OffscreenRenderTarget target) noexcept override;
+    [[nodiscard]] std::size_t finishOffscreenRgbaInto(
+            OffscreenRenderTarget target, int width, int height,
+            std::uint8_t* destination, std::size_t destinationSize,
+            std::size_t rowStride) override;
 
 private:
     std::shared_ptr<VulkanBackendSession> mSession;
-    std::array<std::pair<int, int>, 2> mOffscreenDimensions{};
+    std::array<std::pair<int, int>, 3> mOffscreenDimensions{};
 };
 
 } // namespace cellularity::render::abi

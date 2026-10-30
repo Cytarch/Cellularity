@@ -103,88 +103,11 @@ if (existingJavaOptions == null || !existingJavaOptions.contains('java.desktop/j
     }
 }
 
-// Measures whether the interface still answers while the simulation runs. The failure this
-// covers was not a wrong picture but a frozen window: presenting frames on the event thread
-// left the interface with no time to handle a click, and no screenshot can tell that apart
-// from a working screen. This posts work to the event queue and reports how long it waited.
-// Reports where the native child window would land, without showing a window. The report it
-// exists for is "the interface disappears when an experiment starts", and geometry is the
-// part of that a screenshot cannot settle.
-// Proves that a tap selects a cell and that the cell can be read back. Two implementations
-// have to agree for that -- the runtime that writes the document and the codec that reads it
-// -- and neither can be checked against the other without a live session.
-// Dumps the AWT component tree of the play screen in paint order. Structure is what settles
-// "the simulation is in a corner" and "the interface does not answer"; a screenshot settles
-// neither and costs the machine it is taken on.
 // Measures whether the event thread is still being serviced while the simulation runs. A
 // frozen window is a claim about that one thread, and it is checkable without looking at
-// anything: post work to its queue and time the round trip.
-// Asks Windows which window a click at a screen point would reach. The simulation is a
-// native child window and the interface is drawn by Compose into the same top-level window,
-// so this is the only account of their layering that is not one side's opinion of the other.
-// Captures the renderer's own window and reads the picture back, so a defect in it is found
-// by a run rather than reported by a person. Capturing one window by its handle reads that
-// window and nothing else: no screen is photographed and no input is taken.
-tasks.register('runCaptureProbe', JavaExec) {
-    group = 'verification'
-    description = 'Captures the renderer window and checks the picture fills it.'
-    classpath = sourceSets.test.runtimeClasspath
-    mainClass = 'com.cytarch.cellularity.desktop.CaptureProbeKt'
-    environment 'JDK_JAVA_OPTIONS', "${existingJavaOptions ?: ''} ${requiredOpens}".trim()
-    systemProperty 'java.library.path', nativeOutputDirectory.absolutePath
-    environment 'CELLULARITY_NATIVE_DIR', nativeOutputDirectory.absolutePath
-    environment 'PATH', "${nativeOutputDirectory.absolutePath};${System.getenv('PATH')}"
-}
-tasks.register('runHitTestProbe', JavaExec) {
-    group = 'verification'
-    description = 'Reports whether a click reaches the simulation or the interface.'
-    classpath = sourceSets.test.runtimeClasspath
-    mainClass = 'com.cytarch.cellularity.desktop.HitTestProbeKt'
-    environment 'JDK_JAVA_OPTIONS', "${existingJavaOptions ?: ''} ${requiredOpens}".trim()
-    systemProperty 'java.library.path', nativeOutputDirectory.absolutePath
-    environment 'CELLULARITY_NATIVE_DIR', nativeOutputDirectory.absolutePath
-    environment 'PATH', "${nativeOutputDirectory.absolutePath};${System.getenv('PATH')}"
-}
-tasks.register('runEventThreadProbe', JavaExec) {
-    group = 'verification'
-    description = 'Reports whether the interface thread answers while the world runs.'
-    classpath = sourceSets.test.runtimeClasspath
-    mainClass = 'com.cytarch.cellularity.desktop.EventThreadProbeKt'
-    environment 'JDK_JAVA_OPTIONS', "${existingJavaOptions ?: ''} ${requiredOpens}".trim()
-    systemProperty 'java.library.path', nativeOutputDirectory.absolutePath
-    environment 'CELLULARITY_NATIVE_DIR', nativeOutputDirectory.absolutePath
-    environment 'PATH', "${nativeOutputDirectory.absolutePath};${System.getenv('PATH')}"
-}
-tasks.register('runTreeProbe', JavaExec) {
-    group = 'verification'
-    description = 'Prints the component tree of the running play screen.'
-    classpath = sourceSets.test.runtimeClasspath
-    mainClass = 'com.cytarch.cellularity.desktop.TreeProbeKt'
-    environment 'JDK_JAVA_OPTIONS', "${existingJavaOptions ?: ''} ${requiredOpens}".trim()
-    systemProperty 'java.library.path', nativeOutputDirectory.absolutePath
-    environment 'CELLULARITY_NATIVE_DIR', nativeOutputDirectory.absolutePath
-    environment 'PATH', "${nativeOutputDirectory.absolutePath};${System.getenv('PATH')}"
-}
-tasks.register('runSelectionProbe', JavaExec) {
-    group = 'verification'
-    description = 'Taps the plate and reports the cell the runtime selected.'
-    classpath = sourceSets.test.runtimeClasspath
-    mainClass = 'com.cytarch.cellularity.desktop.nativebridge.SelectionProbeKt'
-    environment 'JDK_JAVA_OPTIONS', "${existingJavaOptions ?: ''} ${requiredOpens}".trim()
-    systemProperty 'java.library.path', nativeOutputDirectory.absolutePath
-    environment 'CELLULARITY_NATIVE_DIR', nativeOutputDirectory.absolutePath
-    environment 'PATH', "${nativeOutputDirectory.absolutePath};${System.getenv('PATH')}"
-}
-tasks.register('runLayoutProbe', JavaExec) {
-    group = 'verification'
-    description = 'Reports the layout the renderer would be parented into.'
-    classpath = sourceSets.test.runtimeClasspath
-    mainClass = 'com.cytarch.cellularity.desktop.LayoutProbeKt'
-    environment 'JDK_JAVA_OPTIONS', "${existingJavaOptions ?: ''} ${requiredOpens}".trim()
-    systemProperty 'java.library.path', nativeOutputDirectory.absolutePath
-    environment 'CELLULARITY_NATIVE_DIR', nativeOutputDirectory.absolutePath
-    environment 'PATH', "${nativeOutputDirectory.absolutePath};${System.getenv('PATH')}"
-}
+// anything: post work to its queue and time the round trip. The plate is composed exactly as
+// the play screen composes it, and taken off screen and put back, because that is what
+// switching tabs does and it is the state the window-based design could not survive.
 tasks.register('runResponsivenessProbe', JavaExec) {
     group = 'verification'
     description = 'Measures whether the interface answers while the simulation is running.'
@@ -196,19 +119,124 @@ tasks.register('runResponsivenessProbe', JavaExec) {
     environment 'PATH', "${nativeOutputDirectory.absolutePath};${System.getenv('PATH')}"
 }
 
+// Opens an experiment and stays up, parked outside every monitor, so the window can be measured
+// from another process while it runs. Whether the application answers the system, what a click on
+// the viewport reaches, and whether the picture gets out of the way when another tab opens are
+// facts about the windows as the rest of Windows sees them -- a process cannot ask that about
+// itself without trusting the code it is checking. This probe puts the interface into the state
+// worth measuring and reports on a timer; everything else is measured against it from outside.
+
+// Measures one frame of the world: how long it takes to get from the renderer to pixels the
+// interface can draw, and how much the process grows while that happens a few hundred times.
+// The measurement is the point -- the two paths differ by one window-sized copy per frame and
+// one image per frame, and only numbers can say whether that matters.
+tasks.register('runFrameCostProbe', JavaExec) {
+    group = 'verification'
+    description = 'Measures the cost per frame of each way of getting a frame to the screen.'
+    dependsOn 'testClasses'
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'com.cytarch.cellularity.desktop.nativebridge.FrameCostProbeKt'
+    environment 'JDK_JAVA_OPTIONS', "${existingJavaOptions ?: ''} ${requiredOpens}".trim()
+    systemProperty 'java.library.path', nativeOutputDirectory.absolutePath
+    environment 'CELLULARITY_NATIVE_DIR', nativeOutputDirectory.absolutePath
+    environment 'PATH', "${nativeOutputDirectory.absolutePath};${System.getenv('PATH')}"
+}
+// Photos the editor's own preview panel: the editor is composed offscreen, an organism is grown
+// in it, the wheel is turned over the panel, and both frames are measured and written out. A
+// preview whose camera is never asked for a frame looks exactly like a working one until somebody
+// tries to move it, so what the wheel changed is the measurement.
+tasks.register('runGenomeEditorPreview', JavaExec) {
+    group = 'verification'
+    description = 'Composes the genome editor, zooms its preview, and photographs both frames.'
+    dependsOn 'testClasses'
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'com.cytarch.cellularity.desktop.GenomeEditorPreviewProbeKt'
+    environment 'JDK_JAVA_OPTIONS', "${existingJavaOptions ?: ''} ${requiredOpens}".trim()
+    systemProperty 'java.library.path', nativeOutputDirectory.absolutePath
+    environment 'CELLULARITY_NATIVE_DIR', nativeOutputDirectory.absolutePath
+    environment 'PATH', "${nativeOutputDirectory.absolutePath};${System.getenv('PATH')}"
+}
+
+// Opens the application with a file, the way Windows does when a person chooses Cellularity in
+// "Open with", and photographs the pages the import lands in. The data directory is the probe's
+// own, so a check of the import cannot touch the collection the person running it has saved.
+tasks.register('runImportProbe', JavaExec) {
+    group = 'verification'
+    description = 'Imports a genome and a plate as command-line arguments and photographs the pages.'
+    dependsOn 'testClasses'
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'com.cytarch.cellularity.desktop.ImportProbeKt'
+    environment 'JDK_JAVA_OPTIONS', "${existingJavaOptions ?: ''} ${requiredOpens}".trim()
+    systemProperty 'java.library.path', nativeOutputDirectory.absolutePath
+    environment 'CELLULARITY_NATIVE_DIR', nativeOutputDirectory.absolutePath
+    environment 'CELLULARITY_DATA_DIR',
+        layout.projectDirectory.dir('build/diagnostics/import-check/data').asFile.absolutePath
+    // A plate with a body cannot be written by this side, so a real one is handed in when there is
+    // one to hand in: -PopenedPlate=... makes the probe import it and open the world it holds.
+    environment 'CELLULARITY_PROBE_PLATE',
+        providers.gradleProperty('openedPlate').getOrElse('')
+    environment 'PATH', "${nativeOutputDirectory.absolutePath};${System.getenv('PATH')}"
+}
+
+// Saves a running plate and opens what was saved. A plate with a body cannot be written by this
+// side, so a real one is handed in with -PopenedPlate=... and the probe saves *that* world under a
+// name of its own: what is measured is the save and the file that comes out of it, not the plate
+// that went in.
+tasks.register('runSaveProbe', JavaExec) {
+    group = 'verification'
+    description = 'Saves a running plate, opens the saved file and measures both.'
+    dependsOn 'testClasses'
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'com.cytarch.cellularity.desktop.SaveProbeKt'
+    environment 'JDK_JAVA_OPTIONS', "${existingJavaOptions ?: ''} ${requiredOpens}".trim()
+    systemProperty 'java.library.path', nativeOutputDirectory.absolutePath
+    environment 'CELLULARITY_NATIVE_DIR', nativeOutputDirectory.absolutePath
+    environment 'CELLULARITY_DATA_DIR',
+        layout.projectDirectory.dir('build/diagnostics/save-check/data').asFile.absolutePath
+    environment 'CELLULARITY_PROBE_PLATE',
+        providers.gradleProperty('openedPlate').getOrElse('')
+    environment 'PATH', "${nativeOutputDirectory.absolutePath};${System.getenv('PATH')}"
+}
+// Starts the application itself with a file on its command line, which is what Windows does when a
+// person chooses Cellularity in "Open with" or double-clicks a saved plate. This is not a test: the
+// window it opens is the real application, and what it is watched for is what it did with the file
+// -- the observation is the collection, not an assertion. The data directory is the probe's own so
+// that watching an import cannot disturb the collection the person running it has saved; pass
+// -PcellularityDataDir=... to point it elsewhere, and -PopenedFile=... for the file to open.
+tasks.register('runDesktopWithFile', JavaExec) {
+    group = 'verification'
+    description = 'Starts the desktop application with a file argument, as "Open with" does.'
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'com.cytarch.cellularity.desktop.MainKt'
+    environment 'JDK_JAVA_OPTIONS', "${existingJavaOptions ?: ''} ${requiredOpens}".trim()
+    systemProperty 'java.library.path', nativeOutputDirectory.absolutePath
+    environment 'CELLULARITY_NATIVE_DIR', nativeOutputDirectory.absolutePath
+    environment 'CELLULARITY_DATA_DIR', providers.gradleProperty('cellularityDataDir').getOrElse(
+        layout.projectDirectory.dir('build/diagnostics/open-with/data').asFile.absolutePath
+    )
+    environment 'PATH', "${nativeOutputDirectory.absolutePath};${System.getenv('PATH')}"
+    if (project.hasProperty('openedFile')) {
+        args = [project.property('openedFile').toString()]
+    }
+}
+
+// Draws the organism a genome grows into and writes it out as a picture, so the genome editor's
+// preview is checked by looking at what it would show rather than by trusting a status code.
+tasks.register('runGenomePreviewProbe', JavaExec) {
+    group = 'verification'
+    description = 'Draws the organism of a genome taken from the plate and writes it as a picture.'
+    dependsOn 'testClasses'
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'com.cytarch.cellularity.desktop.GenomePreviewProbeKt'
+    environment 'JDK_JAVA_OPTIONS', "${existingJavaOptions ?: ''} ${requiredOpens}".trim()
+    systemProperty 'java.library.path', nativeOutputDirectory.absolutePath
+    environment 'CELLULARITY_NATIVE_DIR', nativeOutputDirectory.absolutePath
+    environment 'PATH', "${nativeOutputDirectory.absolutePath};${System.getenv('PATH')}"
+}
 // Runs the play screen in a window so it can be watched while it draws. This is not a
 // test: it is the last step of the port that no assertion covers, because the journey
 // from the menu into a running plate is something only a window can show. Keeping it as a
 // task rather than a test means the suite stays free of a ten-minute sleep.
-tasks.register('runSurface', JavaExec) {
-    group = 'verification'
-    description = 'Opens the render viewport on its own and asks Windows whether it is visible.'
-    dependsOn 'testClasses'
-    classpath = sourceSets.test.runtimeClasspath
-    mainClass = 'com.cytarch.cellularity.desktop.SurfaceProbeKt'
-    systemProperty 'java.library.path', nativeOutputDirectory.absolutePath
-    jvmArgs(*(requiredOpens.split(' ').findAll { !it.isBlank() } as String[]))
-}
 tasks.register('runPlayScreen', JavaExec) {
     group = 'verification'
     description = 'Opens the desktop play screen on a live simulation, for observation.'
@@ -220,6 +248,19 @@ tasks.register('runPlayScreen', JavaExec) {
     environment 'PATH', "${nativeOutputDirectory.absolutePath};${System.getenv('PATH')}"
 }
 
+// Walks the whole user journey -- menu, experiment, tabs, dialog, leaving -- and reports the state
+// after every step. Each step has been photographed separately; the sequence is what this checks.
+tasks.register('runUserJourney', JavaExec) {
+    group = 'verification'
+    description = 'Walks the experiment journey through the play state machine and reports each step.'
+    dependsOn 'testClasses'
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'com.cytarch.cellularity.desktop.UserJourneyProbeKt'
+    environment 'JDK_JAVA_OPTIONS', "${existingJavaOptions ?: ''} ${requiredOpens}".trim()
+    systemProperty 'java.library.path', nativeOutputDirectory.absolutePath
+    environment 'CELLULARITY_NATIVE_DIR', nativeOutputDirectory.absolutePath
+    environment 'PATH', "${nativeOutputDirectory.absolutePath};${System.getenv('PATH')}"
+}
 // Drives the genome editor the way a person would and photographs each section. An editor
 // that composes but discards its input looks finished from the outside, so this checks that
 // an edit reached the reducer as well as writing the pictures; the pictures are still for a

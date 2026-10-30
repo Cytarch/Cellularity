@@ -246,13 +246,15 @@ CellularityVulkanPresentationStateV1 presentationView(
             return CELLULARITY_VULKAN_OFFSCREEN_GENOME_PREVIEW_V1;
         case OffscreenRenderTarget::SubstratePreview:
             return CELLULARITY_VULKAN_OFFSCREEN_SUBSTRATE_PREVIEW_V1;
+        case OffscreenRenderTarget::LiveFrame:
+            return CELLULARITY_VULKAN_OFFSCREEN_LIVE_FRAME_V1;
     }
     throw std::invalid_argument("Unknown offscreen render target");
 }
 
 [[nodiscard]] std::size_t offscreenIndex(OffscreenRenderTarget target) {
     const auto index = static_cast<std::size_t>(target);
-    if (index >= 2)
+    if (index >= 3)
         throw std::invalid_argument("Unknown offscreen target");
     return index;
 }
@@ -364,11 +366,18 @@ RenderFrameResult VulkanRenderSurfaceSessionAdapter::presentMicroscope(
 RenderPassStatus
 VulkanRenderSurfaceSessionAdapter::drawMicroscopeOffscreenPass(
         const RenderPresentationState& presentation,
-        const PreparedRenderFrame& frame) {
+        const PreparedRenderFrame& frame,
+        const cellularity::microscope::MicroscopeDebugHudTelemetry* debugHud) {
     const auto abiPresentation = presentationView(presentation);
     const auto abiFrame = preparedFrameView(frame);
+    CellularityVulkanDebugHudViewV1 abiHud{};
+    const CellularityVulkanDebugHudViewV1* hud = nullptr;
+    if (debugHud != nullptr) {
+        abiHud = debugHudView(*debugHud);
+        hud = &abiHud;
+    }
     return passStatus(mSession->drawMicroscopeOffscreenPass(
-            abiPresentation, abiFrame));
+            abiPresentation, abiFrame, hud));
 }
 
 RenderFrameResult VulkanRenderSurfaceSessionAdapter::clearSurface(
@@ -518,9 +527,50 @@ void VulkanRenderSurfaceSessionAdapter::cancelOffscreenRgba(
     if (target == OffscreenRenderTarget::SubstratePreview) {
         abiTarget = CELLULARITY_VULKAN_OFFSCREEN_SUBSTRATE_PREVIEW_V1;
         index = 1;
+    } else if (target == OffscreenRenderTarget::LiveFrame) {
+        abiTarget = CELLULARITY_VULKAN_OFFSCREEN_LIVE_FRAME_V1;
+        index = 2;
     }
     mOffscreenDimensions[index] = {};
     (void)mSession->cancelOffscreenRgba(abiTarget);
+}
+
+std::size_t VulkanRenderSurfaceSessionAdapter::finishOffscreenRgbaInto(
+        OffscreenRenderTarget target, int width, int height,
+        std::uint8_t* destination, std::size_t destinationSize,
+        std::size_t rowStride) {
+    if (destination == nullptr || width <= 0 || height <= 0) {
+        return 0;
+    }
+    const std::size_t packedRowBytes = static_cast<std::size_t>(width) * 4U;
+    if (rowStride < packedRowBytes
+            || static_cast<std::size_t>(height)
+                    > destinationSize / rowStride) {
+        return 0;
+    }
+    const auto [begunWidth, begunHeight] =
+            mOffscreenDimensions[offscreenIndex(target)];
+    if (begunWidth != width || begunHeight != height) {
+        throw std::logic_error(
+                "Offscreen RGBA readback extent does not match its target");
+    }
+    if (!mSession->supportsFinishOffscreenRgbaInto()) {
+        // A backend built before the direct readback entry point. The fallback
+        // still produces the image; it just assembles it in between.
+        return RenderSurfaceSession::finishOffscreenRgbaInto(target, width,
+                height, destination, destinationSize, rowStride);
+    }
+    std::uint64_t written = 0;
+    const auto status = mSession->finishOffscreenRgbaInto(
+            offscreenTarget(target), width, height, destination,
+            static_cast<std::uint64_t>(destinationSize),
+            static_cast<std::uint64_t>(rowStride), written);
+    if (passStatus(status) != RenderPassStatus::Completed
+            || written != packedRowBytes * static_cast<std::size_t>(height)) {
+        throw std::runtime_error("Vulkan offscreen RGBA readback failed");
+    }
+    mOffscreenDimensions[offscreenIndex(target)] = {};
+    return static_cast<std::size_t>(written);
 }
 
 } // namespace cellularity::render::abi

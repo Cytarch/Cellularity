@@ -11,12 +11,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.awt.ComposePanel
 import com.cytarch.cellularity.desktop.nativebridge.DesktopAssetRoots
 import com.cytarch.cellularity.desktop.nativebridge.DesktopNativeRenderer
-import java.awt.Canvas
-import java.awt.Color
-import java.awt.Dimension
 import java.awt.Frame
-import java.awt.Rectangle
-import java.awt.Robot
 import java.io.File
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
@@ -56,26 +51,20 @@ fun main() {
     val frame = AtomicReference<Frame?>(null)
     val visibleState = mutableStateOf(true)
 
-    val ownerFrame = Frame("Cellularity substrate tab owner")
-    val canvas = Canvas().apply {
-        background = Color.BLACK
-        preferredSize = Dimension(640, 480)
-    }
-    ownerFrame.add(canvas)
-    ownerFrame.pack()
-    ownerFrame.setLocation(0, 0)
-    ownerFrame.isVisible = true
-
-    val ownerHandle = nativeWindowHandleOf(canvas)
-    check(ownerHandle != 0L) { "the owner canvas has no native window" }
-    val windowHandle = DesktopNativeRenderer.nativeCreateWindow(
-        ownerHandle, 0, 0, canvas.width, canvas.height
+    // The panel is opened on a session anchored to a window of its own, which is what the
+    // application does: the world is simulated and rendered into memory, and the window exists only
+    // for the backend to stand its device up against. No AWT canvas, and no reaching into one.
+    val probeWidth = 640
+    val probeHeight = 480
+    val windowHandle = DesktopNativeRenderer.nativeCreateSurfaceAnchorWindow(
+        probeWidth,
+        probeHeight
     )
-    check(windowHandle != 0L) { "the renderer did not create its window" }
+    check(windowHandle != 0L) { "the renderer did not create its anchor" }
     val sessionHandle = DesktopNativeRenderer.nativeCreateSession(
         windowHandle,
-        canvas.width,
-        canvas.height,
+        probeWidth,
+        probeHeight,
         1_000,
         3_500,
         1.0,
@@ -102,7 +91,7 @@ fun main() {
         try {
             val window = Frame("Cellularity substrate tab")
             val panel = ComposePanel()
-            panel.preferredSize = Dimension(1100, 700)
+            panel.preferredSize = java.awt.Dimension(1100, 700)
             window.add(panel)
             window.pack()
             window.setLocation(40, 40)
@@ -165,8 +154,6 @@ fun main() {
     gatewayScope.cancel()
     DesktopNativeRenderer.nativeStopSession(sessionHandle)
     DesktopNativeRenderer.nativeDestroyWindow(windowHandle)
-    ownerFrame.isVisible = false
-    ownerFrame.dispose()
     failure.get()?.let { thrown: Throwable ->
         System.err.println("SUBSTRATE raised: $thrown")
         thrown.printStackTrace()
@@ -183,15 +170,33 @@ private fun settle(millis: Long) {
     }
 }
 
+/**
+ * Photographs the window itself, asking the window to draw rather than reading the screen.
+ *
+ * Reading the screen would photograph whatever else happens to be on it, which is both a different
+ * picture from the one the panel drew and a picture of somebody's desktop. A window draws on the
+ * event thread of the toolkit that owns it, so the drawing is asked for on that thread.
+ */
 private fun capture(window: Frame, destination: File): File? = try {
-    val image = Robot().createScreenCapture(Rectangle(window.locationOnScreen, window.size))
-    ImageIO.write(image, "png", destination)
-    destination
+    val size = window.size
+    if (size.width <= 0 || size.height <= 0) {
+        null
+    } else {
+        val image = java.awt.image.BufferedImage(
+            size.width, size.height, java.awt.image.BufferedImage.TYPE_INT_RGB
+        )
+        javax.swing.SwingUtilities.invokeAndWait {
+            val graphics = image.createGraphics()
+            try {
+                window.paintAll(graphics)
+            } finally {
+                graphics.dispose()
+            }
+        }
+        ImageIO.write(image, "jpg", destination)
+        destination
+    }
 } catch (thrown: Throwable) {
     System.err.println("SUBSTRATE could not capture ${destination.name}: $thrown")
     null
 }
-
-// The lookup itself lives beside the tests that need it. It used to be copied here as well, which
-// is how two copies of a reflection helper come to disagree: the copy that looked for a field
-// named `hwnd` returned zero for every component and reported it as a component without a window.

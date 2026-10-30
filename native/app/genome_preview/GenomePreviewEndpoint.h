@@ -40,6 +40,15 @@ public:
     GenomePreviewEndpoint& operator=(const GenomePreviewEndpoint&) = delete;
 
     [[nodiscard]] std::uint64_t generation() const noexcept;
+    /**
+     * How many Cells the preview world was allocated for.
+     *
+     * Reported because it is the other half of the count a caller shows beside the organism: a
+     * preview that says "9 Cells" means nothing without the allocation it was grown in, and the
+     * allocation is this endpoint's -- a caller that assumed a number would keep working while
+     * quietly showing a limit the world does not have.
+     */
+    [[nodiscard]] int maximumCellCount() const noexcept;
     [[nodiscard]] std::uint64_t surfaceCreated() noexcept;
     void surfaceDestroyed(std::uint64_t attachmentGeneration) noexcept;
     [[nodiscard]] std::uint64_t activeAttachmentGeneration() const noexcept;
@@ -51,6 +60,20 @@ public:
 
     void applyPendingOnRenderOwner(NativeCellularityController& controller);
     [[nodiscard]] cellularity::render::RenderFrameResult draw(NativeCellularityController& controller);
+    /**
+     * The same frame into memory the caller owns.
+     *
+     * `draw` presents the preview into the surface the session is attached to; this is that frame
+     * in a buffer instead, which is what a host needs when the preview is a layer of its own scene.
+     * The camera is the one the published view moved, because it is the controller's viewport --
+     * the same viewport the gestures were applied to.
+     */
+    [[nodiscard]] std::size_t drawIntoRgba(
+            NativeCellularityController& controller,
+            std::uint8_t* destination,
+            std::size_t destinationSize,
+            std::size_t rowStride,
+            bool& wrote);
     [[nodiscard]] GenomePreviewAcknowledgment readAcknowledgment() const noexcept;
 
     void close() noexcept;
@@ -67,6 +90,7 @@ private:
     void publishViewportAcknowledgment(NativeCellularityController& controller);
 
     const std::uint64_t mGeneration;
+    const int mMaximumCellCount;
     std::unique_ptr<NativeGenomePreviewFacade> mFacade;
     GenomePreviewRetainedState mRetainedState;
     GenomePreviewInteractionQueue mInteractionQueue;

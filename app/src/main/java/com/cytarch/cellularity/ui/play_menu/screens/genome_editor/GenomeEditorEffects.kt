@@ -7,6 +7,7 @@ import com.cytarch.cellularity.shared.model.GenomeDraft
 import com.cytarch.cellularity.shared.ui.play.genome_editor.GenomeEditorConfig
 import com.cytarch.cellularity.shared.ui.play.genome_editor.GenomeEditorEffectHandler
 import com.cytarch.cellularity.shared.ui.play.genome_editor.GenomeEditorFileGateway
+import com.cytarch.cellularity.shared.ui.play.genome_editor.GenomeEditorLayoutMemory
 import com.cytarch.cellularity.shared.ui.play.genome_editor.GenomeProvider
 
 /**
@@ -49,6 +50,15 @@ class GenomeEditorCoordinator(
         genomeProvider = genomeProvider,
         defaultGenomeFactory = com.cytarch.cellularity.ui.play_menu.screens.genome_editor.GenomeEditorViewModel::createRandomizedEditorGenome
     )
+
+    /**
+     * Where the person left the preview: its size, and the camera inside it.
+     *
+     * Kept here rather than in the screen because the screen is shared now, and a preview that
+     * forgets the size it was dragged to is the sort of small betrayal that makes an editor feel
+     * like a form. The memory itself lives in the shared module, because both platforms want it.
+     */
+    val layout = GenomeEditorLayoutMemory()
 
     private var viewportState: FloatArray? = null
     private var previewHeightDp: Float? = null

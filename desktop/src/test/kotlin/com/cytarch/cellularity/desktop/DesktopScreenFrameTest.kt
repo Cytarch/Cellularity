@@ -17,14 +17,6 @@ import com.cytarch.cellularity.shared.ui.play.substrate_info.SubstrateInfoState
 import com.cytarch.cellularity.shared.ui.play.substrate_info.SubstrateStatsSectionState
 import com.cytarch.cellularity.shared.ui.play.substrate_info.toSubstrateEnvironmentUiState
 import com.cytarch.cellularity.shared.ui.text.formatCanonicalQuantity
-import java.awt.Canvas
-import java.awt.Component
-import java.awt.Dimension
-import java.awt.Frame
-import java.awt.event.ComponentAdapter
-import java.awt.event.ComponentEvent
-import java.util.concurrent.CountDownLatch
-import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -198,7 +190,7 @@ class DesktopScreenFrameTest {
 /**
  * Starts a real world and reads its environment, the same way the renderer's own test does.
  *
- * A session is created against a real canvas on a real window and drawn until it presents,
+ * A session is created against an anchor of its own and drawn until it presents,
  * because the runtime advances the world as it presents and a session nobody draws never
  * produces anything to read. The environment is then taken through the gateway rather than
  * through the renderer directly, so what comes back is the document the panel is actually
@@ -209,40 +201,20 @@ class DesktopScreenFrameTest {
  * would report the port as broken when only the build was incomplete.
  */
 private fun readEnvironmentFromARealWorld(roots: DesktopAssetRoots.Roots): EnvironmentSnapshot? {
-    val frame = Frame("Cellularity frame test")
-    val sized = CountDownLatch(1)
-    val canvas = Canvas().apply {
-        background = java.awt.Color.BLACK
-        preferredSize = Dimension(480, 480)
-    }
-    canvas.addComponentListener(object : ComponentAdapter() {
-        override fun componentResized(event: ComponentEvent) {
-            if (event.component.width > 0) sized.countDown()
-        }
-    })
-    frame.add(canvas)
-    frame.pack()
-    frame.setLocation(60, 60)
-
+    // An anchored renderer rather than one parented to a canvas: the world is simulated and its
+    // frame rendered into memory, so the window only has to exist for the backend to stand its
+    // device up against. Reaching into an AWT component for a native handle was both unsupported
+    // and unnecessary, and a test that fails when that lookup changes establishes nothing about
+    // the world it was trying to read.
+    val size = 480
     var windowHandle = 0L
     var sessionHandle = 0L
     return try {
-        frame.isVisible = true
-        if (!sized.await(10, TimeUnit.SECONDS)) {
-            println("WORLD canvas was never sized")
-            return null
-        }
-        val ownerHandle = nativeWindowHandleOf(canvas)
-        println("WORLD owner=$ownerHandle canvas=${canvas.width}x${canvas.height}")
-        if (ownerHandle == 0L) return null
-
-        windowHandle = DesktopNativeRenderer.nativeCreateWindow(
-            ownerHandle, 0, 0, canvas.width, canvas.height
-        )
+        windowHandle = DesktopNativeRenderer.nativeCreateSurfaceAnchorWindow(size, size)
         println("WORLD window=$windowHandle")
         if (windowHandle == 0L) return null
         sessionHandle = DesktopNativeRenderer.nativeCreateSession(
-            windowHandle, canvas.width, canvas.height,
+            windowHandle, size, size,
             1_000, 3_500, 1.0,
             roots.shaderRoot.toString(), roots.textureRoot.toString()
         )
@@ -269,37 +241,5 @@ private fun readEnvironmentFromARealWorld(roots: DesktopAssetRoots.Roots): Envir
     } finally {
         if (sessionHandle != 0L) DesktopNativeRenderer.nativeStopSession(sessionHandle)
         if (windowHandle != 0L) DesktopNativeRenderer.nativeDestroyWindow(windowHandle)
-        frame.isVisible = false
-        frame.dispose()
-    }
-}
-
-/**
- * The native window an AWT component was given.
- *
- * There is no public accessor for this, so the peer has to be reached by reflection. Reaching the
- * handle field directly was tried first and silently returned nothing -- a peer that has no such
- * field is not an error, it is just a peer without one, so the failure was a zero rather than an
- * exception and the test skipped itself instead of reporting that it could not look. The peer's
- * own `getHWnd` is the accessor that actually exists, and it is asked for by name.
- *
- * This lives beside the tests that need it rather than inside one of them, because two copies of
- * a reflection helper is two chances for one of them to be quietly wrong -- which is exactly what
- * happened.
- */
-internal fun nativeWindowHandleOf(component: Component): Long {
-    if (!component.isShowing) return 0L
-    return try {
-        val peerField = Component::class.java.getDeclaredField("peer")
-        peerField.isAccessible = true
-        val peer: Any = peerField.get(component) ?: return 0L
-        val getHWnd = peer.javaClass.methods.firstOrNull { it.name == "getHWnd" } ?: return 0L
-        (getHWnd.invoke(peer) as? Long) ?: 0L
-    } catch (_: ReflectiveOperationException) {
-        0L
-    } catch (_: RuntimeException) {
-        0L
-    } catch (_: LinkageError) {
-        0L
     }
 }

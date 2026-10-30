@@ -100,9 +100,15 @@ ASSERT_CALLBACK_TYPE(set_profiling_enabled, CellularityVulkanSetProfilingEnabled
 ASSERT_CALLBACK_TYPE(get_diagnostics_size, CellularityVulkanGetDiagnosticsSizeFnV1);
 ASSERT_CALLBACK_TYPE(read_diagnostics_chunk, CellularityVulkanReadDiagnosticsChunkFnV1);
 ASSERT_CALLBACK_TYPE(release_diagnostics_snapshot, CellularityVulkanReleaseDiagnosticsSnapshotFnV1);
+ASSERT_CALLBACK_TYPE(finish_offscreen_rgba_into, CellularityVulkanFinishOffscreenRgbaIntoFnV1);
 
 _Static_assert(CELLULARITY_VULKAN_SURFACE_API_V1_REQUIRED_SIZE == offsetof(CellularityVulkanSurfaceApiV1, release_diagnostics_snapshot) + sizeof(CellularityVulkanReleaseDiagnosticsSnapshotFnV1), "API required size changed");
-_Static_assert(sizeof(CellularityVulkanSurfaceApiV1) == CELLULARITY_VULKAN_SURFACE_API_V1_REQUIRED_SIZE, "Unexpected API tail padding");
+/* The table grows by appending, so the entries a caller that predates the newest
+   one reads keep their offsets, and the required size still names the last entry
+   of the older prefix. */
+_Static_assert(offsetof(CellularityVulkanSurfaceApiV1, finish_offscreen_rgba_into) == CELLULARITY_VULKAN_SURFACE_API_V1_REQUIRED_SIZE, "Appended entry must follow the required prefix");
+_Static_assert(sizeof(CellularityVulkanSurfaceApiV1) == CELLULARITY_VULKAN_SURFACE_API_V1_FULL_SIZE, "Full API size must be the structure itself");
+_Static_assert(sizeof(CellularityVulkanSurfaceApiV1) >= CELLULARITY_VULKAN_SURFACE_API_V1_REQUIRED_SIZE, "Full API size must cover the required prefix");
 #if UINTPTR_MAX == UINT64_MAX
 _Static_assert(CELLULARITY_VULKAN_SURFACE_API_V1_REQUIRED_SIZE == 224, "64-bit API size changed");
 #elif UINTPTR_MAX == UINT32_MAX

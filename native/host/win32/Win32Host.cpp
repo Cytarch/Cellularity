@@ -439,7 +439,10 @@ public:
 
     [[nodiscard]] RenderPassStatus drawMicroscopeOffscreenPass(
             const RenderPresentationState& presentation,
-            const PreparedRenderFrame& frame) override {
+            const PreparedRenderFrame& frame,
+            const cellularity::microscope::MicroscopeDebugHudTelemetry*
+                    debugHudTelemetry) override {
+        (void)debugHudTelemetry;
         return mAdapter.drawMicroscopeOffscreenPass(presentation, frame);
     }
 

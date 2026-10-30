@@ -4,6 +4,7 @@
 
 package com.cytarch.cellularity.desktop
 
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -12,6 +13,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.LaunchedEffect
 import kotlinx.coroutines.Dispatchers
+import org.jetbrains.compose.resources.stringResource
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import androidx.compose.runtime.getValue
@@ -21,29 +23,37 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.unit.dp
+import com.cytarch.cellularity.shared.generated.resources.*
 import com.cytarch.cellularity.desktop.nativebridge.DesktopCellDiagnosis
 import com.cytarch.cellularity.shared.ui.play.microscope.MicroscopeTool
 import com.cytarch.cellularity.desktop.files.DesktopCellularityFileRepository
 import com.cytarch.cellularity.desktop.nativebridge.DesktopAssetRoots
-import com.cytarch.cellularity.desktop.nativebridge.SurfaceInputEvent
 import com.cytarch.cellularity.shared.files.StorageResult
 import com.cytarch.cellularity.shared.files.StoredSubstrateId
 import com.cytarch.cellularity.shared.model.GenomeDraft
 import com.cytarch.cellularity.shared.model.SimulationConfiguration
 import com.cytarch.cellularity.shared.ui.play.PlayAction
+import com.cytarch.cellularity.shared.ui.play.PlayEffect
 import com.cytarch.cellularity.shared.ui.play.PlayLaunchSource
+import com.cytarch.cellularity.shared.ui.play.PlayPlateAction
+import com.cytarch.cellularity.shared.ui.play.PlayRestoredUiState
 import com.cytarch.cellularity.shared.ui.play.PlayScreen
+import com.cytarch.cellularity.shared.ui.play.PlayStore
 import com.cytarch.cellularity.shared.ui.play.PlayTab
 import com.cytarch.cellularity.shared.ui.play.genome_editor.GenomeProvider
 import com.cytarch.cellularity.shared.ui.play.microscope.MicroscopeAction
 import com.cytarch.cellularity.shared.ui.play.microscope.MicroscopeStore
 import com.cytarch.cellularity.shared.ui.play.microscope.MicroscopeTemperature
+import com.cytarch.cellularity.desktop.nativebridge.SubstratePreviewCapture
+import kotlinx.coroutines.launch
 
 /**
  * The running simulation and the panels beside it.
@@ -67,7 +77,22 @@ fun DesktopPlayScreen(
      * job: the name-to-path mapping, and the refusal of a name that would leave the storage
      * directory, belong in one place and are already there.
      */
-    storedPlateName: String? = null
+    storedPlateName: String? = null,
+    /**
+     * Whether the renderer should draw its own performance readout into the frame.
+     *
+     * The setting is the user's, read from the settings the window already holds; the HUD itself
+     * belongs to the renderer, so the value travels to the session rather than being drawn here.
+     */
+    performanceHudEnabled: Boolean = false,
+    /**
+     * Whether sterilising the plate asks first.
+     *
+     * The user's setting, the same one the phone reads, and it is asked of the machine rather than
+     * answered here: the difference between a sterilise that asks and one that does not is a dialog
+     * the shared screen owns.
+     */
+    askSterilize: Boolean = false
 ) {
     val microscopeStore = remember { MicroscopeStore() }
     val microscopeState by microscopeStore.state.collectAsState()
@@ -81,26 +106,61 @@ fun DesktopPlayScreen(
         val name = storedPlateName ?: return@LaunchedEffect
         when (val resolved = fileRepository.substrateFilePath(StoredSubstrateId(name))) {
             is StorageResult.Success -> substratePath = resolved.value.toString()
-            is StorageResult.Failure -> plateFailure =
-                "The saved plate could not be found (${resolved.error.code})."
+            is StorageResult.Failure -> {
+                plateFailure = "The saved plate could not be found (${resolved.error.code})."
+                // The same banner the phone shows when a plate cannot be prepared, because it is
+                // the same situation: the screen is open and there is nothing to draw in it.
+                microscopeStore.dispatch(
+                    MicroscopeAction.RenderPreparationFailureObserved(true)
+                )
+            }
         }
     }
 
-    // Input is handed to the surface as an immutable list rather than appended to a
-    // mutable one. The surface republishes the queue whenever the list changes, and a
-    // list mutated in place would look unchanged to it, so the events would never be
-    // applied at all.
-    var pendingInput by remember { mutableStateOf<List<SurfaceInputEvent>>(emptyList()) }
-    val queueInput: (SurfaceInputEvent) -> Unit = { event ->
-        pendingInput = pendingInput + event
+    // The genome editor's own state, held here rather than inside the tab, because the plate needs
+    // it too: a synthesizer tap places the genome the editor is showing, which is the phone's
+    // arrangement -- its play screen owns the editor state and hands the microscope the draft.
+    // A store the tab owned would be invisible to the plate, which is why the plate used to place
+    // the default Cell.
+    val scope = rememberCoroutineScope()
+    val genomeEditorStore = remember(fileRepository) {
+        DesktopGenomeEditorStore(
+            repository = fileRepository,
+            genomeProvider = NoMicroscopeGenome
+        ).also { it.attach(scope) }
     }
 
-    // The store resets the world by queueing a reset for the renderer to apply, because
-    // the world belongs to the renderer's thread and not to the interface.
-    val playStore = remember {
-        DesktopPlayStore(source = PlayLaunchSource.New(configuration)) {
-            pendingInput = pendingInput + SurfaceInputEvent.Reset
-        }.also { store ->
+    /**
+     * Where a saved plate's picture is taken from.
+     *
+     * Created here and handed both to the surface that can draw it and to the operations that need
+     * it, because neither owns the other: the surface comes and goes with the screen, and a save has
+     * to reach whichever surface is drawing at the moment it runs.
+     */
+    val previewCapture = remember { SubstratePreviewCapture() }
+
+    // The plate's own name, when this run continues one. It is what a save replaces: the phone's
+    // rule is that a plate may overwrite itself and nothing else, and without this the machine
+    // would see a stored plate as a name that is already taken.
+    val openedPlate = remember(storedPlateName) {
+        storedPlateName?.let { StoredSubstrateId(it) }
+    }
+
+    // The machine the phone runs, with the desktop's own five operations behind it -- so a save,
+    // a reset and the dirty state that follows them behave here because they *are* the phone's
+    // sequence rather than a second copy of it that has to be kept in step by hand.
+    val operations = remember(fileRepository, openedPlate) {
+        DesktopPlaySessionOperations(
+            fileRepository = fileRepository,
+            openedPlate = openedPlate,
+            previewCapture = previewCapture
+        )
+    }
+    val playStore = remember(operations) {
+        PlayStore(
+            source = openedPlate?.let { PlayLaunchSource.Stored(it) }
+                ?: PlayLaunchSource.New(configuration),
+            operations = operations,
             // An experiment opens on the plate, not on the panel that describes it.
             //
             // The phone opens on the substrate tab because that is where a person sets the
@@ -110,12 +170,34 @@ fun DesktopPlayScreen(
             // the window appears. Opening on the substrate panel made the first thing a person saw
             // a description of a world they had not looked at yet -- and, before the panel was
             // reachable at all, a sentence saying it could not be read.
-            store.dispatch(PlayAction.SelectTab(PlayTab.MICROSCOPE))
+            restoredUi = PlayRestoredUiState(selectedTab = PlayTab.MICROSCOPE)
+        )
+    }
+    val playState by playStore.state.collectAsState()
+
+    // What the machine says about its own operations, said out loud.
+    //
+    // This is the half that was missing: the desktop's store wrote its failures into a field nobody
+    // read, so saving closed the dialog and said nothing at all -- neither that the plate was
+    // written nor that it was refused nor why. The phone shows these as a toast; a desktop window
+    // has no toast, so they are shown by the same host the launcher uses, in the same words.
+    val notices = remember { DesktopNoticeQueue() }
+    LaunchedEffect(playStore) {
+        playStore.effects.collect { effect ->
+            when (effect) {
+                is PlayEffect.ShowNotice -> notices.post(DesktopPlayNotice(effect.notice))
+                is PlayEffect.Finish -> onExit()
+            }
         }
     }
-    val playState = playStore.state
 
-    var cellCount by remember { mutableStateOf(0L) }
+    // The machine is told the session is starting, which is what the phone's view model does when
+    // its activity comes up. Without it nothing was ever opened: the shared state stayed "not
+    // started" for the whole run.
+    LaunchedEffect(playStore) {
+        playStore.dispatch(PlayAction.Start)
+    }
+
     var failure by remember { mutableStateOf<String?>(null) }
     val assetRoots = remember { DesktopAssetRoots.resolve() }
 
@@ -124,59 +206,120 @@ fun DesktopPlayScreen(
     // edit the world on screen rather than a second one behind it.
     var sessionHandle by remember { mutableStateOf(0L) }
     var gateway by remember { mutableStateOf<DesktopSimulationGateway?>(null) }
-    LaunchedEffect(sessionHandle) {
+    LaunchedEffect(sessionHandle, fileRepository, openedPlate, previewCapture) {
         val handle = sessionHandle
         if (handle == 0L) return@LaunchedEffect
-        val created = DesktopSimulationGateway(sessionHandle = handle)
+        val created = DesktopSimulationGateway(
+            sessionHandle = handle,
+            fileRepository = fileRepository,
+            openedPlate = openedPlate,
+            previewCapture = previewCapture
+        )
         gateway = created
-        created.start()
+        // Handed to the machine before anything is asked of it: opening a plate is the machine's
+        // first command, and it waits here until the renderer has a world.
+        operations.attachGateway(created)
+        created.start()        // The counters are re-read for as long as the session lives, rather than once at the
+        // moment it opened: the substrate panel was reporting the world as it was before the
+        // first update, and stayed at zero while the plate filled up. It runs here because this
+        // effect is cancelled with the session, so the loop cannot outlive what it reads.
+        created.pollStats()
     }
 
-    // A mode or tool change in the interface becomes an instruction to the simulation.
-    LaunchedEffect(microscopeState.selectedTemperature) {
-        queueInput(SurfaceInputEvent.Temperature(microscopeState.selectedTemperature.nativeMode))
+    // What the world says has changed, forwarded the way the phone forwards it.
+    //
+    // On the phone this is a collector over the gateway's content state, and it is not decoration:
+    // sterilising is a *request* until the world reports that it happened, and the machine holds
+    // that change pending in the meantime -- so without this the plate's menu and the way out would
+    // quietly stop answering after a sterilise, with nothing on screen to say why. The observation
+    // is what completes the request.
+    LaunchedEffect(gateway, playStore) {
+        val current = gateway ?: return@LaunchedEffect
+        current.contentState.collect { content ->
+            playStore.dispatch(PlayAction.ContentStateObserved(content))
+        }
     }
-    LaunchedEffect(microscopeState.selectedTool) {
-        queueInput(SurfaceInputEvent.Tool(microscopeState.selectedTool.nativeOrdinal))
+
+    // A mode or tool change in the interface reaches the simulation through the surface, which
+    // reads both from this same state. Nothing has to be queued here: the value is the
+    // instruction.
+
+    // The screen asks for the keyboard rather than hoping it arrives.
+    //
+    // Key events go to whatever has focus, and a window whose content is a plain Box has nothing
+    // focused at all: the shortcuts then work only if something else happens to have taken focus
+    // first, which is why they worked after one run of the app and not after another. A
+    // FocusRequester on the root is the ordinary Compose answer and it is what the tab bar, the
+    // dialogs and these shortcuts all rely on.
+    val focusRequester = remember { FocusRequester() }
+    LaunchedEffect(Unit) {
+        focusRequester.requestFocus()
     }
 
     Box(
         modifier = modifier
             .fillMaxSize()
+            .focusRequester(focusRequester)
+            .focusable()
             .onPreviewKeyEvent { event ->
                 if (event.type != KeyEventType.KeyDown) {
                     return@onPreviewKeyEvent false
                 }
+                // Escape is the window's own command and works wherever it is pressed; the rest
+                // belong to the microscope, and answering them while a text field has focus
+                // would mean a genome could not be called "2".
+                val onMicroscope = playState.selectedTab == PlayTab.MICROSCOPE
                 when (event.key) {
                     // Escape follows the same route as the back button in the tab bar,
                     // so it asks before discarding rather than leaving outright.
                     Key.Escape -> {
-                        playStore.dispatch(PlayAction.BackRequested)
+                        scope.launch { playStore.dispatch(PlayAction.BackRequested) }
                         true
                     }
 
+                    // Sterilising from the keyboard is the same request the plate's menu makes --
+                    // including whether it asks first -- so the two cannot drift apart: there is
+                    // one action, and the setting decides whether it asks.
                     Key.R -> {
-                        queueInput(SurfaceInputEvent.Reset)
+                        if (!onMicroscope) return@onPreviewKeyEvent false
+                        scope.launch {
+                            playStore.dispatch(
+                                PlayAction.SelectPlateAction(
+                                    action = PlayPlateAction.STERILIZE,
+                                    confirmationRequired = askSterilize
+                                )
+                            )
+                        }
                         true
                     }
 
-                    Key.One -> selectTemperature(
+                    Key.One -> if (!onMicroscope) false else selectTemperature(
                         microscopeStore,
                         MicroscopeTemperature.FREEZE
                     )
-                    Key.Two -> selectTemperature(
+                    Key.Two -> if (!onMicroscope) false else selectTemperature(
                         microscopeStore,
                         MicroscopeTemperature.OBSERVE
                     )
-                    Key.Three -> selectTemperature(
+                    Key.Three -> if (!onMicroscope) false else selectTemperature(
                         microscopeStore,
                         MicroscopeTemperature.INCUBATE
                     )
-                    Key.Four -> selectTemperature(microscopeStore, MicroscopeTemperature.SLOW)
-                    Key.Five -> selectTemperature(
+                    Key.Four -> if (!onMicroscope) false else selectTemperature(microscopeStore, MicroscopeTemperature.SLOW)
+                    Key.Five -> if (!onMicroscope) false else selectTemperature(
                         microscopeStore,
                         MicroscopeTemperature.INCUBATE_NO_RENDER
                     )
+
+                    // The tools, on the keys the standalone host used: 6 to 9 and 0, in the
+                    // order the tool dialog lists them. A keyboard route to each is worth more
+                    // than it sounds on a desktop -- it is the only way to change tools without
+                    // moving the pointer off the cell being looked at.
+                    Key.Six -> if (!onMicroscope) false else selectTool(microscopeStore, MicroscopeTool.CELL)
+                    Key.Seven -> if (!onMicroscope) false else selectTool(microscopeStore, MicroscopeTool.MOVE)
+                    Key.Eight -> if (!onMicroscope) false else selectTool(microscopeStore, MicroscopeTool.ADD)
+                    Key.Nine -> if (!onMicroscope) false else selectTool(microscopeStore, MicroscopeTool.REMOVE)
+                    Key.Zero -> if (!onMicroscope) false else selectTool(microscopeStore, MicroscopeTool.DIAGNOSIS)
 
                     else -> false
                 }
@@ -184,34 +327,39 @@ fun DesktopPlayScreen(
     ) {
         PlayScreen(
             state = playState,
-            // Sterilising a substrate that has been changed is the case that asks; a
-            // desktop run is never dirty until saving exists, so nothing asks yet.
-            askSterilize = false,
+            // Whether sterilising asks first is the user's setting, the same one the phone reads;
+            // whether a run is worth asking about is the machine's, and it counts a plate dirty
+            // exactly when the file no longer describes it.
+            askSterilize = askSterilize,
             avoidCameraCutout = false,
-            onAction = { action ->
-                if (action == PlayAction.ConfirmLeave) {
-                    onExit()
-                } else {
-                    playStore.dispatch(action)
-                }
-            },
+            onAction = { action -> scope.launch { playStore.dispatch(action) } },
             microscopeContent = { isVisible, onPlateActionClick ->
                 MicroscopeTab(
                     state = microscopeState,
                     isVisible = isVisible,
                     assetRoots = assetRoots,
                     configuration = configuration,
-                    pendingInput = pendingInput,
-                    cellCount = cellCount,
-                    // A failure to resolve the plate is reported through the same channel
-                    // as a failure to open it, so a person sees one message either way
-                    // rather than a screen that looks fine and never draws anything.
-                    failure = failure ?: plateFailure,
                     substratePath = substratePath,
+                    performanceHudEnabled = performanceHudEnabled,
+                    // What a synthesizer tap places: the genome the editor is showing.
+                    placementGenome = genomeEditorStore.state.preview.snapshot,
+                    // Where a save takes this plate's picture from: the surface that draws it.
+                    previewCapture = previewCapture,
                     onPlateActionClick = onPlateActionClick,
                     onAction = { action -> microscopeStore.dispatch(action) },
-                    onCellCount = { count -> cellCount = count },
-                    onFailure = { message -> failure = message },
+                    // The count exists for the probes that watch the plate from outside; this
+                    // screen shows the plate itself, and the number of cells is read where it is
+                    // displayed -- in the substrate tab.
+                    onCellCount = {},
+                    // A failure to prepare the plate is reported through the interface the phone
+                    // reports it through, so the banner over the world is the same banner: the
+                    // message is kept for the window title bar and the state drives the banner.
+                    onFailure = { message ->
+                        failure = message
+                        microscopeStore.dispatch(
+                            MicroscopeAction.RenderPreparationFailureObserved(true)
+                        )
+                    },
                     onSessionReady = { handle -> sessionHandle = handle }
                 )
             },
@@ -236,7 +384,7 @@ fun DesktopPlayScreen(
                     )
                 }
             },
-            genomeContent = { GenomeTab(fileRepository) }
+            genomeContent = { GenomeTab(genomeEditorStore) }
         )
     }
 
@@ -293,8 +441,11 @@ fun DesktopPlayScreen(
 private fun SubstrateTabUnavailable(isVisible: Boolean) {
     if (!isVisible) return
     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        // The plate's own words for "not ready yet": the tab can be opened before the session
+        // exists, and this is the same sentence the phone shows in that state rather than a
+        // sentence about the desktop build, which is what used to be here.
         Text(
-            text = "Waiting for the simulation to start.",
+            text = stringResource(Res.string.substrate_environment_loading_message),
             modifier = Modifier.padding(24.dp)
         )
     }
@@ -303,25 +454,16 @@ private fun SubstrateTabUnavailable(isVisible: Boolean) {
 /**
  * The genome panel.
  *
- * The editor itself is shared: the same sections, the same reducer, and now the same effect
- * handler the phone uses. What differs is only where the bytes go -- a directory in the
- * user's profile rather than the app's private storage -- and that the preview is not
- * available, which the editor says rather than showing an empty box.
+ * The editor itself is shared: the same sections, the same reducer, and the same effect handler
+ * the phone uses. What differs is only where the bytes go -- a directory in the user's profile
+ * rather than the app's private storage.
  *
- * The store is remembered for the life of the screen, not per tab visit, so switching to
- * the microscope and back does not throw away work in progress.
+ * The store belongs to the play screen rather than to this tab, because the plate places the
+ * genome the editor is showing: a store this tab owned would go away with the tab and be
+ * invisible to the microscope.
  */
 @Composable
-private fun GenomeTab(fileRepository: DesktopCellularityFileRepository) {
-    // A scope that outlives recomposition: a save in flight must not be cancelled because
-    // the screen redrew, or the state would say "saving" with nothing saving.
-    val scope = rememberCoroutineScope()
-    val store = remember(fileRepository) {
-        DesktopGenomeEditorStore(
-            repository = fileRepository,
-            genomeProvider = NoMicroscopeGenome
-        ).also { it.attach(scope) }
-    }
+private fun GenomeTab(store: DesktopGenomeEditorStore) {
     DesktopGenomeEditor(store = store, modifier = Modifier.fillMaxSize())
 }
 
@@ -329,7 +471,11 @@ private fun GenomeTab(fileRepository: DesktopCellularityFileRepository) {
  * Says that there is no genome to take from the plate.
  *
  * Selecting a cell and editing its genome is what the phone offers, and it needs a way to
- * read a cell's genome out of the running simulation, which this bridge does not have yet.
+ * read a cell's genome out of the running simulation. Taking a genome *from* the plate is the
+ * direction that is still missing: the bridge can inspect a selected Cell, but nothing polls it
+ * into a value the editor's provider can answer from, and a provider that blocked the interface
+ * thread on the render thread would be the freeze this port was debugged for.
+ *
  * Answering "none" makes the editor report that as the reason the option failed instead of
  * offering a choice that would do nothing.
  */

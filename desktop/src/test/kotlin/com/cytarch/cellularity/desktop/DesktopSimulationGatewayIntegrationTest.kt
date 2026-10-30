@@ -11,7 +11,6 @@ import com.cytarch.cellularity.shared.simulation.EnvironmentBooleanProperty
 import com.cytarch.cellularity.shared.simulation.EnvironmentChange
 import com.cytarch.cellularity.shared.simulation.EnvironmentPatch
 import com.cytarch.cellularity.shared.ui.play.substrate_info.toSubstrateEnvironmentUiState
-import java.awt.Canvas
 import java.awt.Color
 import java.awt.Component
 import java.awt.Dimension
@@ -51,35 +50,16 @@ class DesktopSimulationGatewayIntegrationTest {
         assumeTrue("the compiled shaders and textures were not found", roots != null)
         assumeTrue("no display is available", !java.awt.GraphicsEnvironment.isHeadless())
 
-        val frame = Frame("Cellularity gateway test")
-        val sized = CountDownLatch(1)
-        val canvas = Canvas().apply {
-            background = Color.BLACK
-            preferredSize = Dimension(480, 480)
-        }
-        canvas.addComponentListener(object : ComponentAdapter() {
-            override fun componentResized(event: ComponentEvent) {
-                if (event.component.width > 0) sized.countDown()
-            }
-        })
-        frame.add(canvas)
-        frame.pack()
-        frame.setLocation(60, 60)
-
+        // An anchored renderer: the environment is read from the running world, not from a surface,
+        // so the window exists only for the backend to stand its device up against.
+        val side = 480
         var windowHandle = 0L
         var sessionHandle = 0L
         try {
-            frame.isVisible = true
-            assertTrue("the canvas never received a size", sized.await(10, TimeUnit.SECONDS))
-            val ownerHandle = handleOf(canvas)
-            assertTrue("the canvas has no native window", ownerHandle != 0L)
-
-            windowHandle = DesktopNativeRenderer.nativeCreateWindow(
-                ownerHandle, 0, 0, canvas.width, canvas.height
-            )
-            assertTrue("the renderer did not create its window", windowHandle != 0L)
+            windowHandle = DesktopNativeRenderer.nativeCreateSurfaceAnchorWindow(side, side)
+            assertTrue("the renderer did not create its anchor", windowHandle != 0L)
             sessionHandle = DesktopNativeRenderer.nativeCreateSession(
-                windowHandle, canvas.width, canvas.height,
+                windowHandle, side, side,
                 1_000, 3_500, 1.0,
                 roots!!.shaderRoot.toString(), roots.textureRoot.toString()
             )
@@ -201,8 +181,6 @@ class DesktopSimulationGatewayIntegrationTest {
         } finally {
             if (sessionHandle != 0L) DesktopNativeRenderer.nativeStopSession(sessionHandle)
             if (windowHandle != 0L) DesktopNativeRenderer.nativeDestroyWindow(windowHandle)
-            frame.isVisible = false
-            frame.dispose()
         }
     }
 
@@ -218,7 +196,5 @@ class DesktopSimulationGatewayIntegrationTest {
         gateway.close()
     }
 
-    private companion object {
-        private fun handleOf(component: Component): Long = nativeWindowHandleOf(component)
-    }
 }
+

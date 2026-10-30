@@ -202,13 +202,27 @@ void appendTimingDistribution(std::ostringstream& stream,
 }
 
 std::size_t offscreenTargetIndex(OffscreenRenderTarget target) noexcept {
-    return target == OffscreenRenderTarget::GenomePreview ? 0U : 1U;
+    switch (target) {
+    case OffscreenRenderTarget::GenomePreview:
+        return 0U;
+    case OffscreenRenderTarget::SubstratePreview:
+        return 1U;
+    case OffscreenRenderTarget::LiveFrame:
+        break;
+    }
+    return 2U;
 }
 
 const char* offscreenTargetName(OffscreenRenderTarget target) noexcept {
-    return target == OffscreenRenderTarget::GenomePreview
-            ? "Genome Preview"
-            : "Substrate Preview";
+    switch (target) {
+    case OffscreenRenderTarget::GenomePreview:
+        return "Genome Preview";
+    case OffscreenRenderTarget::SubstratePreview:
+        return "Substrate Preview";
+    case OffscreenRenderTarget::LiveFrame:
+        break;
+    }
+    return "Live Frame";
 }
 
 struct alignas(16) BackgroundUniformData final {
@@ -844,7 +858,7 @@ struct VulkanClearFrameSession::Impl final {
     std::vector<VulkanFramebuffer> framebuffers;
     VulkanRenderPass offscreenRenderPass;
     VulkanPipeline offscreenBackgroundPipeline;
-    std::array<OffscreenTargetResources, 2> offscreenTargets;
+    std::array<OffscreenTargetResources, 3> offscreenTargets;
     std::optional<OffscreenRenderTarget> activeOffscreenTarget;
     // Present completion is associated with a swapchain image, not with the
     // frame slot that happened to render it. Reacquiring that image proves its
@@ -2215,11 +2229,26 @@ struct VulkanClearFrameSession::Impl final {
         candidate.framebuffer = VulkanFramebuffer(
                 deviceContext, framebuffer);
 
+        // The memory this reads back through is asked for as *cached*, not merely visible.
+        //
+        // That single preference is the difference between a live frame that keeps up and one
+        // that does not, and it was found by measuring: the cost of a frame grew exactly with
+        // its number of pixels -- 1.6 ms at 320x200, 5.9 at 640x400, 15.4 at 1280x800, 34.1 at
+        // 1920x1200 -- which is the shape of a bandwidth limit, and the bandwidth came out at
+        // about 270 MB/s. That is write-combined memory being read by the processor: fast to
+        // write from the device, and punishing to read afterwards, which is what a buffer that
+        // is only HOST_VISIBLE|HOST_COHERENT usually gets. Cached memory costs one invalidate
+        // before it is read (the callers already do it) and reads at memory speed.
+        //
+        // Coherent stays preferred because it costs nothing when it is granted, and the
+        // invalidate is harmless when it is. The device may still refuse both preferences --
+        // they are preferences -- and then this is exactly what it was before.
         result = VulkanBuffer::create(deviceContext, readbackBytes,
                 VK_BUFFER_USAGE_TRANSFER_DST_BIT,
                 VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
-                VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, true,
-                candidate.readbackBuffer);
+                VK_MEMORY_PROPERTY_HOST_COHERENT_BIT
+                        | VK_MEMORY_PROPERTY_HOST_CACHED_BIT,
+                true, candidate.readbackBuffer);
         if (result != VK_SUCCESS) {
             setFailure("create off-screen readback buffer", result);
             return false;
@@ -3071,24 +3100,32 @@ struct VulkanClearFrameSession::Impl final {
 
     [[nodiscard]] ClearFrameResult renderPreparedFrameOffscreen(
             const PreparedRenderFrameView& preparedFrame,
-            const RenderPresentationState& presentation) {
-        if (!offscreenCaptureActive(
-                    OffscreenRenderTarget::SubstratePreview)) {
-            setFailure("A substrate frame was submitted to the wrong off-screen target");
+            const RenderPresentationState& presentation,
+            const cellularity::microscope::MicroscopeDebugHudTelemetry*
+                    debugHudTelemetry) {
+        // Whichever off-screen target is active owns this frame. Both the
+        // Substrate Preview and the Live Frame are recorded by exactly the same
+        // command, into exactly the same kind of storage, with two different
+        // lifetimes: one is a saved document's picture, the other is what a host
+        // draws on screen right now. Anything but a target that was begun for
+        // this frame is a caller fault and is reported as one.
+        if (!activeOffscreenTarget.has_value()) {
+            setFailure("A microscope frame was submitted with no off-screen target active");
             return ClearFrameResult::Failed;
         }
-        OffscreenTargetResources& target = offscreenTarget(
-                OffscreenRenderTarget::SubstratePreview);
+        const OffscreenRenderTarget activeTarget = *activeOffscreenTarget;
+        OffscreenTargetResources& target = offscreenTarget(activeTarget);
         target.rendered = false;
         if (!target.matches(presentation.viewport.surfaceWidth,
                     presentation.viewport.surfaceHeight)) {
-            setFailure("Substrate preview dimensions do not match its off-screen target");
+            setFailure(std::string(offscreenTargetName(activeTarget))
+                    + " dimensions do not match its off-screen target");
             return ClearFrameResult::Failed;
         }
 
         FrameResources& frame = frames[currentFrame];
         if (!waitForFrameCompletion(
-                    frame, "vkWaitForFences(off-screen substrate preview)")) {
+                    frame, "vkWaitForFences(off-screen frame)")) {
             return ClearFrameResult::Failed;
         }
         if (basicCellRenderer.needsGeometryUpload(preparedFrame)) {
@@ -3118,8 +3155,7 @@ struct VulkanClearFrameSession::Impl final {
         VkResult result = vkResetCommandBuffer(
                 frame.commandBuffer.get(), 0);
         if (result != VK_SUCCESS) {
-            setFailure("vkResetCommandBuffer(off-screen substrate preview)",
-                    result);
+            setFailure("vkResetCommandBuffer(off-screen frame)", result);
             return ClearFrameResult::Failed;
         }
         const RenderDestination destination{
@@ -3131,8 +3167,30 @@ struct VulkanClearFrameSession::Impl final {
                 VulkanPipelineTarget::Offscreen,
                 &target,
         };
+        // The performance HUD is drawn by the renderer itself and is part of this
+        // image, because it describes the image: it counts the frames this very
+        // session presented, and a host that drew its own version of it would be
+        // counting something else. Everything else a host draws over this image --
+        // the microscope HUD, panels, dialogs -- belongs to that host's own UI,
+        // exactly as it does on the platform whose compositor draws the surface
+        // below the application, and is laid out over these pixels rather than
+        // into them.
+        bool drawText = false;
+        if (debugHudTelemetry != nullptr) {
+            const cellularity::render::PixelTextRenderer& textGeometry =
+                    debugHud.prepareGeometry(static_cast<int>(target.width),
+                            static_cast<int>(target.height),
+                            *debugHudTelemetry);
+            std::string textGeometryError;
+            if (!basicCellRenderer.uploadTextGeometry(textGeometry,
+                        completedSubmissionSerial, textGeometryError)) {
+                setFailure(std::move(textGeometryError));
+                return ClearFrameResult::Failed;
+            }
+            drawText = true;
+        }
         if (!recordPreparedFrameCommand(frame, currentFrame,
-                    backgroundDynamicOffset, cellDynamicOffset, false,
+                    backgroundDynamicOffset, cellDynamicOffset, drawText,
                     destination)) {
             return ClearFrameResult::Failed;
         }
@@ -3140,7 +3198,7 @@ struct VulkanClearFrameSession::Impl final {
         const VkFence inFlightFence = frame.inFlight.get();
         result = vkResetFences(device, 1, &inFlightFence);
         if (result != VK_SUCCESS) {
-            setFailure("vkResetFences(off-screen substrate preview)", result);
+            setFailure("vkResetFences(off-screen frame)", result);
             return ClearFrameResult::Failed;
         }
         const VkCommandBuffer commandBuffer = frame.commandBuffer.get();
@@ -3151,7 +3209,7 @@ struct VulkanClearFrameSession::Impl final {
         result = vkQueueSubmit(
                 graphicsQueue, 1, &submitInfo, inFlightFence);
         if (result != VK_SUCCESS) {
-            setFailure("vkQueueSubmit(off-screen substrate preview)", result);
+            setFailure("vkQueueSubmit(off-screen frame)", result);
             return ClearFrameResult::Failed;
         }
         frame.submissionPending = true;
@@ -3161,7 +3219,7 @@ struct VulkanClearFrameSession::Impl final {
         basicCellRenderer.markActiveGeometryUsed(frame.submissionSerial);
         ++resourceCounters->queueSubmissionCount;
         if (!waitForFrameCompletion(frame,
-                    "vkWaitForFences(off-screen substrate readback)")) {
+                    "vkWaitForFences(off-screen readback)")) {
             return ClearFrameResult::Failed;
         }
 
@@ -3205,13 +3263,17 @@ struct VulkanClearFrameSession::Impl final {
             return ClearFrameResult::Failed;
         }
         if (activeOffscreenTarget.has_value()) {
+            // A microscope frame may render into any off-screen target except
+            // the Genome Preview one, which carries its own draw calls and its
+            // own transparency contract and is never what a live session's
+            // frame is aimed at.
             if (*activeOffscreenTarget
-                    != OffscreenRenderTarget::SubstratePreview) {
+                    == OffscreenRenderTarget::GenomePreview) {
                 setFailure("A microscope frame cannot render into the active Genome Preview target");
                 return ClearFrameResult::Failed;
             }
-            return renderPreparedFrameOffscreen(
-                    preparedFrame, presentation);
+            return renderPreparedFrameOffscreen(preparedFrame, presentation,
+                    debugHudTelemetry);
         }
         if (surface == VK_NULL_HANDLE
                 || requestedWidth <= 0 || requestedHeight <= 0) {
@@ -4067,6 +4129,76 @@ struct VulkanClearFrameSession::Impl final {
         if (target == OffscreenRenderTarget::GenomePreview) {
             pendingGenomeFrame.reset();
         }
+    }
+
+    // The direct form of finishOffscreenRgba: the mapped readback buffer is
+    // walked once, straight into the caller's storage at the caller's stride.
+    //
+    // A host that draws the live frame itself owns one buffer for the whole
+    // session, so this path allocates nothing, zero-fills nothing and copies
+    // nothing twice -- which is the difference between a readback that costs a
+    // memcpy per frame and one that costs three.
+    std::size_t finishOffscreenRgbaInto(OffscreenRenderTarget target,
+            int width, int height, std::uint8_t* destination,
+            std::size_t destinationSize, std::size_t rowStride) {
+        if (!checkThread("finishOffscreenRgbaInto")) {
+            throw std::logic_error(error);
+        }
+        if (!offscreenCaptureActive(target)) {
+            throw std::logic_error(
+                    "Off-screen Vulkan target is not active");
+        }
+        OffscreenTargetResources& resources = offscreenTarget(target);
+        if (!resources.rendered) {
+            throw std::logic_error(
+                    "Off-screen Vulkan target has no completed frame");
+        }
+        if (destination == nullptr || width <= 0 || height <= 0) {
+            throw std::invalid_argument(
+                    "Off-screen Vulkan readback needs a destination and an extent");
+        }
+        if (resources.width != width || resources.height != height) {
+            // The caller's extent and the target's extent have to be the same
+            // picture: the projection the frame was recorded with came from the
+            // viewport, which the caller set to the size it asked for.
+            throw std::invalid_argument(
+                    "Off-screen Vulkan readback extent does not match its target");
+        }
+        const std::size_t packedRowBytes =
+                static_cast<std::size_t>(width)
+                * static_cast<std::size_t>(kRgbaChannelCount);
+        const std::size_t heightBytes = static_cast<std::size_t>(height);
+        if (rowStride < packedRowBytes
+                || heightBytes > destinationSize / rowStride) {
+            throw std::length_error(
+                    "Off-screen Vulkan readback destination is too small");
+        }
+        const VkDeviceSize mappedBytes = resources.rowPitch
+                * static_cast<VkDeviceSize>(resources.height);
+        const VkResult result = resources.readbackBuffer.invalidate(
+                0, mappedBytes);
+        if (result != VK_SUCCESS) {
+            setFailure("vkInvalidateMappedMemoryRanges(off-screen readback)",
+                    result);
+            throw std::runtime_error(error);
+        }
+        const auto* mapped = static_cast<const std::uint8_t*>(
+                resources.readbackBuffer.mappedData());
+        if (mapped == nullptr) {
+            setFailure("Off-screen Vulkan readback buffer is not mapped");
+            throw std::runtime_error(error);
+        }
+        for (std::size_t row = 0; row < heightBytes; ++row) {
+            std::memcpy(destination + row * rowStride,
+                    mapped + row * static_cast<std::size_t>(resources.rowPitch),
+                    packedRowBytes);
+        }
+
+        resources.rendered = false;
+        activeOffscreenTarget.reset();
+        ++offscreenCaptureCount;
+        offscreenReadbackBytes += packedRowBytes * heightBytes;
+        return packedRowBytes * heightBytes;
     }
 
     void beginGenomePreviewFrame(
@@ -5164,7 +5296,13 @@ struct VulkanClearFrameSession::Impl final {
         stream << "render_pass=production_microscope_scene_with_overlays\n";
         stream << "offscreen_color_format=VK_FORMAT_R8G8B8A8_UNORM\n";
         stream << "offscreen_output_row_order=top_left\n";
-        stream << "offscreen_readback_only_on_capture=true\n";
+        // A saved document's picture is still the only readback the interactive
+        // window path performs. A host that draws the live frame itself reads
+        // one back per frame as well, into a buffer it owns, which is a
+        // different transaction on a different target -- so the honest statement
+        // is which targets read back, not which occasions do.
+        stream << "offscreen_readback_targets=genome_preview,substrate_preview,live_frame\n";
+        stream << "offscreen_readback_only_on_capture=false\n";
         stream << "offscreen_capture_active="
                << (activeOffscreenTarget.has_value() ? "true" : "false")
                << '\n';
@@ -5172,6 +5310,8 @@ struct VulkanClearFrameSession::Impl final {
                 OffscreenRenderTarget::GenomePreview);
         const OffscreenTargetResources& substrateTarget = offscreenTarget(
                 OffscreenRenderTarget::SubstratePreview);
+        const OffscreenTargetResources& liveTarget = offscreenTarget(
+                OffscreenRenderTarget::LiveFrame);
         stream << "offscreen_genome_extent=" << genomeTarget.width << 'x'
                << genomeTarget.height << '\n';
         stream << "offscreen_genome_row_pitch=" << genomeTarget.rowPitch
@@ -5180,6 +5320,10 @@ struct VulkanClearFrameSession::Impl final {
                << 'x' << substrateTarget.height << '\n';
         stream << "offscreen_substrate_row_pitch="
                << substrateTarget.rowPitch << '\n';
+        stream << "offscreen_live_frame_extent=" << liveTarget.width << 'x'
+               << liveTarget.height << '\n';
+        stream << "offscreen_live_frame_row_pitch=" << liveTarget.rowPitch
+               << '\n';
         stream << "shader_target_environment=vulkan1.0\n";
         stream << "background_push_constant_bytes=0\n";
         stream << "background_uniform_bytes="
@@ -5501,8 +5645,10 @@ RenderFrameResult VulkanClearFrameSession::renderFrame(
 
 RenderPassStatus VulkanClearFrameSession::drawMicroscopeOffscreenPass(
         const PreparedRenderFrameView& frame,
-        const RenderPresentationState& presentation) {
-    return mImpl->renderFrame(frame, presentation, nullptr)
+        const RenderPresentationState& presentation,
+        const cellularity::microscope::MicroscopeDebugHudTelemetry*
+                debugHudTelemetry) {
+    return mImpl->renderFrame(frame, presentation, debugHudTelemetry)
                     == RenderFrameOutcome::Presented
             ? RenderPassStatus::Completed
             : RenderPassStatus::Failed;
@@ -5532,6 +5678,14 @@ std::vector<std::uint8_t>
 VulkanClearFrameSession::finishOffscreenRgba(
         OffscreenRenderTarget target) {
     return mImpl->finishOffscreenRgba(target);
+}
+
+std::size_t VulkanClearFrameSession::finishOffscreenRgbaInto(
+        OffscreenRenderTarget target, int width, int height,
+        std::uint8_t* destination, std::size_t destinationSize,
+        std::size_t rowStride) {
+    return mImpl->finishOffscreenRgbaInto(target, width, height, destination,
+            destinationSize, rowStride);
 }
 
 void VulkanClearFrameSession::cancelOffscreenRgba(

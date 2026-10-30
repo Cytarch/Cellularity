@@ -75,6 +75,7 @@
 #include <chrono>
 #include <cmath>
 #include <cstdint>
+#include <cstring>
 #include <fstream>
 #include <limits>
 #include <memory>
@@ -87,6 +88,18 @@
 #include <vector>
 
 #include "app/NativeCellularityController.h"
+#include "app/NativeRenderSession.h"
+#include "app/genome_preview/GenomeFilePreviewSimulation.h"
+
+namespace {
+// A preview session exists to draw one organism into memory, so its own world only has to be
+// large enough to hold that organism while it is grown. It never simulates a plate.
+constexpr int kGenomePreviewAllocationCells = 64;
+
+// The surface a preview session is anchored to is never presented, so its extent only has to be
+// legal for the backend.
+constexpr int kGenomePreviewAnchorExtent = 16;
+} // namespace
 // microscopeRuntimeSnapshot() returns this by value, so the controller's forward
 // declaration is not enough to read the cell count out of it.
 #include "app/microscope/NativeMicroscopeRuntime.h"
@@ -95,6 +108,9 @@
 #include "core/SimulationWorld.h"
 #include "formats/DecodedWorldValidation.h"
 #include "formats/NativeSubstrateLoader.h"
+#include "formats/SubstrateFileCodec.h"
+#include "formats/GenomeDraftCodec.h"
+#include "io/NativeByteStream.h"
 #include "render/backend/abi/CellularityVulkanBackendAbi.h"
 #include "render/backend/abi/VulkanBackendSession.h"
 #include "render/backend/abi/VulkanRenderSurfaceSessionAdapter.h"
@@ -115,6 +131,11 @@ constexpr jint kStatusFailed = 1;
 // caller bug, while a failed resize or teardown is an environment problem, and a
 // caller that logs both the same way learns nothing.
 constexpr jint kStatusInvalidHandle = 2;
+
+// "There is nothing to draw yet." A frame loop asks for a frame every tick, and
+// between captures there is none; reporting that as a failure would make an idle
+// microscope look like a broken renderer.
+constexpr jint kStatusNoFrameYet = 3;
 
 // Input is queued or it is not. The managed declarations return Int rather than
 // Boolean, so the values are 1 and 0 rather than JNI_TRUE and JNI_FALSE.
@@ -262,6 +283,13 @@ struct DesktopSession final {
 // reader a second ordering to reason about.
 std::mutex gStateMutex;
 std::unordered_set<HWND> gChildWindows;
+
+// Windows this bridge presents into without having created them, registered by
+// nativeAdoptWindow. They are kept apart from the child windows above because every
+// operation that changes a window -- moving it, showing it, destroying it -- belongs to
+// whoever created it, and for these that is the JVM. A window in this set is one this
+// bridge may draw into and resize its own swapchain for, and nothing more.
+std::unordered_set<HWND> gAdoptedWindows;
 std::unordered_map<jlong, std::shared_ptr<DesktopSession>> gSessions;
 jlong gNextSessionHandle = 1;
 
@@ -286,7 +314,29 @@ void registerChildWindow(HWND window) {
         return false;
     }
     std::lock_guard<std::mutex> lock(gStateMutex);
+    return gChildWindows.find(window) != gChildWindows.end()
+            || gAdoptedWindows.find(window) != gAdoptedWindows.end();
+}
+
+// True for a window this bridge created and therefore owns.
+[[nodiscard]] bool isChildWindow(HWND window) {
+    if (window == nullptr) {
+        return false;
+    }
+    std::lock_guard<std::mutex> lock(gStateMutex);
     return gChildWindows.find(window) != gChildWindows.end();
+}
+
+// True for a window this bridge draws into but does not own. Such a window is the JVM's,
+// and every call that would change it -- position, visibility, lifetime -- is refused
+// rather than performed, because the JVM decides those and a bridge that moved a window
+// out from under AWT would be answering a question nobody asked it.
+[[nodiscard]] bool isAdoptedWindow(HWND window) {
+    if (window == nullptr) {
+        return false;
+    }
+    std::lock_guard<std::mutex> lock(gStateMutex);
+    return gAdoptedWindows.find(window) != gAdoptedWindows.end();
 }
 
 [[nodiscard]] std::shared_ptr<DesktopSession> findSessionByWindow(HWND window) {
@@ -424,25 +474,20 @@ void registerChildWindow(HWND window) {
     return true;
 }
 
-// Rounds a native double to the whole number the managed status vector carries, which
-// has one jlong per value. Non-finite values saturate instead of trapping, because this
-// runs on a path whose contract is that nothing throws: a NaN round-tripped into a
-// status readout would otherwise be undefined behaviour rather than a readout.
-[[nodiscard]] jlong roundedToWhole(double value) noexcept {
-    constexpr double kMaximumWhole =
-            static_cast<double>(std::numeric_limits<std::int64_t>::max());
-    constexpr double kMinimumWhole =
-            static_cast<double>(std::numeric_limits<std::int64_t>::min());
-    if (std::isnan(value)) {
-        return 0;
-    }
-    if (value >= kMaximumWhole) {
-        return std::numeric_limits<jlong>::max();
-    }
-    if (value <= kMinimumWhole) {
-        return std::numeric_limits<jlong>::min();
-    }
-    return static_cast<jlong>(std::llround(value));
+// The bit pattern of a double, which is how a fractional value travels through the managed
+// status vector: that vector carries one jlong per value and a jlong cannot hold a fraction.
+//
+// The pattern is transported rather than the value for the same reason Android's bridge does
+// it: the alternative is rounding, and a rounded status line reports a plate of food as empty
+// and a world that has run for an hour as having run for none.
+[[nodiscard]] jlong javaDoubleBits(double value) noexcept {
+    std::uint64_t bits = 0;
+    static_assert(sizeof(bits) == sizeof(value), "a double is the size of its bit pattern");
+    // Copied rather than reinterpreted through a pointer: the copy is defined behaviour in both
+    // languages, and the alternative is the only place in this file where an optimiser could
+    // read something other than what was written.
+    std::memcpy(&bits, &value, sizeof(bits));
+    return static_cast<jlong>(bits);
 }
 
 [[nodiscard]] std::int64_t currentUnixMillis() noexcept {
@@ -564,6 +609,93 @@ Java_com_cytarch_cellularity_desktop_nativebridge_DesktopNativeRenderer_nativeCr
         }
         registerChildWindow(child);
         return handleFromWindow(child);
+    } catch (...) {
+        return 0;
+    }
+}
+
+// Creates the window a Vulkan surface needs, and nothing else.
+//
+// A device is created against a surface, so a session that draws every frame into
+// a buffer the caller owns still needs one window to exist. This is that window,
+// and it is deliberately not a picture: it is never shown, it belongs to no other
+// window, it is placed off every monitor, and nothing ever draws into it. Its
+// only job is to be the HWND that vkCreateWin32SurfaceKHR is given, which is the
+// same role the platform surface plays on the phone -- there the compositor draws
+// it below the application's window; here the application draws the frame itself.
+//
+// Because it is never shown and never activated, it receives no input and no
+// paint, so it needs no message handling and cannot hang the application the way
+// a visible window created by a thread that does not pump messages does. It is
+// owned by this bridge: nativeDestroyWindow destroys it like any other window it
+// created.
+extern "C" JNIEXPORT jlong JNICALL
+Java_com_cytarch_cellularity_desktop_nativebridge_DesktopNativeRenderer_nativeCreateSurfaceAnchorWindow(
+        JNIEnv*, jclass, jint width, jint height) {
+    try {
+        if (width <= 0 || height <= 0) {
+            return 0;
+        }
+        if (!ensureChildWindowClassRegistered()) {
+            return 0;
+        }
+        constexpr int kOffscreenX = -32000;
+        constexpr int kOffscreenY = -32000;
+        const HWND anchor = ::CreateWindowExW(WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE,
+                kChildWindowClassName, L"", WS_POPUP, kOffscreenX, kOffscreenY,
+                width, height, nullptr, nullptr, moduleInstance(), nullptr);
+        if (anchor == nullptr) {
+            return 0;
+        }
+        registerChildWindow(anchor);
+        return handleFromWindow(anchor);
+    } catch (...) {
+        return 0;
+    }
+}
+
+// Takes a window the caller already owns as the surface this bridge presents into, and
+// returns its handle. Nothing is created: the window is the caller's, and this only
+// records that the bridge may draw into it.
+//
+// This exists because of the one property of Win32 that no amount of care on the managed
+// side can work around: a window receives its messages on the thread that created it, and
+// only that thread. A window created by the render loop -- a loop that draws frames and
+// sleeps -- belongs to a queue nobody reads, and Windows eventually answers for it by
+// marking the whole application as not responding; the picture keeps coming because the
+// loop is still turning, while the interface stops accepting anything at all.
+//
+// Moving the creation to the event thread was tried and is not the answer, because the
+// AWT event thread does not pump either: the toolkit's message pump runs on a thread of
+// its own (WToolkit.eventLoop), and the event thread waits on a Java condition for work
+// to arrive from it. A window created there is a window whose messages are still never
+// dispatched, which is measured rather than reasoned: WM_NULL sent to such a window
+// times out after four seconds while the same message to any AWT window returns in none.
+//
+// So the surface is not given a window of its own at all. It is given the heavyweight
+// canvas the interface already put on the screen -- a window the toolkit created on the
+// thread that pumps it, hit-tests it and resizes it. Input then arrives as ordinary AWT
+// events, resizing is an AWT layout operation, and hiding the picture is the composition
+// taking the canvas out of its layout, which needs no window call from any thread.
+extern "C" JNIEXPORT jlong JNICALL
+Java_com_cytarch_cellularity_desktop_nativebridge_DesktopNativeRenderer_nativeAdoptWindow(
+        JNIEnv*, jclass, jlong ownerHwnd) {
+    try {
+        const HWND window = windowFromHandle(ownerHwnd);
+        if (window == nullptr || ::IsWindow(window) == 0) {
+            return 0;
+        }
+        // A window this bridge created is already registered and already its own; taking
+        // it through this path as well would make the two sets disagree about who may
+        // destroy it.
+        if (isChildWindow(window)) {
+            return handleFromWindow(window);
+        }
+        {
+            std::lock_guard<std::mutex> lock(gStateMutex);
+            gAdoptedWindows.insert(window);
+        }
+        return handleFromWindow(window);
     } catch (...) {
         return 0;
     }
@@ -699,6 +831,13 @@ Java_com_cytarch_cellularity_desktop_nativebridge_DesktopNativeRenderer_nativeSh
         const HWND window = windowFromHandle(windowHandle);
         if (!isBridgeWindow(window)) {
             return kStatusInvalidHandle;
+        }
+        // An adopted window is shown and hidden by the composition that lays it out, which
+        // does it by giving the canvas no extent at all. There is nothing to do here, and
+        // doing something -- hiding a window AWT believes is visible -- would leave the
+        // toolkit's idea of the component and Win32's idea of its window disagreeing.
+        if (isAdoptedWindow(window)) {
+            return kStatusOk;
         }
         if (::ShowWindow(window, visible != 0 ? SW_SHOWNA : SW_HIDE) == 0) {
             // ShowWindow reports the previous visibility rather than success, so a zero here
@@ -1016,6 +1155,15 @@ Java_com_cytarch_cellularity_desktop_nativebridge_DesktopNativeRenderer_nativeWi
                 return 0;
             }
         }
+        // Adopted windows are asked about the same way and for the same reason: a point
+        // inside the application but not on the surface has to read as "elsewhere in this
+        // application", whether the surface is a window this bridge made or the canvas the
+        // interface lent it.
+        for (const HWND window : gAdoptedWindows) {
+            if (::IsWindow(window) != 0 && ::GetAncestor(window, GA_ROOT) == top) {
+                return 0;
+            }
+        }
         return -1;
     } catch (...) {
         return -1;
@@ -1094,9 +1242,15 @@ Java_com_cytarch_cellularity_desktop_nativebridge_DesktopNativeRenderer_nativeRe
         if (width <= 0 || height <= 0) {
             return kStatusFailed;
         }
-        if (::SetWindowPos(window, nullptr, 0, 0, width, height,
-                    SWP_NOZORDER | SWP_NOACTIVATE)
-                == 0) {
+        // The window is only resized when this bridge created it. An adopted window is laid
+        // out by AWT, and AWT has already put it at this size -- the caller is reporting what
+        // the layout did, not asking for it. Resizing it here would be a second authority on
+        // the same rectangle, and the two would disagree for as long as it took the next
+        // layout pass to correct it.
+        if (!isAdoptedWindow(window)
+                && ::SetWindowPos(window, nullptr, 0, 0, width, height,
+                            SWP_NOZORDER | SWP_NOACTIVATE)
+                        == 0) {
             return kStatusFailed;
         }
         // Placed at the parent's client origin here, which is only correct while nothing else
@@ -1142,6 +1296,13 @@ Java_com_cytarch_cellularity_desktop_nativebridge_DesktopNativeRenderer_nativeSe
         if (width <= 0 || height <= 0) {
             return kStatusFailed;
         }
+        // Placing a window is the one thing an adopted window may never be asked for: it is
+        // where the interface put it, which is the whole reason it was adopted. The refusal is
+        // explicit so a caller that still believes it must place the surface finds out here
+        // rather than by watching the picture sit somewhere the layout never chose.
+        if (isAdoptedWindow(window)) {
+            return kStatusFailed;
+        }
         // The offset is taken as already being relative to the parent's client area, and the
         // screen coordinates in the signature are only a cross-check. Converting from the
         // desktop's space was tried first and was wrong in a way worth recording: the managed
@@ -1185,9 +1346,10 @@ Java_com_cytarch_cellularity_desktop_nativebridge_DesktopNativeRenderer_nativeDe
         if (window == nullptr) {
             return kStatusOk;
         }
+        const bool adopted = isAdoptedWindow(window);
         {
             std::lock_guard<std::mutex> lock(gStateMutex);
-            if (gChildWindows.find(window) == gChildWindows.end()) {
+            if (!adopted && gChildWindows.find(window) == gChildWindows.end()) {
                 return kStatusInvalidHandle;
             }
             // A session's window member is fixed once the session is published, so
@@ -1197,6 +1359,15 @@ Java_com_cytarch_cellularity_desktop_nativebridge_DesktopNativeRenderer_nativeDe
                     return kStatusFailed;
                 }
             }
+        }
+        if (adopted) {
+            // Forgetting the window is the whole of this bridge's part in its lifetime: it
+            // is AWT's window and AWT will destroy it. Destroying it here would take a
+            // component the interface still owns out from under the toolkit, which is a
+            // crash in the middle of an unrelated repaint rather than a visible mistake.
+            std::lock_guard<std::mutex> lock(gStateMutex);
+            gAdoptedWindows.erase(window);
+            return kStatusOk;
         }
         // DestroyWindow is called outside the registry lock: it dispatches messages,
         // and a window procedure that ever reached back into the registry would
@@ -1424,6 +1595,415 @@ Java_com_cytarch_cellularity_desktop_nativebridge_DesktopNativeRenderer_nativeCr
             dishRadius, shaderRoot, textureRoot, substratePath);
 }
 
+// Says why a stored plate cannot be opened, or null when it can.
+//
+// Opening a plate answers with a handle or with nothing, and "nothing" is all the caller ever
+// learned: the decoder's own complaint was an exception thrown inside the bridge and dropped there,
+// so a plate from a newer build, a truncated file or a file that is not a plate at all all looked
+// the same, and the person was told the simulation could not be opened without being told anything
+// about the file they had just chosen. The complaint is the useful half.
+//
+// The phone has the same validation and reports it the same way -- as a failure the interface can
+// show -- because a plate that cannot be opened is a normal outcome of choosing a file, not an
+// internal fault. The allocation is passed for the same reason it is passed when opening: the
+// decoder needs a fallback for a file that predates recording its own, and a validation run with a
+// different fallback would answer a different question than the open would.
+extern "C" JNIEXPORT jstring JNICALL
+Java_com_cytarch_cellularity_desktop_nativebridge_DesktopNativeRenderer_nativeDescribeSubstrateProblem(
+        JNIEnv* env, jclass, jstring substratePath, jint maxCellCount, jint maxFoodCount,
+        jdouble dishRadius) {
+    if (substratePath == nullptr) {
+        return nullptr;
+    }
+    try {
+        std::string pathValue;
+        if (!readUtf8String(env, substratePath, pathValue) || pathValue.empty()) {
+            return env->NewStringUTF("No plate was named");
+        }
+        Environment environment = Environment::constructDefaultEnvironment(
+                maxCellCount, maxFoodCount, dishRadius);
+        environment.addRandom = true;
+        cellularity::snapshot_codec::validateEnvironmentForAllocation(environment);
+        validateNativeSubstratePath(pathValue, /*previewMode=*/false, environment);
+        return nullptr;
+    } catch (const std::exception& failure) {
+        return env->NewStringUTF(failure.what());
+    } catch (...) {
+        return env->NewStringUTF("The plate could not be read for an unknown reason");
+    }
+}
+
+// Writes the plate the session is showing into `substratePath`, and prepares its preview frame.
+//
+// This is the phone's own save entry point, and it is deliberately the same call: on Android the
+// write goes through the microscope owner -- which is where the world is -- so the file is written
+// from the world that is being edited rather than from a copy the interface happens to hold. The
+// desktop session runs the same owner, so the same call means the same thing here.
+//
+// Answers two questions that must not be collapsed into one: whether the plate was written, and
+// whether there is a picture to go with it. A null return means the file is on disk, and
+// outToken[0] then holds the prepared preview frame's token -- or zero when the plate was written
+// without a picture, which is a complete plate and not a failed save. A returned sentence means the
+// file is not there, and it is the decoder's or the writer's own complaint rather than a code,
+// because the person is owed the reason their plate was not saved.
+//
+// The preview frame token is one-shot: the caller captures it with nativeCaptureSubstratePreview
+// and gives it back with nativeDiscardSubstratePreview, and both must happen on the session's own
+// thread.
+extern "C" JNIEXPORT jstring JNICALL
+Java_com_cytarch_cellularity_desktop_nativebridge_DesktopNativeRenderer_nativeSaveSubstrate(
+        JNIEnv* env, jclass, jlong sessionHandle, jstring substratePath,
+        jlongArray outToken) {
+    if (substratePath == nullptr || outToken == nullptr
+            || env->GetArrayLength(outToken) < 1) {
+        return env->NewStringUTF("The plate was not named or no place was given for it");
+    }
+    const std::shared_ptr<DesktopSession> session = findSession(sessionHandle);
+    if (!session) {
+        return env->NewStringUTF("The plate's session is not one of ours");
+    }
+    std::string pathValue;
+    if (!readUtf8String(env, substratePath, pathValue) || pathValue.empty()) {
+        return env->NewStringUTF("The plate was not named");
+    }
+    try {
+        const std::shared_ptr<NativeCellularityController> controller =
+                liveController(session);
+        if (!controller) {
+            return env->NewStringUTF("The plate's simulation is no longer running");
+        }
+        const std::uint64_t token =
+                controller->writeSubstratePathAndPreparePreview(pathValue);
+        const jlong written[1] = {static_cast<jlong>(token)};
+        env->SetLongArrayRegion(outToken, 0, 1, written);
+        return nullptr;
+    } catch (const std::exception& failure) {
+        return env->NewStringUTF(failure.what());
+    } catch (...) {
+        return env->NewStringUTF("The plate could not be written for an unknown reason");
+    }
+}
+
+// The side of a substrate preview picture, in pixels.
+//
+// A plate's preview is square and its side is fixed by the container's own policy, so the caller
+// needs it to size the memory it hands over rather than guessing a number the format would then
+// have to agree with. It is a property of the format, not of a session, which is why it takes no
+// handle.
+extern "C" JNIEXPORT jint JNICALL
+Java_com_cytarch_cellularity_desktop_nativebridge_DesktopNativeRenderer_nativeSubstratePreviewPixels(
+        JNIEnv*, jclass) {
+    return static_cast<jint>(NativeRenderSession::SUBSTRATE_PREVIEW_PIXELS);
+}
+
+// Draws the prepared substrate preview [token] into [destination], once.
+//
+// The picture is nativeSubstratePreviewPixels() square, tightly packed RGBA8 with [rowStride] bytes
+// to a row. It is drawn by the renderer and therefore must be asked for from the thread that owns
+// the session -- the same thread that draws frames -- which is why the request travels through the
+// surface rather than being made from the interface.
+//
+// Returns 0 when the picture was drawn, 1 when the renderer refused the frame, 2 when the handle or
+// the arguments are not usable, and 3 when there was nothing left to capture -- the token was
+// already consumed by an earlier capture, or was never a preview token at all. The last case is an
+// answer about the plate, not a fault: a plate may be saved without a preview.
+[[nodiscard]] jint captureSubstratePreviewInto(
+        jlong sessionHandle,
+        jlong token,
+        std::uint8_t* destination,
+        jint rowStride) {
+    const auto side = static_cast<jint>(NativeRenderSession::SUBSTRATE_PREVIEW_PIXELS);
+    if (destination == nullptr || token == 0 || rowStride < side * 4) {
+        return kStatusInvalidHandle;
+    }
+    const std::shared_ptr<DesktopSession> session = findSession(sessionHandle);
+    if (!session) {
+        return kStatusInvalidHandle;
+    }
+    try {
+        const std::shared_ptr<NativeCellularityController> controller =
+                liveController(session);
+        if (!controller) {
+            return kStatusInvalidHandle;
+        }
+        const std::vector<std::uint8_t> rgba =
+                controller->captureSubstratePreviewRgba(static_cast<std::uint64_t>(token));
+        if (rgba.empty()) {
+            return kStatusNoFrameYet;
+        }
+        const std::size_t bytesPerRow = static_cast<std::size_t>(side) * 4U;
+        if (rgba.size() < bytesPerRow * static_cast<std::size_t>(side)) {
+            return kStatusFailed;
+        }
+        for (jint row = 0; row < side; ++row) {
+            std::memcpy(destination + static_cast<std::size_t>(row)
+                            * static_cast<std::size_t>(rowStride),
+                    rgba.data() + static_cast<std::size_t>(row) * bytesPerRow,
+                    bytesPerRow);
+        }
+        return kStatusOk;
+    } catch (...) {
+        // The frame is consumed either way: the renderer takes it out of its slot before drawing.
+        return kStatusFailed;
+    }
+}
+
+// The same picture into memory the caller holds, which is how the surface takes it: the buffer
+// lives in the drawing loop and does not have to be found through the module system.
+extern "C" JNIEXPORT jint JNICALL
+Java_com_cytarch_cellularity_desktop_nativebridge_DesktopNativeRenderer_nativeCaptureSubstratePreviewIntoAddress(
+        JNIEnv*, jclass, jlong sessionHandle, jlong token, jlong address,
+        jint rowStride) {
+    if (address == 0) {
+        return kStatusInvalidHandle;
+    }
+    return captureSubstratePreviewInto(sessionHandle, token,
+            reinterpret_cast<std::uint8_t*>(address), rowStride);
+}
+
+// The same picture into a direct java.nio.ByteBuffer, which is the form a test can hold without
+// asking the module system for the address of its memory.
+extern "C" JNIEXPORT jint JNICALL
+Java_com_cytarch_cellularity_desktop_nativebridge_DesktopNativeRenderer_nativeCaptureSubstratePreview(
+        JNIEnv* env, jclass, jlong sessionHandle, jlong token, jobject pixelBuffer,
+        jint rowStride) {
+    if (pixelBuffer == nullptr) {
+        return kStatusInvalidHandle;
+    }
+    auto* destination = static_cast<std::uint8_t*>(
+            env->GetDirectBufferAddress(pixelBuffer));
+    const jlong capacity = env->GetDirectBufferCapacity(pixelBuffer);
+    const jlong required =
+            static_cast<jlong>(NativeRenderSession::SUBSTRATE_PREVIEW_PIXELS)
+            * static_cast<jlong>(NativeRenderSession::SUBSTRATE_PREVIEW_PIXELS) * 4;
+    if (destination == nullptr || capacity < required) {
+        return kStatusInvalidHandle;
+    }
+    return captureSubstratePreviewInto(sessionHandle, token, destination, rowStride);
+}
+
+// Attaches an encoded preview to a plate that was just written.
+//
+// The container's policy for a plate's picture is WebP lossy, and the attachment is what the phone
+// does with the picture it encodes -- so the payload must be that same WebP, and a payload that is
+// not one is refused by the format rather than stored as something a reader would then fail on.
+// The call names the file rather than a session because the file is a temporary path the caller
+// owns, exactly as on Android: what is being written is not yet a plate in the collection.
+//
+// It takes no handle: attaching a picture to a file has nothing to do with a running world. A
+// failure to attach does not fail the save, and that is deliberate -- the plate itself is already
+// written -- so it is reported only when the caller asks the file afterwards.
+extern "C" JNIEXPORT void JNICALL
+Java_com_cytarch_cellularity_desktop_nativebridge_DesktopNativeRenderer_nativeAttachSubstratePreview(
+        JNIEnv* env, jclass, jstring substratePath, jbyteArray webpBytes) {
+    if (substratePath == nullptr || webpBytes == nullptr) {
+        return;
+    }
+    std::string pathValue;
+    if (!readUtf8String(env, substratePath, pathValue) || pathValue.empty()) {
+        return;
+    }
+    const jsize length = env->GetArrayLength(webpBytes);
+    if (length <= 0) {
+        return;
+    }
+    std::vector<std::uint8_t> payload(static_cast<std::size_t>(length));
+    env->GetByteArrayRegion(webpBytes, 0, length,
+            reinterpret_cast<jbyte*>(payload.data()));
+    if (env->ExceptionCheck() == JNI_TRUE) {
+        return;
+    }
+    try {
+        attachSubstratePreviewPath(pathValue, payload);
+    } catch (...) {
+        // Reported by the file, not by this call: see above.
+    }
+}
+
+// Gives back a prepared preview frame that will not be used.
+//
+// A frame the renderer prepared holds the world it was taken from until it is drawn or discarded,
+// so a save that decides not to attach a picture -- because the encoder refused it, or because the
+// plate is being written by a path that has no picture -- must hand the frame back rather than
+// leave it in the renderer's one slot.
+extern "C" JNIEXPORT void JNICALL
+Java_com_cytarch_cellularity_desktop_nativebridge_DesktopNativeRenderer_nativeDiscardSubstratePreview(
+        JNIEnv*, jclass, jlong sessionHandle, jlong token) {
+    if (token == 0) {
+        return;
+    }
+    const std::shared_ptr<DesktopSession> session = findSession(sessionHandle);
+    if (!session) {
+        return;
+    }
+    try {
+        const std::shared_ptr<NativeCellularityController> controller =
+                liveController(session);
+        if (!controller) {
+            return;
+        }
+        controller->discardSubstratePreviewFrame(static_cast<std::uint64_t>(token));
+    } catch (...) {
+        // Discarding is best effort: the frame is dead either way, and a plate that was written
+        // must not be reported as unsaved because cleaning up after it failed.
+    }
+}
+
+// The plate's own description, as the container records it.
+//
+// The collection shows a plate by what is inside it -- how many cells, how long it has been
+// running, how much food is left -- and none of that is in the file's header: it is in the
+// metadata block and the body, which only the release codec can read. The desktop adapter used to
+// report nothing rather than guess, which is honest but useless: the freezer showed zero cells for
+// a plate holding thousands. This is the same inspection the phone's list uses, in the same
+// versioned form, so both platforms describe a file the same way.
+//
+// The allocation is passed because a plate written before it recorded its own needs a fallback,
+// exactly as when opening one. Null means the file could not be described at all -- which the
+// caller can explain by asking nativeDescribeSubstrateProblem.
+extern "C" JNIEXPORT jbyteArray JNICALL
+Java_com_cytarch_cellularity_desktop_nativebridge_DesktopNativeRenderer_nativeInspectSubstrate(
+        JNIEnv* env, jclass, jstring substratePath, jint maxCellCount, jint maxFoodCount,
+        jdouble dishRadius) {
+    if (substratePath == nullptr) {
+        return nullptr;
+    }
+    std::string pathValue;
+    if (!readUtf8String(env, substratePath, pathValue) || pathValue.empty()) {
+        return nullptr;
+    }
+    try {
+        Environment environment = Environment::constructDefaultEnvironment(
+                maxCellCount, maxFoodCount, dishRadius);
+        environment.addRandom = true;
+        cellularity::snapshot_codec::validateEnvironmentForAllocation(environment);
+        const NativeSubstrateInspection inspection =
+                inspectSubstratePath(pathValue, /*previewMode=*/false, environment);
+        const std::vector<std::uint8_t> snapshot =
+                writeSubstrateInspectionSnapshot(inspection);
+        jbyteArray result = env->NewByteArray(
+                static_cast<jsize>(snapshot.size()));
+        if (result == nullptr) {
+            return nullptr;
+        }
+        env->SetByteArrayRegion(result, 0, static_cast<jsize>(snapshot.size()),
+                reinterpret_cast<const jbyte*>(snapshot.data()));
+        return result;
+    } catch (...) {
+        return nullptr;
+    }
+}
+
+// The picture a plate carries, as the file stores it.
+//
+// The bytes are the container's own encoded preview -- WebP for a plate -- so what the caller gets
+// is what a reader of the file gets, not a re-encoding of it. Null or empty means the plate has no
+// picture, which is a normal state and not a failure: a plate saved without one, or written by a
+// build that had no encoder, is still a plate.
+extern "C" JNIEXPORT jbyteArray JNICALL
+Java_com_cytarch_cellularity_desktop_nativebridge_DesktopNativeRenderer_nativeReadSubstratePreview(
+        JNIEnv* env, jclass, jstring substratePath) {
+    if (substratePath == nullptr) {
+        return nullptr;
+    }
+    std::string pathValue;
+    if (!readUtf8String(env, substratePath, pathValue) || pathValue.empty()) {
+        return nullptr;
+    }
+    try {
+        const std::vector<std::uint8_t> preview = readSubstratePreviewPath(pathValue);
+        if (preview.empty()) {
+            return nullptr;
+        }
+        jbyteArray result = env->NewByteArray(static_cast<jsize>(preview.size()));
+        if (result == nullptr) {
+            return nullptr;
+        }
+        env->SetByteArrayRegion(result, 0, static_cast<jsize>(preview.size()),
+                reinterpret_cast<const jbyte*>(preview.data()));
+        return result;
+    } catch (...) {
+        return nullptr;
+    }
+}
+
+// Creates a session that owns a renderer and no window at all.
+//
+// The genome preview draws into memory rather than onto a surface, so it needs a device and not
+// a window: a hidden window stood up to satisfy a Vulkan requirement would be a surface nobody
+// presents to, and the whole point of the preview is that it has no surface to present. The
+// session this returns is therefore the same session every other entry point takes, minus the
+// window it never needed.
+//
+// It also does not start the microscope runtime. A preview is drawn from a world built on the
+// spot from the genome it is given and is drawn synchronously, so there is nothing for a
+// simulation thread to step and nothing to publish.
+//
+// The world it holds is a preview world and not a plate's: the phone's preview controller is
+// created in preview mode against the preview environment, and a desktop preview grown in the
+// microscope's medium -- with food in it, and the plate's own fields -- would be a picture of
+// something the phone never shows. Same mode, same environment, same picture.
+//
+// Returns an opaque handle, or 0 if the renderer could not be created.
+extern "C" JNIEXPORT jlong JNICALL
+Java_com_cytarch_cellularity_desktop_nativebridge_DesktopNativeRenderer_nativeCreateGenomePreviewSession(
+        JNIEnv* env, jclass, jlong windowHandle, jstring shaderRoot, jstring textureRoot) {
+    try {
+        // An anchor, not a window anyone looks at: the backend stands its device up against a
+        // surface, and a preview that has none draws nothing at all. The caller passes the anchor
+        // the rest of the application already has, so this costs no window of its own.
+        const HWND window = windowFromHandle(windowHandle);
+        if (!isBridgeWindow(window)) {
+            return 0;
+        }
+        std::string shaderRootValue;
+        std::string textureRootValue;
+        if (!readUtf8String(env, shaderRoot, shaderRootValue)
+                || !readUtf8String(env, textureRoot, textureRootValue)) {
+            return 0;
+        }
+        const CellularityVulkanSurfaceApiV1* backendApi =
+                cellularity_vulkan_get_surface_api_v1();
+        if (backendApi == nullptr) {
+            return 0;
+        }
+        std::shared_ptr<VulkanBackendSession> session =
+                VulkanBackendSession::create(backendApi,
+                        VulkanBackendAssetSource::fromFilesystem(
+                                std::move(shaderRootValue),
+                                std::move(textureRootValue)));
+        if (session == nullptr) {
+            return 0;
+        }
+        if (session->attachWindow(window, kGenomePreviewAnchorExtent,
+                    kGenomePreviewAnchorExtent)
+                != CELLULARITY_VULKAN_OPERATION_OK_V1) {
+            (void)session->detachSurface();
+            session->closeOnOwnerThread();
+            return 0;
+        }
+        Environment environment = Environment::setupPreviewSimulationEnvironment(
+                kGenomePreviewAllocationCells);
+        environment.addRandom = false;
+        cellularity::snapshot_codec::validateEnvironmentForAllocation(environment);
+        auto controller = std::make_shared<NativeCellularityController>(
+                true, environment);
+        controller->installRenderSurfaceSession(
+                std::make_unique<cellularity::render::abi::
+                                VulkanRenderSurfaceSessionAdapter>(session));
+
+        auto handle = std::make_shared<DesktopSession>();
+        handle->session = std::move(session);
+        handle->controller = std::move(controller);
+        std::lock_guard<std::mutex> lock(gStateMutex);
+        const jlong key = gNextSessionHandle++;
+        gSessions.emplace(key, handle);
+        return key;
+    } catch (...) {
+        return 0;
+    }
+}
+
 // Draws the newest frame the simulation has published. Returns 0 when the outcome is
 // a frame the caller should simply try again from (Presented, Deferred,
 // SwapchainRecreated, SkippedNotReady), 1 when it is Failed or SurfaceLost, and 2
@@ -1479,6 +2059,136 @@ Java_com_cytarch_cellularity_desktop_nativebridge_DesktopNativeRenderer_nativeRe
     } catch (...) {
         return kStatusFailed;
     }
+}
+
+// Draws the newest frame the simulation has published into a buffer the caller
+// owns, as tightly packed top-left RGBA8 at the caller's row stride.
+//
+// This is the entry point a host uses when it draws the world itself instead of
+// letting a window present it: the frame becomes one layer of that host's own
+// scene, which is the only way the world can sit *below* the rest of the
+// interface rather than in front of or behind the whole of it. A swapchain on a
+// second window cannot do that, because a window is a sibling of the interface's
+// surface and not a layer inside it.
+//
+// The buffer must be a direct java.nio.ByteBuffer of at least rowStride * height
+// bytes, and it stays the caller's property: nothing here allocates per frame,
+// and the pixels land in it once. Returns 0 when a frame was written, 1 when the
+// backend refused it, 2 when the handle or the arguments are not usable, and 3
+// when there is simply nothing to draw yet -- which is an idle state and not a
+// fault, and leaves the caller's previous picture untouched.
+namespace {
+
+// Draws the newest published frame into memory the caller owns.
+//
+// One implementation for both entry points, because a buffer the JVM handed us and a buffer
+// the JVM told us the address of are the same thing to the renderer: the only difference is
+// where the pointer came from, and neither is allowed to make the other behave differently.
+jint drawFrameIntoCallerMemory(const std::shared_ptr<DesktopSession>& session,
+        void* address, std::size_t bytes, int width, int height,
+        std::size_t rowStride) noexcept {
+    if (address == nullptr || width <= 0 || height <= 0) {
+        return kStatusInvalidHandle;
+    }
+    if (rowStride < static_cast<std::size_t>(width) * 4U) {
+        return kStatusInvalidHandle;
+    }
+    const std::size_t requiredBytes = rowStride * static_cast<std::size_t>(height);
+    if (bytes < requiredBytes) {
+        return kStatusInvalidHandle;
+    }
+    try {
+        const std::shared_ptr<NativeCellularityController> controller =
+                liveController(session);
+        if (!controller) {
+            return kStatusInvalidHandle;
+        }
+
+        // The extent the caller draws at is the extent the simulation projects
+        // into and converts gestures through, so it is applied here rather than
+        // left to the environment patch the window path used: a tap that is
+        // resolved against a viewport of a different size lands somewhere other
+        // than the cursor.
+        if (width != session->appliedSurfaceWidth
+                || height != session->appliedSurfaceHeight) {
+            controller->setViewportSurfaceSize(width, height);
+            controller->invalidateMicroscopeFrameData();
+            session->appliedSurfaceWidth = width;
+            session->appliedSurfaceHeight = height;
+        }
+
+        std::size_t written = 0;
+        const RenderFrameOutcome outcome =
+                controller->drawMicroscopeIntoRgba(
+                        static_cast<std::uint8_t*>(address), requiredBytes,
+                        rowStride, written)
+                        .outcome;
+        if (written == 0) {
+            return outcome == RenderFrameOutcome::Failed
+                            || outcome == RenderFrameOutcome::SurfaceLost
+                    ? kStatusFailed
+                    : kStatusNoFrameYet;
+        }
+        return kStatusOk;
+    } catch (...) {
+        return kStatusFailed;
+    }
+}
+
+}  // namespace
+
+extern "C" JNIEXPORT jint JNICALL
+Java_com_cytarch_cellularity_desktop_nativebridge_DesktopNativeRenderer_nativeRenderFrameInto(
+        JNIEnv* env, jclass, jlong sessionHandle, jobject pixelBuffer,
+        jint width, jint height, jint rowStride) {
+    const std::shared_ptr<DesktopSession> session = findSession(sessionHandle);
+    if (!session || pixelBuffer == nullptr) {
+        return kStatusInvalidHandle;
+    }
+    const jint minimumStride = width * 4;
+    if (rowStride < minimumStride) {
+        return kStatusInvalidHandle;
+    }
+    void* address = env->GetDirectBufferAddress(pixelBuffer);
+    const jlong capacity = env->GetDirectBufferCapacity(pixelBuffer);
+    if (address == nullptr) {
+        return kStatusInvalidHandle;
+    }
+    return drawFrameIntoCallerMemory(session, address,
+            static_cast<std::size_t>(std::max<jlong>(capacity, 0)), width, height,
+            static_cast<std::size_t>(rowStride));
+}
+
+// The same frame, into memory given by address rather than by a java.nio buffer.
+//
+// This is how a host that draws the world itself avoids every copy between the renderer and
+// its own picture: the address is the address of the pixels of an image the host already
+// owns, so the readback lands directly in what will be drawn. Handing over a direct buffer
+// instead is legitimate and remains supported, but it costs a buffer that has to be copied
+// into the image afterwards, once per frame, at the size of the whole window.
+//
+// The address is only dereferenced; nothing here takes ownership or keeps it. A caller that
+// frees the memory while a frame is in flight is a caller fault, and the state it leaves
+// behind is the same as any other use-after-free -- which is why the managed side keeps the
+// image alive for as long as the session that draws into it.
+extern "C" JNIEXPORT jint JNICALL
+Java_com_cytarch_cellularity_desktop_nativebridge_DesktopNativeRenderer_nativeRenderFrameIntoAddress(
+        JNIEnv*, jclass, jlong sessionHandle, jlong address, jint width, jint height,
+        jint rowStride) {
+    const std::shared_ptr<DesktopSession> session = findSession(sessionHandle);
+    if (!session) {
+        return kStatusInvalidHandle;
+    }
+    if (address == 0 || width <= 0 || height <= 0) {
+        return kStatusInvalidHandle;
+    }
+    if (rowStride < width * 4) {
+        return kStatusInvalidHandle;
+    }
+    const std::size_t requiredBytes = static_cast<std::size_t>(rowStride)
+            * static_cast<std::size_t>(height);
+    return drawFrameIntoCallerMemory(session, reinterpret_cast<void*>(address),
+            requiredBytes, width, height, static_cast<std::size_t>(rowStride));
 }
 
 // ---------------------------------------------------------------------------
@@ -1541,10 +2251,11 @@ Java_com_cytarch_cellularity_desktop_nativebridge_DesktopNativeRenderer_nativeQu
 // Queues a tap at a client-area position. Returns 1 if it was queued, 0 if the handle
 // is not a live session.
 //
-// The genome is deliberately null. A tap with no genome is the gesture that selects
-// or deselects whatever is under the cursor, which is the whole of what clicking the
-// plate means; placement, which does carry a genome, is a separate managed flow this
-// bridge does not serve yet.
+// The genome is deliberately null: a tap with no genome is the gesture that selects or
+// deselects whatever is under the cursor, which is the whole of what clicking the plate
+// means. Placement carries a genome and has an entry point of its own beside this one --
+// nativeQueueTapWithGenome -- so that "click on the plate" and "place this creature" stay
+// two messages rather than one message with an optional half.
 extern "C" JNIEXPORT jint JNICALL
 Java_com_cytarch_cellularity_desktop_nativebridge_DesktopNativeRenderer_nativeQueueTap(
         JNIEnv*, jclass, jlong sessionHandle, jfloat screenX, jfloat screenY) {
@@ -1558,8 +2269,122 @@ Java_com_cytarch_cellularity_desktop_nativebridge_DesktopNativeRenderer_nativeQu
         if (!controller) {
             return kInputRefused;
         }
-        controller->queueMicroscopeTap(screenX, screenY, nullptr);
-        return kInputQueued;
+        return controller->queueMicroscopeTap(screenX, screenY, nullptr)
+                ? kInputQueued
+                : kInputRefused;
+    } catch (...) {
+        return kInputRefused;
+    }
+}
+
+// Queues a tap that places a Cell grown from the genome handed in, rather than from the plate's
+// own default one. Returns 1 if it was queued, 0 when the handle is not a live session or the
+// genome could not be read.
+//
+// The genome travels as the same bounded draft payload the editor saves and the phone publishes,
+// decoded by the same codec, so the creature placed in the plate is the one the editor is showing.
+// That is the whole point of this entry point: the phone synthesizes a Cell from the genome its
+// editor published, and a desktop that placed the plate's default Cell instead was answering a
+// different question than the person asked.
+//
+// Refusing an unreadable genome rather than placing the default one is deliberate: a silent
+// fallback would put a black phagocyte in the plate and leave the person to wonder which of the
+// two genomes they are looking at.
+extern "C" JNIEXPORT jint JNICALL
+Java_com_cytarch_cellularity_desktop_nativebridge_DesktopNativeRenderer_nativeQueueTapWithGenome(
+        JNIEnv* env, jclass, jlong sessionHandle, jfloat screenX, jfloat screenY,
+        jbyteArray genomeBytes) {
+    const std::shared_ptr<DesktopSession> session = findSession(sessionHandle);
+    if (!session || genomeBytes == nullptr) {
+        return kInputRefused;
+    }
+    const jsize genomeSize = env->GetArrayLength(genomeBytes);
+    if (genomeSize <= 0) {
+        return kInputRefused;
+    }
+    std::vector<std::uint8_t> genome(static_cast<std::size_t>(genomeSize));
+    env->GetByteArrayRegion(genomeBytes, 0, genomeSize,
+            reinterpret_cast<jbyte*>(genome.data()));
+    if (env->ExceptionCheck() == JNI_TRUE) {
+        return kInputRefused;
+    }
+    try {
+        const std::shared_ptr<NativeCellularityController> controller =
+                liveController(session);
+        if (!controller) {
+            return kInputRefused;
+        }
+        ByteReader reader(genome.data(), genome.size());
+        const cellularity::GenomeData genomeData = readGenomeDraft(reader);
+        // The controller copies the genome into the queued tap, so the decoded value only has to
+        // outlive this call.
+        return controller->queueMicroscopeTap(screenX, screenY, &genomeData)
+                ? kInputQueued
+                : kInputRefused;
+    } catch (...) {
+        return kInputRefused;
+    }
+}
+
+// Queues a fling: the velocity a pointer was released with, in client-area pixels
+// per second. Returns 1 if it was queued. Inertia is the simulation's, applied to
+// the same viewport the pan was applied to, so a gesture that ends in a throw keeps
+// moving the way the hand did.
+extern "C" JNIEXPORT jint JNICALL
+Java_com_cytarch_cellularity_desktop_nativebridge_DesktopNativeRenderer_nativeQueueFling(
+        JNIEnv*, jclass, jlong sessionHandle, jfloat velocityX, jfloat velocityY) {
+    const std::shared_ptr<DesktopSession> session = findSession(sessionHandle);
+    if (!session) {
+        return kInputRefused;
+    }
+    try {
+        const std::shared_ptr<NativeCellularityController> controller =
+                liveController(session);
+        if (!controller) {
+            return kInputRefused;
+        }
+        return controller->queueMicroscopeFling(velocityX, velocityY)
+                ? kInputQueued
+                : kInputRefused;
+    } catch (...) {
+        return kInputRefused;
+    }
+}
+
+// Queues the three touch phases as one entry point, because they are one gesture:
+// a press, the moves while it is held, and the release. The MOVE tool drags a cell
+// with these, and a pointer that is never released would leave the simulation
+// holding a pointer nobody owns, which is why the phase is explicit rather than
+// three separate calls a caller could forget to pair.
+//
+// phase is 0 for down, 1 for move and 2 for up; anything else is refused.
+extern "C" JNIEXPORT jint JNICALL
+Java_com_cytarch_cellularity_desktop_nativebridge_DesktopNativeRenderer_nativeQueueTouch(
+        JNIEnv*, jclass, jlong sessionHandle, jint pointerId, jint phase, jfloat screenX,
+        jfloat screenY) {
+    const std::shared_ptr<DesktopSession> session = findSession(sessionHandle);
+    if (!session) {
+        return kInputRefused;
+    }
+    try {
+        const std::shared_ptr<NativeCellularityController> controller =
+                liveController(session);
+        if (!controller) {
+            return kInputRefused;
+        }
+        switch (phase) {
+        case 0:
+            controller->queueMicroscopeTouchDown(pointerId, screenX, screenY);
+            return kInputQueued;
+        case 1:
+            controller->queueMicroscopeTouchMove(pointerId, screenX, screenY);
+            return kInputQueued;
+        case 2:
+            controller->queueMicroscopeTouchUp(pointerId);
+            return kInputQueued;
+        default:
+            return kInputRefused;
+        }
     } catch (...) {
         return kInputRefused;
     }
@@ -1607,6 +2432,78 @@ Java_com_cytarch_cellularity_desktop_nativebridge_DesktopNativeRenderer_nativeSe
             return kStatusInvalidHandle;
         }
         controller->setMicroscopeToolOrdinal(ordinal);
+        return kStatusOk;
+    } catch (...) {
+        return kStatusFailed;
+    }
+}
+
+// The three microscope settings the interface owns and the simulation has to be
+// told about. They are here for the same reason the temperature and the tool are:
+// the interface's value is the interface's, and the simulation is only consistent
+// with it if both sides were told. Without these the controls moved and the
+// simulation never heard, which is a control that lies about what it did.
+//
+// Each returns 0 on success and 2 when the handle is not a live session.
+extern "C" JNIEXPORT jint JNICALL
+Java_com_cytarch_cellularity_desktop_nativebridge_DesktopNativeRenderer_nativeSetSlowMotionSpeed(
+        JNIEnv*, jclass, jlong sessionHandle, jfloat speed) {
+    const std::shared_ptr<DesktopSession> session = findSession(sessionHandle);
+    if (!session) {
+        return kStatusInvalidHandle;
+    }
+    try {
+        const std::shared_ptr<NativeCellularityController> controller =
+                liveController(session);
+        if (!controller) {
+            return kStatusInvalidHandle;
+        }
+        controller->setMicroscopeSlowMotionSpeed(speed);
+        return kStatusOk;
+    } catch (...) {
+        return kStatusFailed;
+    }
+}
+
+extern "C" JNIEXPORT jint JNICALL
+Java_com_cytarch_cellularity_desktop_nativebridge_DesktopNativeRenderer_nativeSetIncubateTargetUps(
+        JNIEnv*, jclass, jlong sessionHandle, jdouble targetUps) {
+    const std::shared_ptr<DesktopSession> session = findSession(sessionHandle);
+    if (!session) {
+        return kStatusInvalidHandle;
+    }
+    try {
+        const std::shared_ptr<NativeCellularityController> controller =
+                liveController(session);
+        if (!controller) {
+            return kStatusInvalidHandle;
+        }
+        controller->setMicroscopeIncubateTargetUps(targetUps);
+        return kStatusOk;
+    } catch (...) {
+        return kStatusFailed;
+    }
+}
+
+// The performance overlay is drawn by the renderer's text pass, which the live
+// frame deliberately leaves out: what a host draws over the frame is the host's
+// own interface. The call is still served, because a session may be presented
+// through a surface as well, and a caller that turns the overlay on should not be
+// told it was refused when it was merely not applicable.
+extern "C" JNIEXPORT jint JNICALL
+Java_com_cytarch_cellularity_desktop_nativebridge_DesktopNativeRenderer_nativeSetPerformanceHudEnabled(
+        JNIEnv*, jclass, jlong sessionHandle, jboolean enabled) {
+    const std::shared_ptr<DesktopSession> session = findSession(sessionHandle);
+    if (!session) {
+        return kStatusInvalidHandle;
+    }
+    try {
+        const std::shared_ptr<NativeCellularityController> controller =
+                liveController(session);
+        if (!controller) {
+            return kStatusInvalidHandle;
+        }
+        controller->setMicroscopePerformanceHudEnabled(enabled == JNI_TRUE);
         return kStatusOk;
     } catch (...) {
         return kStatusFailed;
@@ -1760,11 +2657,14 @@ Java_com_cytarch_cellularity_desktop_nativebridge_DesktopNativeRenderer_nativeAp
 // snapshot: eleven readings would be eleven different moments, and a status line assembled
 // from them would show a cell count from before an update next to a revision from after it.
 //
-// Two of the eleven are conversions, and both are done here rather than by each caller. The
-// snapshot reports food as a total mass, which is the only food figure it carries -- there
-// is no food count in it -- and it is rounded to whole units so that a plate with food on
-// it does not read as zero. Simulation time is fractional seconds and is reported as whole
-// milliseconds, which is the resolution a status line can show.
+// Two of the eleven carry a fractional value, and both are transported as the bit pattern of
+// a double rather than as a rounded integer. The rounding was there to keep a status line from
+// reading zero for a plate with food on it, and it did that at a cost that was found by reading
+// the panel: food mass is in the units the simulation uses -- a plate holding a thousandth of a
+// unit read as `0,0` for ever, and a time of one and a half hours read as whole milliseconds
+// that were then divided again by the caller. Android passes both as `doubleBits`, and a status
+// panel that says something different from the phone's for the same world is a defect in the
+// port, not a formatting choice.
 extern "C" JNIEXPORT jlongArray JNICALL
 Java_com_cytarch_cellularity_desktop_nativebridge_DesktopNativeRenderer_nativeReadStats(
         JNIEnv* env, jclass, jlong sessionHandle) {
@@ -1780,20 +2680,23 @@ Java_com_cytarch_cellularity_desktop_nativebridge_DesktopNativeRenderer_nativeRe
         }
         const cellularity::microscope::NativeMicroscopeRuntimeSnapshot snapshot =
                 controller->microscopeRuntimeSnapshot();
-        // A negative simulation time cannot be shown as a duration and is reported as
-        // zero; a negative food mass is equally meaningless and is left to the rounding
-        // below, which preserves its sign rather than hiding it.
-        const jlong simulationTimeMillis = snapshot.simulationTime > 0.0
-                ? roundedToWhole(snapshot.simulationTime * 1000.0)
-                : 0;
-        const jlong foodWholeUnits = roundedToWhole(snapshot.foodMass);
+        // A negative simulation time cannot be shown as a duration and is reported as zero; a
+        // negative food mass is equally meaningless and is left to the caller, which formats it
+        // the same way it formats a positive one.
+        const double simulationTime = snapshot.simulationTime > 0.0
+                ? snapshot.simulationTime
+                : 0.0;
         const jlong values[] = {
                 static_cast<jlong>(snapshot.revision),
                 static_cast<jlong>(snapshot.worldEpoch),
                 static_cast<jlong>(snapshot.completedUpdateCount),
                 static_cast<jlong>(snapshot.cellCount),
-                foodWholeUnits,
-                simulationTimeMillis,
+                // Two slots hold a double's bits rather than a number: a jlong cannot carry a
+                // fraction, and splitting a value across two slots would give a reader a
+                // half-updated pair. These two are read with Double.fromBits on the managed
+                // side, which is what Android's bridge does with the same fields.
+                javaDoubleBits(snapshot.foodMass),
+                javaDoubleBits(simulationTime),
                 static_cast<jlong>(snapshot.temperatureMode),
                 static_cast<jlong>(snapshot.toolOrdinal),
                 static_cast<jlong>(snapshot.selectedCellId),
@@ -1882,6 +2785,310 @@ Java_com_cytarch_cellularity_desktop_nativebridge_DesktopNativeRenderer_nativeIn
     }
 }
 
+// The genome preview: the organism a genome grows into, drawn at the size the plate's own file
+// previews use.
+//
+// The editor needs to show a genome as a creature rather than as a list of numbers, and the
+// renderer already knows how: this is the same capture the phone embeds in a saved genome, drawn
+// from a genome handed in as bytes rather than from the world. Nothing is allocated per call
+// beyond the simulation of the organism itself, and the pixels land in the caller's memory once.
+static_assert(cellularity::genome_preview::kGenomeFilePreviewPixels > 0,
+        "The genome preview must have a positive edge length");
+
+// The edge of the square a preview is drawn at, so the caller can size its picture before asking
+// for one.
+extern "C" JNIEXPORT jint JNICALL
+Java_com_cytarch_cellularity_desktop_nativebridge_DesktopNativeRenderer_nativeGenomePreviewPixels(
+        JNIEnv*, jclass) {
+    return cellularity::genome_preview::kGenomeFilePreviewPixels;
+}
+
+// Draws the organism of [genomeBytes] into memory at [address], as tightly packed top-left RGBA8
+// with [rowStride] bytes to a row, after growing it for [maximumSimulationTime] hours.
+//
+// Returns 0 when a preview was drawn, 1 when the renderer refused it, 2 when the handle or the
+// arguments are not usable, and 3 when the genome did not grow into a living cell -- which is an
+// answer about the genome rather than a fault, and is why it is not reported as one.
+// One implementation for both callers, because memory handed over as an address and memory handed
+// over as a direct buffer are the same memory to the renderer: only where the pointer came from
+// differs, and neither form is allowed to behave differently from the other.
+static jint captureGenomePreviewInto(JNIEnv* env, jlong sessionHandle,
+        jbyteArray genomeBytes, jdouble maximumSimulationTime, std::uint8_t* destination,
+        std::size_t destinationSize, int rowStride,
+        const GenomePreviewController::Camera* camera) {
+    const std::shared_ptr<DesktopSession> session = findSession(sessionHandle);
+    if (!session || genomeBytes == nullptr || destination == nullptr) {
+        return kStatusInvalidHandle;
+    }
+    const jsize genomeSize = env->GetArrayLength(genomeBytes);
+    if (genomeSize <= 0) {
+        return kStatusInvalidHandle;
+    }
+    const int pixels = cellularity::genome_preview::kGenomeFilePreviewPixels;
+    const jint minimumStride = pixels * 4;
+    if (rowStride < minimumStride) {
+        return kStatusInvalidHandle;
+    }
+    std::vector<std::uint8_t> genome(static_cast<std::size_t>(genomeSize));
+    env->GetByteArrayRegion(genomeBytes, 0, genomeSize,
+            reinterpret_cast<jbyte*>(genome.data()));
+    if (env->ExceptionCheck() == JNI_TRUE) {
+        return kStatusInvalidHandle;
+    }
+    try {
+        const std::shared_ptr<NativeCellularityController> controller =
+                liveController(session);
+        if (!controller) {
+            return kStatusInvalidHandle;
+        }
+        // The same bounded draft payload the phone publishes and the editor saves, decoded by
+        // the same codec: a preview that accepted a different encoding from the one the file
+        // holds would be a preview of something the user cannot save.
+        ByteReader reader(genome.data(), genome.size());
+        const cellularity::GenomeData genomeData = readGenomeDraft(reader);
+        const std::vector<std::uint8_t> preview =
+                controller->captureGenomeFilePreviewRgba(
+                        genomeData, maximumSimulationTime, camera);
+        const std::size_t packedRowBytes =
+                static_cast<std::size_t>(pixels) * 4U;
+        if (preview.size() < packedRowBytes
+                        * static_cast<std::size_t>(pixels)) {
+            return kStatusFailed;
+        }
+        if (destinationSize
+                < static_cast<std::size_t>(rowStride)
+                        * static_cast<std::size_t>(pixels)) {
+            return kStatusInvalidHandle;
+        }
+        for (int row = 0; row < pixels; ++row) {
+            std::memcpy(destination + static_cast<std::size_t>(row)
+                            * static_cast<std::size_t>(rowStride),
+                    preview.data() + static_cast<std::size_t>(row)
+                            * packedRowBytes,
+                    packedRowBytes);
+        }
+        return kStatusOk;
+    } catch (const std::exception&) {
+        // A genome that grows into nothing living is the ordinary way this fails, and the editor
+        // shows that as an empty preview rather than as a broken renderer.
+        return kStatusNoFrameYet;
+    } catch (...) {
+        return kStatusFailed;
+    }
+}
+
+extern "C" JNIEXPORT jint JNICALL
+Java_com_cytarch_cellularity_desktop_nativebridge_DesktopNativeRenderer_nativeCaptureGenomePreviewIntoAddress(
+        JNIEnv* env, jclass, jlong sessionHandle, jbyteArray genomeBytes,
+        jdouble maximumSimulationTime, jlong address, jint rowStride) {
+    if (address == 0) {
+        return kStatusInvalidHandle;
+    }
+    constexpr std::size_t kNoSizeCheck = std::numeric_limits<std::size_t>::max();
+    return captureGenomePreviewInto(env, sessionHandle, genomeBytes,
+            maximumSimulationTime, reinterpret_cast<std::uint8_t*>(address),
+            kNoSizeCheck, rowStride, nullptr);
+}
+
+// The same preview into a direct java.nio.ByteBuffer, which is the form a test can hold without
+// asking the module system for the address of its memory.
+extern "C" JNIEXPORT jint JNICALL
+Java_com_cytarch_cellularity_desktop_nativebridge_DesktopNativeRenderer_nativeCaptureGenomePreview(
+        JNIEnv* env, jclass, jlong sessionHandle, jbyteArray genomeBytes,
+        jdouble maximumSimulationTime, jobject pixelBuffer, jint rowStride) {
+    if (pixelBuffer == nullptr) {
+        return kStatusInvalidHandle;
+    }
+    auto* destination = static_cast<std::uint8_t*>(
+            env->GetDirectBufferAddress(pixelBuffer));
+    const jlong capacity = env->GetDirectBufferCapacity(pixelBuffer);
+    if (destination == nullptr || capacity <= 0) {
+        return kStatusInvalidHandle;
+    }
+    return captureGenomePreviewInto(env, sessionHandle, genomeBytes,
+            maximumSimulationTime, destination,
+            static_cast<std::size_t>(capacity), rowStride, nullptr);
+}
+
+// The same preview from a camera the caller holds, which is what an interactive preview needs: the
+// file preview frames the organism itself, while a person looking at it has panned and zoomed and
+// expects the picture from where they put the camera.
+extern "C" JNIEXPORT jint JNICALL
+Java_com_cytarch_cellularity_desktop_nativebridge_DesktopNativeRenderer_nativeCaptureGenomePreviewWithCameraIntoAddress(
+        JNIEnv* env, jclass, jlong sessionHandle, jbyteArray genomeBytes,
+        jdouble maximumSimulationTime, jdouble cameraCenterX, jdouble cameraCenterY,
+        jfloat cameraZoom, jlong address, jint rowStride) {
+    if (address == 0) {
+        return kStatusInvalidHandle;
+    }
+    const GenomePreviewController::Camera camera{
+            cameraCenterX, cameraCenterY, cameraZoom};
+    constexpr std::size_t kNoSizeCheck = std::numeric_limits<std::size_t>::max();
+    return captureGenomePreviewInto(env, sessionHandle, genomeBytes,
+            maximumSimulationTime, reinterpret_cast<std::uint8_t*>(address),
+            kNoSizeCheck, rowStride, &camera);
+}
+
+// The same into a direct java.nio.ByteBuffer, for callers that hold one -- a probe, or anything
+// that would otherwise have to ask the module system for the address of its memory.
+extern "C" JNIEXPORT jint JNICALL
+Java_com_cytarch_cellularity_desktop_nativebridge_DesktopNativeRenderer_nativeCaptureGenomePreviewWithCamera(
+        JNIEnv* env, jclass, jlong sessionHandle, jbyteArray genomeBytes,
+        jdouble maximumSimulationTime, jdouble cameraCenterX, jdouble cameraCenterY,
+        jfloat cameraZoom, jobject pixelBuffer, jint rowStride) {
+    if (pixelBuffer == nullptr) {
+        return kStatusInvalidHandle;
+    }
+    auto* destination = static_cast<std::uint8_t*>(
+            env->GetDirectBufferAddress(pixelBuffer));
+    const jlong capacity = env->GetDirectBufferCapacity(pixelBuffer);
+    if (destination == nullptr || capacity <= 0) {
+        return kStatusInvalidHandle;
+    }
+    const GenomePreviewController::Camera camera{
+            cameraCenterX, cameraCenterY, cameraZoom};
+    return captureGenomePreviewInto(env, sessionHandle, genomeBytes,
+            maximumSimulationTime, destination,
+            static_cast<std::size_t>(capacity), rowStride, &camera);
+}
+// Hands the preview session the genome it should be showing, and where the view stands. This is
+// the phone's publication path, on the desktop's single session: the same endpoint, the same
+// content-and-view split, so an interactive preview works here for the same reason it works there.
+extern "C" JNIEXPORT jint JNICALL
+Java_com_cytarch_cellularity_desktop_nativebridge_DesktopNativeRenderer_nativePublishGenomePreviewContent(
+        JNIEnv* env, jclass, jlong sessionHandle, jbyteArray genomeBytes,
+        jdouble simulationTimeHours) {
+    if (genomeBytes == nullptr) {
+        return 1;
+    }
+    const jsize length = env->GetArrayLength(genomeBytes);
+    if (length <= 0) {
+        return 1;
+    }
+    const std::shared_ptr<DesktopSession> session = findSession(sessionHandle);
+    const auto controller = liveController(session);
+    if (controller == nullptr) {
+        return 1;
+    }
+    jboolean copied = JNI_FALSE;
+    jbyte* pinned = env->GetByteArrayElements(genomeBytes, &copied);
+    if (pinned == nullptr) {
+        if (env->ExceptionCheck()) {
+            env->ExceptionClear();
+        }
+        return 1;
+    }
+    const auto status = controller->publishGenomePreviewContent(
+            reinterpret_cast<const std::uint8_t*>(pinned),
+            static_cast<std::size_t>(length),
+            static_cast<double>(simulationTimeHours));
+    env->ReleaseByteArrayElements(genomeBytes, pinned, JNI_ABORT);
+    return static_cast<jint>(status);
+}
+// Where the preview's view stands: selected gene, grid, tree, viewport size.
+extern "C" JNIEXPORT jint JNICALL
+Java_com_cytarch_cellularity_desktop_nativebridge_DesktopNativeRenderer_nativePublishGenomePreviewViewState(
+        JNIEnv*, jclass, jlong sessionHandle, jint selectedGeneIndex, jboolean gridEnabled,
+        jboolean treeEnabled, jint viewportWidth, jint viewportHeight) {
+    const std::shared_ptr<DesktopSession> session = findSession(sessionHandle);
+    const auto controller = liveController(session);
+    if (controller == nullptr) {
+        return 1;
+    }
+    return static_cast<jint>(controller->publishGenomePreviewViewState(
+            static_cast<int>(selectedGeneIndex),
+            gridEnabled == JNI_TRUE,
+            treeEnabled == JNI_TRUE,
+            static_cast<int>(viewportWidth),
+            static_cast<int>(viewportHeight)));
+}
+
+// One thing the person did to the preview. The kinds are the phone's kinds: 0 restore viewport,
+// 1 move, 2 zoom, 3 select gene, 4 capture ghost, 5 clear ghost.
+extern "C" JNIEXPORT jint JNICALL
+Java_com_cytarch_cellularity_desktop_nativebridge_DesktopNativeRenderer_nativeEnqueueGenomePreviewInteraction(
+        JNIEnv*, jclass, jlong sessionHandle, jint kind, jfloat first, jfloat second,
+        jfloat third) {
+    const std::shared_ptr<DesktopSession> session = findSession(sessionHandle);
+    const auto controller = liveController(session);
+    if (controller == nullptr) {
+        return 1;
+    }
+    return static_cast<jint>(controller->enqueueGenomePreviewInteraction(
+            static_cast<int>(kind),
+            static_cast<float>(first),
+            static_cast<float>(second),
+            static_cast<float>(third)));
+}
+// The preview's own frame into caller memory: the world the published content built, seen through
+// the viewport the published view moved. This is what makes an interactive preview interactive --
+// the camera survives between frames because it lives in the session, not in the caller.
+extern "C" JNIEXPORT jint JNICALL
+Java_com_cytarch_cellularity_desktop_nativebridge_DesktopNativeRenderer_nativeDrawGenomePreviewIntoAddress(
+        JNIEnv*, jclass, jlong sessionHandle, jlong address, jint rowStride) {
+    if (address == 0 || rowStride <= 0) {
+        return kStatusInvalidHandle;
+    }
+    const std::shared_ptr<DesktopSession> session = findSession(sessionHandle);
+    const auto controller = liveController(session);
+    if (controller == nullptr) {
+        return kStatusInvalidHandle;
+    }
+    constexpr std::size_t kNoLimit = std::numeric_limits<std::size_t>::max();
+    bool wrote = false;
+    const std::size_t bytes = controller->drawGenomePreviewIntoRgba(
+            reinterpret_cast<std::uint8_t*>(address),
+            kNoLimit,
+            static_cast<std::size_t>(rowStride),
+            wrote);
+    if (!wrote || bytes == 0) {
+        return kStatusNoFrameYet;
+    }
+    return kStatusOk;
+}
+
+// Where the preview stands: the Cells it grew, the gene a tap chose, and the camera the last
+// frame was taken through. Null when the handle is not a live session.
+//
+// This is the acknowledgment the phone reads out of its presentation, on the desktop's single
+// session: an editor that shows a Cell count and a selected gene has to be able to read them
+// from the thing that counted and chose, and a picture that came back without them would leave
+// the editor describing a preview from before the person's last tap.
+//
+// Nine numbers, in the order NativeCellularityController::genomePreviewStatus documents them:
+// the camera's three arrive as float bit patterns, because a long cannot hold a fraction, and the
+// controller is the side that knows which of its numbers are patterns rather than values. This
+// side carries all nine through unchanged.
+extern "C" JNIEXPORT jlongArray JNICALL
+Java_com_cytarch_cellularity_desktop_nativebridge_DesktopNativeRenderer_nativeReadGenomePreviewStatus(
+        JNIEnv* env, jclass, jlong sessionHandle) {
+    const std::shared_ptr<DesktopSession> session = findSession(sessionHandle);
+    const auto controller = liveController(session);
+    if (controller == nullptr) {
+        return nullptr;
+    }
+    try {
+        const auto status = controller->genomePreviewStatus();
+        const jlong values[9] = {
+                static_cast<jlong>(status[0]),
+                static_cast<jlong>(status[1]),
+                static_cast<jlong>(status[2]),
+                static_cast<jlong>(status[3]),
+                static_cast<jlong>(status[4]),
+                static_cast<jlong>(status[5]),
+                static_cast<jlong>(status[6]),
+                static_cast<jlong>(status[7]),
+                static_cast<jlong>(status[8]),
+        };
+        jlongArray result = env->NewLongArray(9);
+        if (result != nullptr) {
+            env->SetLongArrayRegion(result, 0, 9, values);
+        }
+        return result;
+    } catch (...) {
+        return nullptr;
+    }
+}
 // Stops the simulation and releases the session. Returns 0 when the session was
 // stopped or there was nothing to stop, and 1 when the teardown reported a failure.
 //

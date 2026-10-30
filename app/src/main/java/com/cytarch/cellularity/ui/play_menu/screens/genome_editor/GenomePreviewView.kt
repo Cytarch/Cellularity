@@ -24,6 +24,7 @@ import com.cytarch.cellularity.platform.render.vulkan.NativeVulkanWorkerStatus
 import com.cytarch.cellularity.shared.model.GenomeDraft
 import com.cytarch.cellularity.shared.model.GenomeDraftWireCodec
 import com.cytarch.cellularity.shared.settings.CellularitySettings
+import com.cytarch.cellularity.shared.ui.play.genome_editor.GenomePreviewInteraction
 import com.cytarch.cellularity.shared.ui.play.genome_editor.GenomePreviewState
 
 class GenomePreviewView(
@@ -37,7 +38,7 @@ class GenomePreviewView(
     initialViewportHeight: Int = context.resources.displayMetrics.heightPixels.coerceAtLeast(1),
     initialBackingSurfaceWidth: Int = initialViewportWidth,
     initialBackingSurfaceHeight: Int = initialViewportHeight
-) : FrameLayout(context) {
+) : FrameLayout(context), GenomePreviewInteraction {
     constructor(context: Context) : this(
         context,
         CellularitySettings.DefaultGenomePreviewMaxCells
@@ -417,7 +418,7 @@ class GenomePreviewView(
         if (accepted) renderSurface.requestFrame()
     }
 
-    fun captureGhost() {
+    override fun captureGhost() {
         if (released) return
         if (
             enqueueInteraction(
@@ -426,7 +427,7 @@ class GenomePreviewView(
         ) renderSurface.requestFrame()
     }
 
-    fun clearGhost() {
+    override fun clearGhost() {
         if (released) return
         if (
             enqueueInteraction(
@@ -438,7 +439,7 @@ class GenomePreviewView(
     val maxPreviewShow: Int
         get() = previewMaxCells
 
-    fun handleMove(dx: Float, dy: Float) {
+    override fun handleMove(dx: Float, dy: Float) {
         if (released) return
         if (
             enqueueInteraction(
@@ -447,7 +448,7 @@ class GenomePreviewView(
         ) renderSurface.requestFrame()
     }
 
-    fun handleZoom(scale: Float, centerX: Float, centerY: Float) {
+    override fun handleZoom(scale: Float, centerX: Float, centerY: Float) {
         if (released) return
         if (
             enqueueInteraction(
@@ -456,7 +457,7 @@ class GenomePreviewView(
         ) renderSurface.requestFrame()
     }
 
-    fun handleTap(x: Float, y: Float) {
+    override fun handleTap(x: Float, y: Float) {
         if (released) return
         val token = enqueueInteraction(INTERACTION_SELECT_GENE, x, y, 0.0f)
         if (token == 0L) return

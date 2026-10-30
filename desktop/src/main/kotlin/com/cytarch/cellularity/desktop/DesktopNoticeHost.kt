@@ -20,6 +20,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import com.cytarch.cellularity.shared.ui.main_menu.FileCollectionNotice
 import com.cytarch.cellularity.shared.ui.main_menu.messageResource
+import com.cytarch.cellularity.shared.ui.play.PlayFailureCause
+import com.cytarch.cellularity.shared.ui.play.PlayNotice
+import com.cytarch.cellularity.shared.ui.play.messageResource
 import org.jetbrains.compose.resources.getString
 
 /**
@@ -38,6 +41,15 @@ data class DesktopThemeNotice(val message: String) : DesktopNotice
 
 /** What a stored-file operation did, in the terms the collection screens use. */
 data class DesktopFileNotice(val notice: FileCollectionNotice) : DesktopNotice
+
+/**
+ * What an experiment's own operation did -- a save, a reset, a reload.
+ *
+ * The play screen has its own vocabulary for these, and its own words for them, both shared with
+ * the phone; the launcher's file notices are about the collection rather than about a running
+ * plate, so the two are told apart here instead of being forced into one shape.
+ */
+data class DesktopPlayNotice(val notice: PlayNotice) : DesktopNotice
 
 /**
  * Where the launcher says what it just did.
@@ -75,6 +87,25 @@ fun DesktopNoticeHost(
                         "Stored-file ${pending.notice.operation} failed: " +
                             "${error.code} ${error.detail}"
                     )
+                }
+                getString(pending.notice.feedback.messageResource())
+            }
+
+            is DesktopPlayNotice -> {
+                // Logged as well as shown, matching the phone: the sentence is written for a
+                // person, and the code is what a report needs.
+                when (val cause = pending.notice.cause) {
+                    is PlayFailureCause.Storage -> System.err.println(
+                        "Play ${pending.notice.operation} failed: " +
+                            "${cause.error.code} ${cause.error.detail}"
+                    )
+
+                    is PlayFailureCause.Simulation -> System.err.println(
+                        "Play ${pending.notice.operation} failed: " +
+                            "${cause.error.code} ${cause.error.message}"
+                    )
+
+                    null -> Unit
                 }
                 getString(pending.notice.feedback.messageResource())
             }

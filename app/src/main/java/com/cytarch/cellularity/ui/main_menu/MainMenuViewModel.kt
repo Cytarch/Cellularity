@@ -2,6 +2,7 @@ package com.cytarch.cellularity.ui.main_menu
 
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
@@ -20,6 +21,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import java.util.UUID
 
 internal class MainMenuImportOrchestrator(
     private val store: MainMenuStore,
@@ -138,6 +140,23 @@ internal class MainMenuViewModel(
 
     fun acceptExternalIntent(intent: Intent) {
         val command = importCoordinator.commandFrom(intent) ?: return
+        viewModelScope.launch {
+            importOrchestrator.submit(command)
+        }
+    }
+
+    /**
+     * Imports a document the person chose in the platform's own file chooser.
+     *
+     * The same command and the same orchestrator as a file opened from a file manager: the chooser
+     * and the view intent are two ways of naming a document, and everything after the naming --
+     * resolving it, copying it in, reporting the outcome -- is one road rather than two.
+     */
+    fun importPickedFile(uri: Uri) {
+        val command = MainMenuImportCommand(
+            commandId = UUID.randomUUID().toString(),
+            contentUri = uri.toString()
+        )
         viewModelScope.launch {
             importOrchestrator.submit(command)
         }

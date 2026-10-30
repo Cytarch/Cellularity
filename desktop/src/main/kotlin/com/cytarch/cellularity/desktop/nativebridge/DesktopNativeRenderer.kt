@@ -210,6 +210,22 @@ object DesktopNativeRenderer {
         height: Int
     ): Long
 
+    /**
+     * Takes a window the caller already owns as the surface to present into, and returns its
+     * handle, or 0 if it is not a live window.
+     *
+     * Nothing is created. What this buys is the message queue: a window receives its messages on
+     * the thread that created it, and the only window in this process whose messages are
+     * dispatched is one the AWT toolkit made on the thread that pumps them. The heavyweight
+     * canvas the interface puts on the screen is exactly that window, so the renderer is pointed
+     * at it instead of at a window of its own -- and input, resizing and hiding then arrive by
+     * the ordinary AWT routes rather than through Win32 calls from a thread that owns nothing.
+     *
+     * The window's geometry and lifetime stay the toolkit's: the bridge never moves, shows,
+     * hides or destroys an adopted window.
+     */
+    external fun nativeAdoptWindow(windowHandle: Long): Long
+
     external fun nativeResizeWindow(windowHandle: Long, width: Int, height: Int): Int
 
     /**
@@ -349,6 +365,207 @@ object DesktopNativeRenderer {
 
     external fun nativeRenderFrame(sessionHandle: Long): Int
 
+    /**
+     * Why a stored plate cannot be opened, or null when it can.
+     *
+     * Opening answers with a handle or with nothing, and the phone's decoder reports the rest as a
+     * failure the interface shows. Without this the desktop could only say that the simulation did
+     * not open, which is the same sentence for a plate from a newer build, a truncated file and a
+     * file that is not a plate at all -- and the person had just chosen one of them and would like
+     * to know which.
+     *
+     * The allocation is passed because the decoder needs a fallback for a file that predates
+     * recording its own; it must be the same one the open would use, or this answers a different
+     * question than the open does.
+     */
+    external fun nativeDescribeSubstrateProblem(
+        substratePath: String,
+        maxCellCount: Int,
+        maxFoodCount: Int,
+        dishRadius: Double
+    ): String?
+
+    /**
+     * Writes the plate the session is showing into [substratePath], and prepares its preview.
+     *
+     * This is the phone's own save call, and it is the same one on purpose: the write goes through
+     * the microscope owner, which is where the world is, so the file holds the world being edited
+     * rather than a copy the interface happened to be holding.
+     *
+     * Returns null when the plate was written, and a sentence when it was not -- the writer's or the
+     * decoder's own complaint rather than a code, because the person is owed the reason. The answer
+     * to "is there a picture to go with it" is [previewToken]: its first element receives the
+     * prepared preview frame's token, or zero for a plate written without one, which is a complete
+     * plate and not a failed save. The array is written, never read, and must hold one element.
+     *
+     * The token is one-shot and belongs to the session's thread: capture it with
+     * [nativeCaptureSubstratePreview] and give it back with [nativeDiscardSubstratePreview], both on
+     * that thread. A token that is neither captured nor discarded holds the world it was taken from.
+     */
+    external fun nativeSaveSubstrate(
+        sessionHandle: Long,
+        substratePath: String,
+        previewToken: LongArray
+    ): String?
+
+    /**
+     * The side of a plate's preview picture, in pixels.
+     *
+     * The picture is square and its side is the container's own policy, so the caller sizes the
+     * memory it hands over instead of guessing a number the format would have to agree with. It is a
+     * property of the format rather than of a session, which is why it takes no handle.
+     */
+    external fun nativeSubstratePreviewPixels(): Int
+
+    /**
+     * Draws the prepared preview [token] into memory the caller holds, once.
+     *
+     * The picture is [nativeSubstratePreviewPixels] square, tightly packed RGBA8 with [rowStride]
+     * bytes to a row, and it lands in the caller's memory exactly once. It is drawn by the renderer,
+     * so it must be asked for from the thread that owns the session -- the same thread that draws
+     * frames -- which is why the request travels through the surface instead of being made from the
+     * interface.
+     *
+     * Returns 0 when the picture was drawn, 1 when the renderer refused it, 2 when the handle or the
+     * arguments are not usable, and 3 when there was nothing left to capture -- the token had already
+     * been used, or was never a preview token. The last one is an answer about the plate rather than
+     * a fault: a plate may be saved without a picture.
+     */
+    external fun nativeCaptureSubstratePreviewIntoAddress(
+        sessionHandle: Long,
+        token: Long,
+        address: Long,
+        rowStride: Int
+    ): Int
+
+    /**
+     * The same picture into a direct [pixels] buffer, for a caller that holds one.
+     *
+     * A drawing loop has the buffer already and does not have an address for it, so this is the form
+     * that loop uses; the address form exists because a caller that owns memory outside the heap
+     * should not have to copy through a buffer to reach it. Both are the same capture.
+     */
+    external fun nativeCaptureSubstratePreview(
+        sessionHandle: Long,
+        token: Long,
+        pixels: java.nio.ByteBuffer,
+        rowStride: Int
+    ): Int
+
+    /**
+     * Attaches an encoded preview to a plate that was just written.
+     *
+     * The container's policy for a plate's picture is WebP lossy, and the attachment is what the
+     * phone does with the picture it encodes, so the payload must be that same WebP: a payload that
+     * is not one is refused by the format rather than stored as something a reader would then fail
+     * on. It names the file rather than a session because the file is a temporary path the caller
+     * owns -- what is being written is not yet a plate in the collection.
+     *
+     * A failure to attach does not fail the save, deliberately: the plate itself is already written,
+     * and a picture is an ornament. A plate without one is read and run exactly the same.
+     */
+    external fun nativeAttachSubstratePreview(substratePath: String, webpBytes: ByteArray)
+
+    /**
+     * Gives back a prepared preview frame that will not be used.
+     *
+     * A prepared frame holds the world it was taken from until it is drawn or discarded, so a save
+     * that decides against a picture must hand it back rather than leave it in the renderer's one
+     * slot. Best effort by design: the frame is dead either way, and a plate that was written must
+     * not be reported as unsaved because cleaning up after it failed.
+     */
+    external fun nativeDiscardSubstratePreview(sessionHandle: Long, token: Long)
+
+    /**
+     * The plate's own description, as the container records it, or null when it cannot be read.
+     *
+     * Everything the collection shows about a plate -- how many cells, how long it has been running,
+     * how much food is left -- is in the metadata block and the body, which only the release codec
+     * can read. The desktop adapter used to report nothing rather than guess, which was honest and
+     * useless: the freezer showed zero cells for a plate holding thousands. This is the phone's own
+     * inspection in the phone's own versioned form, decoded on this side by the desktop's codec.
+     *
+     * The allocation is passed for the same reason it is passed when opening: a plate that predates
+     * recording its own needs a fallback, and describing a file with a different one would describe
+     * a different plate than opening it would.
+     */
+    external fun nativeInspectSubstrate(
+        substratePath: String,
+        maxCellCount: Int,
+        maxFoodCount: Int,
+        dishRadius: Double
+    ): ByteArray?
+
+    /**
+     * The picture a plate carries, as the file stores it, or null when it has none.
+     *
+     * The bytes are the container's own encoded preview rather than a re-encoding, so what is shown
+     * is what a reader of the file sees. A plate without a picture is a normal plate, not a failure.
+     */
+    external fun nativeReadSubstratePreview(substratePath: String): ByteArray?
+
+    /**
+     * Draws the newest frame into [pixels] and returns what happened.
+     *
+     * This is how the desktop draws the world now. A window of its own cannot be composited
+     * with the interface -- it is a sibling of it, so it is either in front of everything or
+     * behind everything -- and a microscope whose controls, panels and dialogs are behind the
+     * picture is not the microscope the phone shows. So the frame is asked for as pixels and
+     * drawn inside the same scene as the rest of the interface, which is what a compositor
+     * does for the phone's surface: the world ends up below the interface because the
+     * interface is painted after it, in one window and one scene.
+     *
+     * [pixels] must be a direct buffer of at least `rowStride * height` bytes and stays the
+     * caller's: nothing is allocated per frame, and the pixels land in it once. The buffer is
+     * reused for the life of the session, so the caller copies out of it before asking for
+     * the next frame.
+     *
+     * Returns 0 when a frame was drawn, 1 when the renderer refused it, 2 when the handle or
+     * the arguments are not usable, and 3 when there is nothing to draw yet -- an idle
+     * state, not a fault, which leaves the caller's previous picture on screen.
+     */
+    external fun nativeRenderFrameInto(
+        sessionHandle: Long,
+        pixels: java.nio.ByteBuffer,
+        width: Int,
+        height: Int,
+        rowStride: Int
+    ): Int
+
+    /**
+     * Draws the newest frame straight into memory at [address], and returns what happened.
+     *
+     * This is the same frame as [nativeRenderFrameInto] with one copy removed: the address is
+     * the address of a picture the caller already owns and will draw, so the readback lands in
+     * it and nothing has to be copied afterwards. The copy it removes is a whole window's
+     * worth of pixels per frame, which at sixty frames a second is the difference between a
+     * renderer that keeps up and one that spends its time moving bytes it is about to draw.
+     *
+     * The memory is borrowed, never owned: it must stay alive and untouched while the call
+     * runs, and the caller is responsible for telling its graphics layer that the pixels it
+     * handed over have changed.
+     *
+     * Returns the same statuses as [nativeRenderFrameInto].
+     */
+    external fun nativeRenderFrameIntoAddress(
+        sessionHandle: Long,
+        address: Long,
+        width: Int,
+        height: Int,
+        rowStride: Int
+    ): Int
+
+    /**
+     * Creates the window a Vulkan surface needs and nothing else.
+     *
+     * The device is created against a surface, so a session exists only while some window
+     * does. This one is never shown, is placed off every monitor, is owned by nothing, and
+     * never has a frame drawn into it: it is the handle the surface is created from. It must
+     * be created and destroyed on the thread that owns the session, like every other call
+     * here.
+     */
+    external fun nativeCreateSurfaceAnchorWindow(width: Int, height: Int): Long
+
     external fun nativeQueuePan(sessionHandle: Long, dx: Float, dy: Float): Int
 
     external fun nativeQueueZoom(
@@ -360,9 +577,56 @@ object DesktopNativeRenderer {
 
     external fun nativeQueueTap(sessionHandle: Long, screenX: Float, screenY: Float): Int
 
+    /**
+     * The same tap, placing a cell grown from [genomeBytes] rather than from the plate's default.
+     *
+     * The bytes are the genome draft the editor saves and the phone publishes, and the renderer
+     * decodes them with the same codec, so what lands in the plate is the creature the editor is
+     * showing. Refused -- rather than quietly placing the default cell -- when the draft cannot be
+     * read, because a fallback would leave the person looking at a cell and wondering which genome
+     * it came from.
+     *
+     * The genome is attached to the tap rather than published once and remembered, because a tap
+     * here is answered by this process on its own thread: what the person clicked is exactly what
+     * they were looking at.
+     */
+    external fun nativeQueueTapWithGenome(
+        sessionHandle: Long,
+        screenX: Float,
+        screenY: Float,
+        genomeBytes: ByteArray
+    ): Int
+
+    /** Queues the velocity a pointer was released with, so the camera keeps moving. */
+    external fun nativeQueueFling(
+        sessionHandle: Long,
+        velocityX: Float,
+        velocityY: Float
+    ): Int
+
+    /**
+     * Queues one touch phase: 0 down, 1 move, 2 up.
+     *
+     * Held pointers are what the MOVE tool drags a cell with, so the phases are paired by the
+     * caller and a pointer that is never released leaves the simulation holding it.
+     */
+    external fun nativeQueueTouch(
+        sessionHandle: Long,
+        pointerId: Int,
+        phase: Int,
+        screenX: Float,
+        screenY: Float
+    ): Int
+
     external fun nativeSetTemperatureMode(sessionHandle: Long, mode: Int): Int
 
     external fun nativeSetToolOrdinal(sessionHandle: Long, ordinal: Int): Int
+
+    external fun nativeSetSlowMotionSpeed(sessionHandle: Long, speed: Float): Int
+
+    external fun nativeSetIncubateTargetUps(sessionHandle: Long, targetUps: Double): Int
+
+    external fun nativeSetPerformanceHudEnabled(sessionHandle: Long, enabled: Boolean): Int
 
     external fun nativeResetWorld(sessionHandle: Long): Int
 
@@ -421,13 +685,20 @@ object DesktopNativeRenderer {
     ): ByteArray?
 
     /**
-     * The runtime's status as ten longs: revision, worldEpoch, completedUpdateCount,
-     * cellCount, foodWholeUnits, simulationTimeMillis, temperatureMode, toolOrdinal,
-     * selectedCellId and a failed flag.
+     * The runtime's status as eleven longs: revision, worldEpoch, completedUpdateCount,
+     * cellCount, the bits of the food mass, the bits of the simulation time in seconds,
+     * temperatureMode, toolOrdinal, selectedCellId, a failed flag and a diagnosis-requested
+     * flag.
      *
-     * It is one array rather than ten calls because the runtime publishes these as a single
-     * snapshot; read separately they would describe different moments and a status line
-     * could show a cell count from before an update beside a revision from after it.
+     * It is one array rather than eleven calls because the runtime publishes these as a single
+     * snapshot; read separately they would describe different moments and a status line could
+     * show a cell count from before an update beside a revision from after it.
+     *
+     * Two of the entries are not numbers: a long cannot hold a fraction, so the food mass and
+     * the simulation time travel as the bit pattern of a double and are read with
+     * [Double.fromBits]. Android's bridge transports the same two fields the same way. Reading
+     * them as longs produces a number that grows without meaning -- the rounding that used to be
+     * here reported a plate that had food on it as empty.
      */
     external fun nativeReadStats(sessionHandle: Long): LongArray?
 
@@ -447,6 +718,159 @@ object DesktopNativeRenderer {
      * Null when nothing is selected, which is the ordinary state of a plate nobody has tapped.
      */
     external fun nativeInspectSelectedGenome(sessionHandle: Long): ByteArray?
+
+    /**
+     * Opens a renderer for the genome preview: a session with no window and no simulation.
+     *
+     * The preview draws into memory, so it needs a device rather than a surface, and the organism
+     * it draws is grown on the spot from the genome it is handed. Such a session never presents a
+     * frame and never steps a world, which is why it is opened on its own rather than being a
+     * mode of a plate.
+     *
+     * Returns an opaque handle, or 0 when the renderer could not be created. The caller closes it
+     * with [nativeStopSession] like any other session.
+     */
+    external fun nativeCreateGenomePreviewSession(
+        windowHandle: Long,
+        shaderRoot: String,
+        textureRoot: String
+    ): Long
+
+    /**
+     * The edge of the square a genome preview is drawn at, in pixels.
+     *
+     * Asked for rather than assumed, because the size belongs to the renderer: a caller that
+     * hard-coded it would keep working after the renderer changed and quietly show a corner of a
+     * larger picture.
+     */
+    external fun nativeGenomePreviewPixels(): Int
+
+    /**
+     * Draws the organism [genomeBytes] grows into, into memory at [address].
+     *
+     * The bytes are the same bounded draft payload the editor saves and the phone publishes, so
+     * what is previewed is what can be saved. The picture is [nativeGenomePreviewPixels] square,
+     * tightly packed RGBA8 with [rowStride] bytes to a row, and it lands in the caller's memory
+     * once.
+     *
+     * Returns 0 when a preview was drawn, 1 when the renderer refused it, 2 when the handle or
+     * the arguments are not usable, and 3 when the genome grew into nothing living -- which is an
+     * answer about the genome, not a fault, and the caller shows it as an empty preview.
+     */
+    external fun nativeCaptureGenomePreviewIntoAddress(
+        sessionHandle: Long,
+        genomeBytes: ByteArray,
+        maximumSimulationTime: Double,
+        address: Long,
+        rowStride: Int
+    ): Int
+
+    /**
+     * The same preview into a direct buffer, for callers that hold one.
+     *
+     * Written as a second entry point rather than as a conversion in the caller because the
+     * conversion would be a copy of a whole picture: a test that wanted pixels and got them by
+     * way of an address would be measuring a different path from the one the editor uses.
+     */
+    external fun nativeCaptureGenomePreview(
+        sessionHandle: Long,
+        genomeBytes: ByteArray,
+        maximumSimulationTime: Double,
+        pixels: java.nio.ByteBuffer,
+        rowStride: Int
+    ): Int
+    /**
+     * The same preview, taken from a camera the caller holds.
+     *
+     * The plain [nativeCaptureGenomePreview] frames the organism itself, which is what a genome's
+     * saved picture wants. This one is for a preview somebody is looking at and moving: the camera
+     * is theirs, and the picture is taken from where they put it. It is used as it stands, even
+     * where it shows nothing, because a preview that snapped back to the organism whenever the view
+     * moved off it would fight the hand that moved it.
+     */
+    external fun nativeCaptureGenomePreviewWithCameraIntoAddress(
+        sessionHandle: Long,
+        genomeBytes: ByteArray,
+        maximumSimulationTime: Double,
+        cameraCenterX: Double,
+        cameraCenterY: Double,
+        cameraZoom: Float,
+        address: Long,
+        rowStride: Int
+    ): Int
+
+    /** The same into a direct buffer, for callers that hold one. */
+    external fun nativeCaptureGenomePreviewWithCamera(
+        sessionHandle: Long,
+        genomeBytes: ByteArray,
+        maximumSimulationTime: Double,
+        cameraCenterX: Double,
+        cameraCenterY: Double,
+        cameraZoom: Float,
+        pixels: java.nio.ByteBuffer,
+        rowStride: Int
+    ): Int
+    /**
+     * Hands the preview session the genome it should show. The phone publishes content and view
+     * state separately and then asks the preview to draw -- that is what makes an interactive
+     * preview interactive, because the camera survives between frames.
+     */
+    external fun nativePublishGenomePreviewContent(
+        sessionHandle: Long,
+        genomeBytes: ByteArray,
+        simulationTimeHours: Double
+    ): Int
+
+    /** Where the preview's view stands: selected gene, grid, tree, viewport size. */
+    external fun nativePublishGenomePreviewViewState(
+        sessionHandle: Long,
+        selectedGeneIndex: Int,
+        gridEnabled: Boolean,
+        treeEnabled: Boolean,
+        viewportWidth: Int,
+        viewportHeight: Int
+    ): Int
+
+    /**
+     * One thing the person did to the preview, numbered as the phone numbers it:
+     * 0 restore viewport, 1 move, 2 zoom, 3 select gene, 4 capture ghost, 5 clear ghost.
+     */
+    external fun nativeEnqueueGenomePreviewInteraction(
+        sessionHandle: Long,
+        kind: Int,
+        first: Float,
+        second: Float,
+        third: Float
+    ): Int
+    /**
+     * The preview's own frame, drawn into the caller's memory.
+     *
+     * This is the world the published content built, seen through the viewport the published view
+     * moved -- so a camera somebody dragged is the camera the picture comes from. Returns 0 when a
+     * frame was written, 3 when there is nothing to draw yet, 1 when the session is gone.
+     */
+    external fun nativeDrawGenomePreviewIntoAddress(
+        sessionHandle: Long,
+        address: Long,
+        rowStride: Int
+    ): Int
+
+    /**
+     * Where the preview stands: how many cells it grew, which gene a tap chose, and its camera.
+     *
+     * Nine numbers, read as one snapshot rather than as nine calls, because a cell count from
+     * before a selection read beside the selection itself would describe two different previews.
+     * In order: the cell count, the content revision it was counted at, the preview's cell
+     * allocation, the selection token, the selected gene index, the viewport revision, and then
+     * the camera's centre X, centre Y and zoom.
+     *
+     * The last three are the bit patterns of floats, for the reason the plate's food mass travels
+     * that way: a long cannot hold a fraction, and a rounded camera is a camera nobody set. Read
+     * them with [Float.fromBits].
+     *
+     * Null when the handle is not a live session.
+     */
+    external fun nativeReadGenomePreviewStatus(sessionHandle: Long): LongArray?
 
     external fun nativeStopSession(sessionHandle: Long): Int
 

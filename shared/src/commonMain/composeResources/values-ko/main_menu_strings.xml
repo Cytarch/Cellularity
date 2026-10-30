@@ -9,4 +9,6 @@
 
     <string name="main_menu_tab_about">정보</string>
 
+    <string name="main_menu_import_action">파일 가져오기</string>
+
 </resources>

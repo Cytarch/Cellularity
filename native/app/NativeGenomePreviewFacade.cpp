@@ -51,12 +51,29 @@ cellularity::render::RenderFrameResult NativeGenomePreviewFacade::draw(
     return mPreview->draw(context, backend, captureMetadata);
 }
 
+std::size_t NativeGenomePreviewFacade::drawIntoRgba(
+        NativeWorldContext context,
+        cellularity::render::RenderSurfaceSession& backend,
+        std::uint8_t* destination,
+        std::size_t destinationSize,
+        std::size_t rowStride,
+        bool& wrote) {
+    return mPreview->drawIntoRgba(context.world,
+            context.viewport,
+            backend,
+            destination,
+            destinationSize,
+            rowStride,
+            wrote);
+}
+
 std::vector<std::uint8_t> NativeGenomePreviewFacade::captureFilePreviewRgba(
         const cellularity::GenomeData& genome,
         double maximumSimulationTime,
-        cellularity::render::RenderSurfaceSession& backend) {
+        cellularity::render::RenderSurfaceSession& backend,
+        const GenomePreviewController::Camera* camera) {
     return mPreview->captureFilePreviewRgba(
-            genome, maximumSimulationTime, backend);
+            genome, maximumSimulationTime, backend, camera);
 }
 
 int NativeGenomePreviewFacade::selectGeneAt(const SimulationWorld& world, double worldX, double worldY) {

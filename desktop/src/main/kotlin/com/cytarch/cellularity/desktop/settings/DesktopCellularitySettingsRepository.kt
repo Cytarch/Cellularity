@@ -258,18 +258,8 @@ class DesktopCellularitySettingsRepository(
             // Written beside the target and then moved over it. The move is atomic on
             // the same volume, so a reader either sees the whole previous document or
             // the whole new one, never a half-written file.
-            val temporary = Files.createTempFile(
-                directory,
-                settingsFile.fileName.toString(),
-                ".tmp"
-            )
+            val temporary = writeTemporary(directory, encoded, checkCancellation)
             try {
-                Files.write(
-                    temporary,
-                    encoded,
-                    StandardOpenOption.WRITE,
-                    StandardOpenOption.TRUNCATE_EXISTING
-                )
                 checkCancellation()
                 // Read back what was actually written. A document that round-trips to
                 // something else means the encoder or the normalizer is not stable, and
@@ -333,6 +323,52 @@ class DesktopCellularitySettingsRepository(
     }
 
     /**
+     * Creates the temporary file beside the document and writes the encoded bytes into it.
+     *
+     * One attempt, deliberately. An earlier version retried three times: a real report showed
+     * `AccessDeniedException` naming a `.tmp` file in this directory, and an antivirus scan of a
+     * file that had just appeared was the suspected cause. Measuring it instead of guessing found
+     * something else entirely -- the process was running at low integrity, because the folder the
+     * build produced the application in carries a mandatory label, and such a process is refused
+     * every write into an ordinary user profile. That refusal is permanent, not the duration of a
+     * scan: three attempts, thirty, three hundred all get the same answer, and retrying only turned
+     * "the settings cannot be saved here" into "the settings cannot be saved here, after three
+     * attempts", which is slower to see and harder to read.
+     *
+     * A genuinely transient refusal cannot be told apart from a permanent one by retrying inside
+     * the same call -- both are `AccessDeniedException` -- so what the code does instead is say
+     * which permission was refused; see [explainRefusal].
+     */
+    private fun writeTemporary(
+        directory: Path,
+        encoded: ByteArray,
+        checkCancellation: () -> Unit
+    ): Path {
+        checkCancellation()
+        val temporary = Files.createTempFile(directory, settingsFile.fileName.toString(), ".tmp")
+        try {
+            Files.write(
+                temporary,
+                encoded,
+                StandardOpenOption.WRITE,
+                StandardOpenOption.TRUNCATE_EXISTING
+            )
+            return temporary
+        } catch (failure: Exception) {
+            // A temporary file that was created and then refused a write is left behind unless it
+            // is removed here, and a directory that slowly fills with half-written settings
+            // documents is a worse fault than the one being reported.
+            try {
+                Files.deleteIfExists(temporary)
+            } catch (ignored: Exception) {
+                // Best effort: failing to remove a leftover is never the reason the settings could
+                // not be saved, and it must not replace the reason that they could not.
+            }
+            throw failure
+        }
+    }
+
+    /**
      * Recovery copies are numbered rather than overwritten, so a second failure does
      * not destroy the document the first one preserved.
      */
@@ -368,9 +404,8 @@ class DesktopCellularitySettingsRepository(
      * rather than where is the difference between a report somebody can act on and one that only
      * says a thing did not work.
      */
-    private fun ioError(failure: Exception): SettingsError = SettingsError(
-        SettingsErrorCode.IO_FAILURE,
-        buildString {
+    private fun ioError(failure: Exception): SettingsError {
+        val described = buildString {
             append(failure.javaClass.simpleName)
             val message = failure.message
             if (!message.isNullOrBlank()) {
@@ -391,7 +426,52 @@ class DesktopCellularitySettingsRepository(
                 append(')')
             }
         }
-    )
+        val explanation = explainRefusal(failure)
+        return SettingsError(
+            SettingsErrorCode.IO_FAILURE,
+            if (explanation == null) described else "$described. $explanation"
+        )
+    }
+
+    /**
+     * Which permission the file system refused, when it refused one.
+     *
+     * This exists because the exception itself does not say. `AccessDeniedException` carries a path
+     * and nothing else, and the two situations that produce it here could not be further apart:
+     * a file or folder that is read-only for everybody, and a process that is allowed by the access
+     * check but refused by a mandatory label it inherited from where it was started. Only the first
+     * can be fixed by changing the file; the second is a property of the process, and a person can
+     * only act on it if they are told it is what happened.
+     *
+     * The last case is deliberately not "unknown": reaching it means the folder and the file both
+     * answer that they are writable, which leaves the process's own permissions as the remaining
+     * explanation, and saying so is more use than saying nothing.
+     */
+    private fun explainRefusal(failure: Exception): String? {
+        val refused = generateSequence<Throwable>(failure) { it.cause }
+            .any { it is AccessDeniedException }
+        if (!refused) return null
+        val directory = settingsFile.parent
+        return when {
+            directory == null -> null
+
+            !Files.isDirectory(directory) ->
+                "The settings folder $directory does not exist and could not be created."
+
+            !Files.isWritable(directory) ->
+                "The settings folder $directory cannot be written to by this account: it is " +
+                    "read-only, or it belongs to somebody else."
+
+            Files.exists(settingsFile) && !Files.isWritable(settingsFile) ->
+                "The settings file $settingsFile is read-only."
+
+            else ->
+                "The settings folder $directory is writable, so the refusal came from this " +
+                    "process's own permissions rather than from the file: that is what happens " +
+                    "when the application is started from a folder Windows marked with a lower " +
+                    "integrity level than the profile it is writing to."
+        }
+    }
 
     private fun ioFailure(detail: String): SettingsResult.Failure =
         SettingsResult.Failure(SettingsError(SettingsErrorCode.IO_FAILURE, detail))
@@ -400,5 +480,6 @@ class DesktopCellularitySettingsRepository(
         /** Generous for a settings document, tight enough to bound a hostile file. */
         const val MAXIMUM_DOCUMENT_BYTES = 1L * 1024L * 1024L
         const val MAXIMUM_RECOVERY_FILES = 16
+
     }
 }

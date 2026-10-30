@@ -406,6 +406,10 @@ void copyViewport(const CellularityVulkanViewportStateV1& source,
         destination = OffscreenRenderTarget::SubstratePreview;
         return true;
     }
+    if (source == CELLULARITY_VULKAN_OFFSCREEN_LIVE_FRAME_V1) {
+        destination = OffscreenRenderTarget::LiveFrame;
+        return true;
+    }
     return false;
 }
 
@@ -874,10 +878,11 @@ CellularityVulkanOperationStatusV1 beginOffscreenRgba(
     }
 }
 
-CellularityVulkanPassStatusV1 drawMicroscopeOffscreenPass(
+CellularityVulkanPassStatusV1 drawMicroscopeOffscreenPassWithHud(
         CellularityVulkanSessionHandle session,
         const CellularityVulkanPresentationStateV1* presentation,
-        const CellularityPreparedRenderFrameViewV1* frame) noexcept {
+        const CellularityPreparedRenderFrameViewV1* frame,
+        const CellularityVulkanDebugHudViewV1* debugHud) noexcept {
     if (session == nullptr)
         return CELLULARITY_VULKAN_PASS_FAILED_V1;
     try {
@@ -887,14 +892,30 @@ CellularityVulkanPassStatusV1 drawMicroscopeOffscreenPass(
                 || !decodeFrame(frame, decodedFrame)) {
             return CELLULARITY_VULKAN_PASS_FAILED_V1;
         }
+        cellularity::microscope::MicroscopeDebugHudTelemetry decodedHud;
+        const auto* hud = debugHud != nullptr
+                        && decodeHud(debugHud, decodedHud)
+                ? &decodedHud
+                : nullptr;
+        if (debugHud != nullptr && hud == nullptr) {
+            return CELLULARITY_VULKAN_PASS_FAILED_V1;
+        }
         return session->implementation->drawMicroscopeOffscreenPass(
-                       decodedFrame, decodedPresentation)
+                       decodedFrame, decodedPresentation, hud)
                         == RenderPassStatus::Completed
                 ? CELLULARITY_VULKAN_PASS_COMPLETED_V1
                 : CELLULARITY_VULKAN_PASS_FAILED_V1;
     } catch (...) {
         return CELLULARITY_VULKAN_PASS_FAILED_V1;
     }
+}
+
+CellularityVulkanPassStatusV1 drawMicroscopeOffscreenPass(
+        CellularityVulkanSessionHandle session,
+        const CellularityVulkanPresentationStateV1* presentation,
+        const CellularityPreparedRenderFrameViewV1* frame) noexcept {
+    return drawMicroscopeOffscreenPassWithHud(session, presentation, frame,
+            nullptr);
 }
 
 CellularityVulkanPassStatusV1 endGenomeOffscreenPass(
@@ -951,6 +972,41 @@ CellularityVulkanOperationStatusV1 cancelOffscreenRgba(
         return CELLULARITY_VULKAN_OPERATION_OK_V1;
     } catch (...) {
         return CELLULARITY_VULKAN_OPERATION_FAILED_V1;
+    }
+}
+
+// The direct form of finishOffscreenRgba: the backend copies out of its mapped
+// readback buffer straight into the caller's storage, so the intermediate image
+// the entry point above assembles and then copies never exists. That is what
+// makes a per-frame readback affordable -- one pass over the pixels per frame
+// instead of three, and no allocation.
+CellularityVulkanPassStatusV1 finishOffscreenRgbaInto(
+        CellularityVulkanSessionHandle session,
+        CellularityVulkanOffscreenTargetV1 target, std::int32_t width,
+        std::int32_t height, std::uint8_t* destination,
+        std::uint64_t destinationSize, std::uint64_t rowStride,
+        std::uint64_t* outBytesWritten) noexcept {
+    if (outBytesWritten != nullptr)
+        *outBytesWritten = 0;
+    OffscreenRenderTarget decoded;
+    if (session == nullptr || !decodeTarget(target, decoded)
+            || destination == nullptr || outBytesWritten == nullptr
+            || width <= 0 || height <= 0
+            || destinationSize > std::numeric_limits<std::size_t>::max()
+            || rowStride > std::numeric_limits<std::size_t>::max()) {
+        return CELLULARITY_VULKAN_PASS_FAILED_V1;
+    }
+    try {
+        const std::size_t written =
+                session->implementation->finishOffscreenRgbaInto(decoded,
+                        width, height, destination,
+                        static_cast<std::size_t>(destinationSize),
+                        static_cast<std::size_t>(rowStride));
+        *outBytesWritten = written;
+        return written == 0 ? CELLULARITY_VULKAN_PASS_FAILED_V1
+                            : CELLULARITY_VULKAN_PASS_COMPLETED_V1;
+    } catch (...) {
+        return CELLULARITY_VULKAN_PASS_FAILED_V1;
     }
 }
 
@@ -1085,6 +1141,9 @@ CellularityVulkanDiagnosticsStatusV1 releaseDiagnosticsSnapshot(
     api.get_diagnostics_size = &getDiagnosticsSize;
     api.read_diagnostics_chunk = &readDiagnosticsChunk;
     api.release_diagnostics_snapshot = &releaseDiagnosticsSnapshot;
+    api.finish_offscreen_rgba_into = &finishOffscreenRgbaInto;
+    api.draw_microscope_offscreen_pass_with_hud =
+            &drawMicroscopeOffscreenPassWithHud;
     return api;
 }
 

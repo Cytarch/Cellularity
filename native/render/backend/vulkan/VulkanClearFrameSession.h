@@ -64,7 +64,9 @@ public:
                     debugHudTelemetry);
     [[nodiscard]] RenderPassStatus drawMicroscopeOffscreenPass(
             const PreparedRenderFrameView& frame,
-            const RenderPresentationState& presentation);
+            const RenderPresentationState& presentation,
+            const cellularity::microscope::MicroscopeDebugHudTelemetry*
+                    debugHudTelemetry = nullptr);
     [[nodiscard]] RenderFrameResult renderClear(
             const RenderViewportState& viewport,
             const std::array<float, 4>& color);
@@ -74,6 +76,13 @@ public:
             OffscreenRenderTarget target, int width, int height);
     [[nodiscard]] std::vector<std::uint8_t> finishOffscreenRgba(
             OffscreenRenderTarget target);
+    // Writes the finished image straight into caller storage at the caller's
+    // row stride, so a per-frame consumer never builds the intermediate image.
+    // Returns the number of bytes written.
+    [[nodiscard]] std::size_t finishOffscreenRgbaInto(
+            OffscreenRenderTarget target, int width, int height,
+            std::uint8_t* destination, std::size_t destinationSize,
+            std::size_t rowStride);
     void cancelOffscreenRgba(OffscreenRenderTarget target) noexcept;
     void beginGenomePreviewFrame(
             int width, int height, bool fullyTransparentClear);

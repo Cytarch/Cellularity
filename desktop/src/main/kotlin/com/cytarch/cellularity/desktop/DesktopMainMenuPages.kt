@@ -125,6 +125,18 @@ private fun DesktopFreezerPage(
 
     FreezerScreen(
         items = state.items,
+        // The plate's own picture, decoded here rather than left to the screen's default
+        // placeholder: a person recognises a plate by what it looked like, and the freezer is a
+        // list of things they have to choose between.
+        previewContent = { item, previewModifier, previewShape ->
+            DesktopStoredSubstratePreview(
+                id = item.id,
+                previewAvailable = item.previewAvailable,
+                repository = environment.fileRepository,
+                modifier = previewModifier,
+                clipShape = previewShape
+            )
+        },
         onAction = { action -> scope.launch { store.dispatch(action) } },
         // The same native policy the phone asks, reached through the desktop bridge. It
         // needs no session -- it is a question about a shape, not about a running world --

@@ -5,34 +5,47 @@
 package com.cytarch.cellularity.desktop
 
 import androidx.compose.material3.MaterialTheme
-import com.cytarch.cellularity.desktop.nativebridge.SurfaceDiagnostics
 import androidx.compose.ui.awt.ComposePanel
+import com.cytarch.cellularity.desktop.files.DesktopCellularityFileRepository
 import com.cytarch.cellularity.desktop.nativebridge.DesktopAssetRoots
 import com.cytarch.cellularity.desktop.nativebridge.DesktopNativeRenderer
-import com.cytarch.cellularity.desktop.files.DesktopCellularityFileRepository
 import com.cytarch.cellularity.shared.model.SimulationContract
+import com.cytarch.cellularity.shared.settings.CellularityThemeColors
+import com.cytarch.cellularity.shared.settings.CellularityThemeComponents
+import com.cytarch.cellularity.shared.ui.theme.CellularityTheme
 import java.awt.Dimension
 import java.awt.Frame
+import java.nio.file.Files
+import java.nio.file.Path
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicReference
+import javax.imageio.ImageIO
 
 /**
- * Opens the play screen on a live simulation, to be watched.
+ * Opens the play screen on a live simulation and photographs it, over and over.
  *
- * This is the one step of the port that no assertion covers: the journey from the menu
- * into a running plate is something only a window can show, and a mistake in it looks
- * like an empty window rather than a failing test. The program reports what it built and
- * then stays up; whether the picture is right is for a person to say.
+ * This is the one step of the port that no assertion covers: the journey from the menu into a
+ * running plate is something only a window can show, and a mistake in it looks like an empty
+ * window rather than a failing test. The probe therefore stays up while the run is watched, and
+ * keeps writing pictures of its own window to `build/diagnostics/playscreen`.
  *
- * Run through `:desktop:runPlayScreen`.
+ * The pictures used to be impossible. The world lived in a child window of its own, so what the
+ * bridge could capture was that window's surface -- which the GPU may never have written the
+ * pixels into -- and every capture came back as one flat colour. The frame is drawn by the
+ * application's own scene now, in the same window as the interface, so a capture of that window
+ * is a picture of everything: the world, and the interface above it.
+ *
+ * Run through `:desktop:runPlayScreen`, and drive the window with real input while it runs.
  */
 fun main() {
-    // A repository of its own under the build directory, so a probe never reads or
-    // writes the genomes the person running it has saved.
+    // A repository of its own under the build directory, so a probe never reads or writes the
+    // genomes the person running it has saved.
     val probeRepository = DesktopCellularityFileRepository(
-        java.nio.file.Files.createTempDirectory("cellularity-probe").resolve("substrates")
+        Files.createTempDirectory("cellularity-probe").resolve("substrates")
     )
+    val pictures = Path.of("build", "diagnostics", "playscreen")
+    Files.createDirectories(pictures)
 
     val failure = AtomicReference<Throwable?>(null)
     val built = CountDownLatch(1)
@@ -47,11 +60,20 @@ fun main() {
             window.pack()
             window.setLocation(40, 40)
             panel.setContent {
-                MaterialTheme {
+                // The application's own theme, not Material's fallback: the probe exists to show
+                // what the application looks like, and a plate drawn outside the theme would show
+                // the lilac palette of the default scheme instead of the one the settings chose.
+                CellularityTheme(
+                    themeColors = CellularityThemeColors.Default,
+                    themeComponents = CellularityThemeComponents.Default
+                ) {
                     DesktopPlayScreen(
                         configuration = SimulationContract.defaultConfiguration,
                         fileRepository = probeRepository,
-                        onExit = { }
+                        onExit = { },
+                        // The renderer's own readout, so that what the probe photographs is also
+                        // the evidence that the setting reaches the session.
+                        performanceHudEnabled = true
                     )
                 }
             }
@@ -76,51 +98,38 @@ fun main() {
 
     println("PLAYSCREEN renderer available=${DesktopNativeRenderer.isAvailable}")
     println("PLAYSCREEN shader root=${DesktopAssetRoots.resolve()?.shaderRoot}")
-    println("PLAYSCREEN the window is up")
+    println("PLAYSCREEN pictures=${pictures.toAbsolutePath()}")
     System.out.flush()
 
-    // A picture of the simulation, taken through the bridge rather than from the screen.
-    //
-    // `Robot` was the only way to photograph anything here, and it photographs the whole display
-    // -- which is not allowed on a machine somebody else is using. The bridge has always had a
-    // capture of its own and it always came back as one flat colour, because a blit from a window
-    // whose content lives on the GPU copies a surface the pixels were never in. PrintWindow asks
-    // the compositor for what is actually shown, and it can only be asked of a window that reads
-    // its messages -- which is what fix has just made this window do.
-    Thread.sleep(6_000)
-    val described = SurfaceDiagnostics.describe()
-    println("PLAYSCREEN surface: $described")
-    // No picture is taken here. The bridge can capture a window, and what it captures is that
-    // window's own surface -- content drawn by the GPU may never have been in it, so the result is
-    // a flat colour and not a photograph of the world. Printing the surface's own account of
-    // itself says far more, and says it reliably: how many times the render loop has gone round,
-    // how many frames it has presented, and what the last one reported.
-    Thread.sleep(4_000)
-    println("PLAYSCREEN surface now: ${SurfaceDiagnostics.describe()}")
-
-    // Whether Windows agrees the window is on screen, and whether a click at its centre would
-    // reach it. Both are asked of the system rather than of this process, because the claim under
-    // check is not what the surface believes about itself -- it is what the rest of Windows sees.
-    // A window that presents frames into a surface nobody can see would pass every check the
-    // surface could make about itself.
-    val handleText = SurfaceDiagnostics.describe()
-    val windowHandle = Regex("window=(\\d+)").find(handleText)?.groupValues?.get(1)?.toLongOrNull()
-    if (windowHandle != null && windowHandle != 0L) {
-        println("PLAYSCREEN scaling: ${DesktopNativeRenderer.nativeDescribeScaling(windowHandle)}")
-        val geometry = DesktopNativeRenderer.nativeWindowGeometry(windowHandle)
-        if (geometry != null && geometry.size >= 4) {
-            val centreX = (geometry[0] + geometry[2] / 2).toInt()
-            val centreY = (geometry[1] + geometry[3] / 2).toInt()
-            println(
-                "PLAYSCREEN at the window's centre ($centreX, $centreY) the window under the " +
-                    "cursor is ${DesktopNativeRenderer.nativeWindowAtPoint(centreX, centreY)} " +
-                    "(1 means this renderer's window)"
-            )
-        }
+    // The window is found by asking the bridge, rather than by reflecting into AWT for a handle:
+    // the bridge already enumerates windows and reports their titles, and a probe that reaches
+    // into the toolkit's internals is a probe that breaks when the toolkit changes.
+    var windowHandle = 0L
+    val findDeadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(30)
+    while (System.nanoTime() < findDeadline && windowHandle == 0L) {
+        windowHandle = findWindowTitled("Cellularity play screen")
+        if (windowHandle == 0L) Thread.sleep(500)
     }
-    System.out.flush()
+    println("PLAYSCREEN window=${if (windowHandle != 0L) "0x" + windowHandle.toString(16) else "not found"}")
+
+    var capture = 0
+    val runUntil = System.nanoTime() + TimeUnit.MINUTES.toNanos(20)
     try {
-        Thread.sleep(TimeUnit.MINUTES.toMillis(10))
+        while (System.nanoTime() < runUntil) {
+            Thread.sleep(CAPTURE_INTERVAL_MILLIS)
+            if (windowHandle == 0L) continue
+            capture++
+            val bitmap = pictures.resolve(String.format("%03d.bmp", capture))
+            val bytes = DesktopNativeRenderer.nativeCaptureWindow(windowHandle, bitmap.toString())
+            if (bytes > 0) {
+                toPng(bitmap, pictures.resolve(String.format("%03d.png", capture)))
+                Files.deleteIfExists(bitmap)
+                println("PLAYSCREEN capture $capture written")
+            } else {
+                println("PLAYSCREEN capture $capture refused (status $bytes)")
+            }
+            System.out.flush()
+        }
     } catch (interrupted: InterruptedException) {
         Thread.currentThread().interrupt()
     } finally {
@@ -132,3 +141,36 @@ fun main() {
         }
     }
 }
+
+/**
+ * The handle of the window with this title, from the bridge's own enumeration.
+ *
+ * The bridge reports one line per window it knows about, with the handle in decimal and the
+ * class and title beside it, which is enough to find the frame this probe opened without asking
+ * AWT for a handle it does not publish.
+ */
+private fun findWindowTitled(title: String): Long {
+    val described = DesktopNativeRenderer.nativeDescribeWindows() ?: return 0L
+    for (line in described.lineSequence()) {
+        if (!line.contains(title)) continue
+        val match = Regex("hwnd=(0x[0-9a-fA-F]+|\\d+)").find(line) ?: continue
+        val text = match.groupValues[1]
+        val value = if (text.startsWith("0x")) {
+            text.substring(2).toLongOrNull(16)
+        } else {
+            text.toLongOrNull()
+        }
+        if (value != null && value != 0L) return value
+    }
+    return 0L
+}
+
+/** Converts a captured bitmap to a picture this repository and a viewer can both read. */
+private fun toPng(source: Path, destination: Path) {
+    ImageIO.read(source.toFile())?.let { image ->
+        ImageIO.write(image, "png", destination.toFile())
+    }
+}
+
+/** How often a picture is taken while the probe is up. */
+private const val CAPTURE_INTERVAL_MILLIS = 2_000L

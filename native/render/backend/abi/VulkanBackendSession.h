@@ -109,12 +109,32 @@ public:
     drawMicroscopeOffscreenPass(
             const CellularityVulkanPresentationStateV1& presentation,
             const CellularityPreparedRenderFrameViewV1& frame) noexcept;
+    // The same pass with the performance HUD telemetry, for a backend whose table is large
+    // enough to serve it. Falls back to the call above when it is not.
+    [[nodiscard]] CellularityVulkanPassStatusV1
+    drawMicroscopeOffscreenPass(
+            const CellularityVulkanPresentationStateV1& presentation,
+            const CellularityPreparedRenderFrameViewV1& frame,
+            const CellularityVulkanDebugHudViewV1* hud) noexcept;
     [[nodiscard]] CellularityVulkanPassStatusV1
     endGenomeOffscreenPass() noexcept;
     [[nodiscard]] CellularityVulkanPassStatusV1 finishOffscreenRgba(
             CellularityVulkanOffscreenTargetV1 target,
             std::uint8_t* destination,
             std::uint64_t destinationSize,
+            std::uint64_t& bytesWritten) noexcept;
+    // The backend's direct readback, which writes into the caller's storage at
+    // the caller's row stride. supportsFinishOffscreenRgbaInto() is false for a
+    // backend that was built before this entry point existed, and this call then
+    // fails instead of reading through a null pointer.
+    [[nodiscard]] bool supportsFinishOffscreenRgbaInto() const noexcept;
+    [[nodiscard]] CellularityVulkanPassStatusV1 finishOffscreenRgbaInto(
+            CellularityVulkanOffscreenTargetV1 target,
+            std::int32_t width,
+            std::int32_t height,
+            std::uint8_t* destination,
+            std::uint64_t destinationSize,
+            std::uint64_t rowStride,
             std::uint64_t& bytesWritten) noexcept;
     [[nodiscard]] CellularityVulkanOperationStatusV1 cancelOffscreenRgba(
             CellularityVulkanOffscreenTargetV1 target) noexcept;

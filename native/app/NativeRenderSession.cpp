@@ -463,6 +463,59 @@ cellularity::render::RenderFrameResult NativeRenderSession::drawMicroscope(
             "Microscope presentation");
 }
 
+// Draws the newest prepared frame into the caller's buffer through the same
+// off-screen route a saved preview uses, on its own target so a live frame and a
+// preview capture can never occupy one another's storage.
+//
+// The pixels land in the caller's memory once: the backend copies out of its
+// mapped readback buffer straight into `destination` at `rowStride`, and the
+// buffer is the caller's for the life of the session. That is what makes this
+// affordable per frame -- a host that composites the world itself calls this
+// sixty times a second, and a path that assembled an image in between would cost
+// an allocation, a zero-fill and a second copy every one of those calls.
+bool NativeRenderSession::drawMicroscopeIntoRgba(
+        const cellularity::render::RenderPresentationState& presentation,
+        std::uint8_t* destination, std::size_t destinationSize,
+        std::size_t rowStride, std::size_t& written,
+        const cellularity::microscope::MicroscopeDebugHudTelemetry*
+                debugHudTelemetry) {
+    written = 0;
+    const auto& viewport = presentation.viewport;
+    if (destination == nullptr || viewport.surfaceWidth <= 0
+            || viewport.surfaceHeight <= 0 || viewport.viewWidth == 0.0f
+            || viewport.viewHeight == 0.0f) {
+        return false;
+    }
+    const auto* frame =
+            framePipeline().presentLatestPreparedFrame(presentation);
+    if (frame == nullptr) {
+        return false;
+    }
+    const int width = viewport.surfaceWidth;
+    const int height = viewport.surfaceHeight;
+    auto& backend = surfaceSession();
+    backend.beginOffscreenRgba(
+            cellularity::render::OffscreenRenderTarget::LiveFrame, width,
+            height);
+    try {
+        if (backend.drawMicroscopeOffscreenPass(
+                    framePipeline().latestPresentation(), *frame,
+                    debugHudTelemetry)
+                != cellularity::render::RenderPassStatus::Completed) {
+            throw std::runtime_error(
+                    "Production renderer rejected the live microscope frame");
+        }
+        written = backend.finishOffscreenRgbaInto(
+                cellularity::render::OffscreenRenderTarget::LiveFrame, width,
+                height, destination, destinationSize, rowStride);
+        return written != 0;
+    } catch (...) {
+        backend.cancelOffscreenRgba(
+                cellularity::render::OffscreenRenderTarget::LiveFrame);
+        throw;
+    }
+}
+
 cellularity::render::RenderFrameResult
 NativeRenderSession::clearMicroscopeNoRender(
         const NativeViewport& viewport) {

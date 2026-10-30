@@ -13,7 +13,6 @@ import com.cytarch.cellularity.shared.ui.play.genome_editor.GenomeScalarField
 import java.awt.Dimension
 import java.awt.Frame
 import java.awt.Rectangle
-import java.awt.Robot
 import java.io.File
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
@@ -190,7 +189,20 @@ fun main() {
     println("GENOME fileState=${store.state.fileState}")
     System.out.flush()
 
-    settle(1_000)
+    // The organism is grown for a day before the window is left open, so that an outside
+    // photograph shows the preview working on something that has developed rather than on the
+    // single cell every genome starts as.
+    store.dispatch(GenomeEditorAction.SetPreviewTime(24.0))
+    settle(6_000)
+    capture(window, File(outputDirectory, "genome-editor-preview-24h.jpg"))
+
+    // The window is held open after its pictures are taken, so that the frame the editor actually
+    // paints can be photographed from outside the process. What the toolkit draws into a picture
+    // of its own is not necessarily what reaches the screen, and the screen is the thing in
+    // question.
+    println("GENOME window held open for ${HOLD_MILLIS / 1000} s")
+    System.out.flush()
+    settle(HOLD_MILLIS)
     javax.swing.SwingUtilities.invokeLater {
         window.isVisible = false
         window.dispose()
@@ -204,6 +216,9 @@ private fun addGene(index: Int): com.cytarch.cellularity.shared.model.GeneDraft 
     DesktopGenomeEditorStore.createRandomizedEditorGene(index)
 
 /** Waits for the interface to catch up, without pretending to know how long that takes. */
+/** How long the window is left on screen for an outside observer to photograph. */
+private const val HOLD_MILLIS = 45_000L
+
 private fun settle(millis: Long) {
     try {
         Thread.sleep(millis)
@@ -212,12 +227,33 @@ private fun settle(millis: Long) {
     }
 }
 
-/** Photographs the window's own rectangle, so the image is what was on screen. */
+/**
+ * Photographs the window itself, asking the window to draw rather than reading the screen.
+ *
+ * Reading the screen would photograph whatever else happens to be on it, which is both a
+ * different picture from the one the editor drew and a picture of somebody's desktop.
+ */
 private fun capture(window: Frame, destination: File): File? = try {
-    val bounds = Rectangle(window.locationOnScreen, window.size)
-    val image = Robot().createScreenCapture(bounds)
-    ImageIO.write(image, "png", destination)
-    destination
+    val size = window.size
+    if (size.width <= 0 || size.height <= 0) {
+        null
+    } else {
+        val image = java.awt.image.BufferedImage(
+            size.width, size.height, java.awt.image.BufferedImage.TYPE_INT_RGB
+        )
+        // A window draws on the event thread of the toolkit that owns it, and this probe runs on
+        // another one, so the drawing is asked for on that thread rather than demanded from here.
+        javax.swing.SwingUtilities.invokeAndWait {
+            val graphics = image.createGraphics()
+            try {
+                window.paintAll(graphics)
+            } finally {
+                graphics.dispose()
+            }
+        }
+        ImageIO.write(image, "jpg", destination)
+        destination
+    }
 } catch (thrown: Throwable) {
     // A capture can fail on a session with no usable display. That is worth saying, but it
     // is not the same as the editor being broken, so it does not stop the run.

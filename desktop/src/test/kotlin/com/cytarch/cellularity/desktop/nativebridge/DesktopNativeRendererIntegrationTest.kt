@@ -4,14 +4,6 @@
 
 package com.cytarch.cellularity.desktop.nativebridge
 
-import java.awt.Canvas
-import java.awt.Color
-import java.awt.Component
-import java.awt.Dimension
-import java.awt.Frame
-import java.awt.event.ComponentAdapter
-import java.awt.event.ComponentEvent
-import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicLong
 import org.junit.Assert.assertEquals
@@ -20,76 +12,43 @@ import org.junit.Assume.assumeTrue
 import org.junit.Test
 
 /**
- * Checks that the renderer can be driven from the JVM through a real window.
+ * Checks that the renderer can be driven from the JVM.
  *
- * This is the part of the desktop port that cannot be established by reading code. The
- * renderer presents into a Win32 child window parented to an AWT canvas, and the whole
- * arrangement depends on a native handle that AWT does not expose in a supported way --
- * if that lookup returns nothing the interface would show a renderer-unavailable message
- * and no amount of unit testing elsewhere would notice.
+ * This is the part of the desktop port that cannot be established by reading code: the renderer
+ * has to come up, take a surface, simulate and hand back pixels. It used to do that by parenting a
+ * Win32 child window to an AWT canvas and reaching into the canvas's peer for its handle, which
+ * was both the thing under test and the reason the test could fail for reasons that had nothing to
+ * do with the renderer.
  *
- * The test is skipped rather than failed when the machine cannot provide what it needs: a
- * library that has not been built, shaders that have not been compiled, or a session with
- * no display. A skip is honest about what was not established; a failure would claim the
- * port is broken when the build simply did not include it.
+ * The renderer is anchored now, not parented: it is given a window of its own that nothing shows
+ * and nothing draws into, and the frame that matters is the one it renders into memory. The test
+ * therefore asks the same question it always asked -- does a session come up and produce a frame --
+ * without depending on an unsupported lookup.
+ *
+ * The test is skipped rather than failed when the machine cannot provide what it needs: a library
+ * that has not been built, shaders that have not been compiled, or a session with no display. A
+ * skip is honest about what was not established; a failure would claim the port is broken when the
+ * build simply did not include it.
  */
 class DesktopNativeRendererIntegrationTest {
 
     @Test
-    fun `creates a child window inside an awt canvas and presents frames`() {
+    fun `creates a session on an anchor window and presents frames`() {
         assumeTrue("the renderer library was not built", DesktopNativeRenderer.isAvailable)
         val roots = DesktopAssetRoots.resolve()
         assumeTrue("the compiled shaders and textures were not found", roots != null)
-        assumeTrue("no display is available", !java.awt.GraphicsEnvironment.isHeadless())
 
-        val frame = Frame("Cellularity native renderer test")
         val size = 640
-        val sized = CountDownLatch(1)
-        val canvas = Canvas().apply {
-            background = Color.BLACK
-            preferredSize = Dimension(size, size)
-        }
-        canvas.addComponentListener(object : ComponentAdapter() {
-            override fun componentResized(event: ComponentEvent) {
-                if (event.component.width > 0 && event.component.height > 0) {
-                    sized.countDown()
-                }
-            }
-        })
-        frame.add(canvas)
-        frame.pack()
-        frame.setLocation(50, 50)
-
         var windowHandle = 0L
         var sessionHandle = 0L
         try {
-            frame.isVisible = true
-            assertTrue(
-                "the canvas never received a size, so AWT did not realise it",
-                sized.await(10, TimeUnit.SECONDS)
-            )
-
-            val ownerHandle = nativeWindowHandleOf(canvas)
-            assertTrue(
-                "the AWT canvas has no native window, so the renderer has nothing to " +
-                    "attach to. This is usually a missing --add-opens for java.awt, " +
-                    "which the launcher sets through JDK_JAVA_OPTIONS.",
-                ownerHandle != 0L
-            )
-
-            windowHandle = DesktopNativeRenderer.nativeCreateWindow(
-                ownerHandle,
-                0,
-                0,
-                canvas.width,
-                canvas.height
-            )
-            assertTrue("the renderer did not create its window", windowHandle != 0L)
+            windowHandle = DesktopNativeRenderer.nativeCreateSurfaceAnchorWindow(size, size)
+            assertTrue("the renderer did not create its anchor", windowHandle != 0L)
 
             sessionHandle = DesktopNativeRenderer.nativeCreateSession(
                 windowHandle,
-                canvas.width,
-                canvas.height,
+                size,
+                size,
                 1_000,
                 3_500,
                 1.0,
@@ -159,8 +118,6 @@ class DesktopNativeRendererIntegrationTest {
             if (windowHandle != 0L) {
                 DesktopNativeRenderer.nativeDestroyWindow(windowHandle)
             }
-            frame.isVisible = false
-            frame.dispose()
         }
     }
 
@@ -171,33 +128,5 @@ class DesktopNativeRendererIntegrationTest {
         // the launcher's teardown safe when a window closes while a frame is in flight.
         assertEquals(2, DesktopNativeRenderer.nativeRenderFrame(0L))
         assertEquals(2, DesktopNativeRenderer.nativeRenderFrame(Long.MAX_VALUE))
-    }
-
-    private companion object {
-        /**
-         * The same lookup the interface uses.
-         *
-         * Repeated here rather than shared so the test does not pass because it and the
-         * production path were changed together to agree on something wrong.
-         */
-        fun nativeWindowHandleOf(component: Component): Long {
-            if (!component.isShowing) return 0L
-            return try {
-                val peerField = Component::class.java.getDeclaredField("peer")
-                peerField.isAccessible = true
-                val peer: Any = peerField.get(component) ?: return 0L
-                val getHWnd = peer.javaClass.methods.firstOrNull { it.name == "getHWnd" }
-                    ?: return 0L
-                (getHWnd.invoke(peer) as? Long) ?: 0L
-            } catch (_: ReflectiveOperationException) {
-                0L
-            } catch (_: RuntimeException) {
-                0L
-            } catch (_: LinkageError) {
-                0L
-            }
-        }
-
-
     }
 }

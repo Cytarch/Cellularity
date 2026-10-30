@@ -1190,11 +1190,20 @@ def verify_saved_file_preview_backend() -> None:
         "preRotationMatrix(renderPreTransform())",
         "VulkanPipelineTarget::Offscreen",
         '"offscreen_output_row_order=top_left\\n"',
-        '"offscreen_readback_only_on_capture=true\\n"',
+        # A host that draws the live frame itself reads one back per frame, on its
+        # own target, into a buffer it owns. The diagnostic states which targets
+        # read back instead of claiming that only captures do.
+        '"offscreen_readback_targets=genome_preview,substrate_preview,live_frame\\n"',
+        '"offscreen_readback_only_on_capture=false\\n"',
+        "OffscreenRenderTarget::LiveFrame",
+        "std::size_t finishOffscreenRgbaInto(",
     ):
-        require(session, snippet, "Vulkan saved-file preview implementation")
+        require(session, snippet, "Vulkan off-screen frame implementation")
     if session.count("vkCmdCopyImageToBuffer") != 2:
-        fail("Vulkan readback copies must exist only for substrate and genome capture")
+        fail(
+            "Vulkan readback copies must exist only for the shared substrate/live "
+            "frame pass and the genome preview pass"
+        )
 
     capture_body = session.split(
         "[[nodiscard]] std::vector<std::uint8_t> finishOffscreenRgba(", 1
