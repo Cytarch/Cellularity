@@ -45,6 +45,12 @@ hs_err_pid*
 replay_pid*
 *.hprof
 
+# One-off investigation scripts. They were written to chase a particular fault and
+# are kept beside the tree rather than in it: they hard-code this machine's paths
+# and one of them drives the window with synthetic input, which is not a way this
+# project measures anything.
+/scripts/diagnostics/
+
 # Profiling outputs
 perf.data
 perf.data.*
