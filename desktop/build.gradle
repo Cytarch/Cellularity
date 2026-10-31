@@ -448,6 +448,12 @@ compose.desktop {
             description = 'Cellularity microscope simulation'
             vendor = 'Cytarch'
 
+            windows {
+                dirChooser = true
+                menu = true
+                shortcut = false
+            }
+
             appResourcesRootDir.set(packagedResourcesDirectory)
         }
     }
