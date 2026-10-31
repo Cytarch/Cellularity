@@ -287,4 +287,4 @@ private fun DesktopSettingsPage(
     )
 }
 
-private const val DESKTOP_VERSION_NAME = "0.1.0-alpha.1"
+private const val DESKTOP_VERSION_NAME = "0.1.1"

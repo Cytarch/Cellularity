@@ -444,7 +444,8 @@ compose.desktop {
                 org.jetbrains.compose.desktop.application.dsl.TargetFormat.Msi
             )
             packageName = 'Cellularity'
-            packageVersion = libs.versions.appVersionName.get().replaceAll(/-.*$/, '')
+            // Windows Installer only runs a major upgrade for a higher numeric version.
+            packageVersion = '0.1.1'
             description = 'Cellularity microscope simulation'
             vendor = 'Cytarch'
 

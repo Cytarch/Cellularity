@@ -35,6 +35,8 @@ android {
     }
     buildTypes {
         debug {
+            applicationIdSuffix = ".debug"
+            versionNameSuffix = "-debug"
             minifyEnabled = false
             shrinkResources = false
             pseudoLocalesEnabled = true

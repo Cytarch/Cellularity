@@ -112,7 +112,8 @@ fun DesktopStoredSubstratePreview(
  *
  * The pixels are copied into a bitmap of this side's own rather than drawn from the decoded image
  * directly: the compressed bytes are freed with the image, and the card keeps its picture for as
- * long as the card is on screen.
+ * long as the card is on screen. A successful conversion leaves the bitmap alive inside the Compose
+ * wrapper; closing it here would leave that wrapper with a null native pointer on its first draw.
  */
 private fun decodePreview(bytes: ByteArray): ImageBitmap? {
     val decoded = try {
@@ -133,13 +134,15 @@ private fun decodePreview(bytes: ByteArray): ImageBitmap? {
             )
         )
         if (!decoded.readPixels(bitmap, 0, 0)) {
+            bitmap.close()
             null
         } else {
             bitmap.asComposeImageBitmap()
         }
     } catch (failure: RuntimeException) {
+        bitmap.close()
         null
     } finally {
-        bitmap.close()
+        decoded.close()
     }
 }
