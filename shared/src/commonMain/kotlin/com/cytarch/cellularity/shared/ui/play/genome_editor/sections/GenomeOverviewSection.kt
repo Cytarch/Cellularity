@@ -51,6 +51,7 @@ import com.cytarch.cellularity.shared.ui.components.CellularityAlertDialog
 import com.cytarch.cellularity.shared.ui.components.DefaultCard
 import com.cytarch.cellularity.shared.ui.components.DefaultLabeledCheckbox
 import com.cytarch.cellularity.shared.ui.components.DefaultSlider
+import com.cytarch.cellularity.shared.ui.components.confirmOnEnter
 import com.cytarch.cellularity.shared.ui.theme.cellularityOutlinedTextFieldColors
 import kotlin.math.roundToInt
 
@@ -260,7 +261,9 @@ private fun GenomeColorDialog(
                         capitalization = KeyboardCapitalization.Characters,
                         keyboardType = KeyboardType.Ascii
                     ),
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .confirmOnEnter(onConfirm = onConfirm),
                     colors = cellularityOutlinedTextFieldColors()
                 )
                 Spacer(modifier = Modifier.height(8.dp))

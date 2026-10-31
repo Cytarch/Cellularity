@@ -75,6 +75,7 @@ import com.cytarch.cellularity.shared.generated.resources.plate
 import com.cytarch.cellularity.shared.generated.resources.simulation_hour_abbreviation
 import com.cytarch.cellularity.shared.settings.ExperimentCollectionPreferences
 import com.cytarch.cellularity.shared.ui.components.CellularityAlertDialog
+import com.cytarch.cellularity.shared.ui.components.confirmOnEnter
 import com.cytarch.cellularity.shared.ui.main_menu.collection.FileCollectionCard
 import com.cytarch.cellularity.shared.ui.main_menu.collection.FileCollectionDeleteDialog
 import com.cytarch.cellularity.shared.ui.main_menu.collection.FileCollectionGrid
@@ -482,6 +483,9 @@ private fun AdvancedSettingsDialog(
     val usageText = estimatedMegabytes?.let { megabytes ->
         stringResource(Res.string.freezer_memory_estimate_format, megabytes)
     }.orEmpty()
+    fun startAdvancedConfiguration() {
+        configuration?.let(onStart)
+    }
 
     CellularityAlertDialog(
         onDismissRequest = onDismiss,
@@ -513,7 +517,13 @@ private fun AdvancedSettingsDialog(
                     value = cells,
                     onValueChange = { cells = it },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .confirmOnEnter(
+                            enabled = estimatedMegabytes != null,
+                            onConfirm = ::startAdvancedConfiguration
+                        ),
                     colors = cellularityOutlinedTextFieldColors()
                 )
 
@@ -527,7 +537,13 @@ private fun AdvancedSettingsDialog(
                     value = food,
                     onValueChange = { food = it },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .confirmOnEnter(
+                            enabled = estimatedMegabytes != null,
+                            onConfirm = ::startAdvancedConfiguration
+                        ),
                     colors = cellularityOutlinedTextFieldColors()
                 )
 
@@ -541,7 +557,13 @@ private fun AdvancedSettingsDialog(
                     value = diameter,
                     onValueChange = { diameter = it },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .confirmOnEnter(
+                            enabled = estimatedMegabytes != null,
+                            onConfirm = ::startAdvancedConfiguration
+                        ),
                     colors = cellularityOutlinedTextFieldColors()
                 )
 
@@ -573,7 +595,13 @@ private fun AdvancedSettingsDialog(
                         value = innerDiameter,
                         onValueChange = { innerDiameter = it },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .confirmOnEnter(
+                                enabled = estimatedMegabytes != null,
+                                onConfirm = ::startAdvancedConfiguration
+                            ),
                         isError = configuration == null,
                         colors = cellularityOutlinedTextFieldColors()
                     )
@@ -590,9 +618,7 @@ private fun AdvancedSettingsDialog(
         confirmButton = {
             TextButton(
                 enabled = estimatedMegabytes != null,
-                onClick = {
-                    configuration?.let(onStart)
-                }
+                onClick = ::startAdvancedConfiguration
             ) {
                 Text(stringResource(Res.string.common_start_action))
             }

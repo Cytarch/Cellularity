@@ -75,6 +75,7 @@ import androidx.compose.ui.zIndex
 import com.cytarch.cellularity.shared.model.GeneDraft
 import com.cytarch.cellularity.shared.model.GenomeContract
 import com.cytarch.cellularity.shared.ui.components.CellularityAlertDialog
+import com.cytarch.cellularity.shared.ui.components.confirmOnEnter
 import com.cytarch.cellularity.shared.ui.components.DefaultLabeledCheckbox
 import com.cytarch.cellularity.shared.ui.components.DefaultSlider
 import com.cytarch.cellularity.shared.ui.play.genome_editor.sections.GenomePreviewSurfaceGeometry
@@ -998,6 +999,9 @@ private fun GenomeSaveDialog(
     onAction: (GenomeEditorAction) -> Unit
 ) {
     var name by remember(initialName) { mutableStateOf(initialName) }
+    fun confirmSave() {
+        onAction(GenomeEditorAction.ConfirmSave(name))
+    }
     CellularityAlertDialog(
         onDismissRequest = { onAction(GenomeEditorAction.DismissSave) },
         title = { Text(stringResource(Res.string.genome_editor_save_dialog_title)) },
@@ -1010,13 +1014,15 @@ private fun GenomeSaveDialog(
                     onValueChange = { name = it },
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text),
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .confirmOnEnter(onConfirm = ::confirmSave),
                     colors = cellularityOutlinedTextFieldColors()
                 )
             }
         },
         confirmButton = {
-            TextButton(onClick = { onAction(GenomeEditorAction.ConfirmSave(name)) }) {
+            TextButton(onClick = ::confirmSave) {
                 Text(stringResource(Res.string.genome_editor_save_dialog_action))
             }
         },

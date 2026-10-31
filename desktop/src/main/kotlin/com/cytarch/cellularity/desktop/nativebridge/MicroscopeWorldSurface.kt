@@ -16,6 +16,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -104,6 +105,8 @@ fun MicroscopeRenderSurface(
      */
     placementGenomeBytes: ByteArray?,
     isVisible: Boolean,
+    /** Unit-length direction supplied by held WASD keys; zero disables keyboard movement. */
+    cameraPanDirection: Offset = Offset.Zero,
     onCellCount: (Long) -> Unit,
     onFailure: (String) -> Unit,
     onSessionReady: (Long) -> Unit,
@@ -174,6 +177,26 @@ fun MicroscopeRenderSurface(
     // what keeps a slow frame from becoming a frozen window.
     LaunchedEffect(surface, isVisible) {
         surface.setPresenting(isVisible)
+    }
+    LaunchedEffect(surface, isVisible, cameraPanDirection) {
+        if (!isVisible || cameraPanDirection == Offset.Zero) return@LaunchedEffect
+        var previousFrameNanos = 0L
+        while (true) {
+            withFrameNanos { frameNanos ->
+                if (previousFrameNanos != 0L) {
+                    // Time-based movement is independent of the render rate. The cap prevents a
+                    // stalled UI frame from turning one held key into a large jump.
+                    val elapsedSeconds = ((frameNanos - previousFrameNanos) / 1_000_000_000.0)
+                        .toFloat()
+                        .coerceIn(0f, MAX_KEYBOARD_PAN_FRAME_SECONDS)
+                    surface.queuePan(
+                        cameraPanDirection.x * KEYBOARD_PAN_PIXELS_PER_SECOND * elapsedSeconds,
+                        cameraPanDirection.y * KEYBOARD_PAN_PIXELS_PER_SECOND * elapsedSeconds
+                    )
+                }
+                previousFrameNanos = frameNanos
+            }
+        }
     }
     LaunchedEffect(surface, temperatureMode) {
         surface.setTemperatureMode(temperatureMode)
@@ -991,6 +1014,10 @@ private const val TOUCH_PHASE_UP = 2
 
 /** A wheel notch zooms by this factor, the step the standalone host used. */
 private const val WHEEL_ZOOM_STEP = 1.1f
+
+/** Keyboard camera speed in screen pixels, with long UI stalls capped to one small step. */
+private const val KEYBOARD_PAN_PIXELS_PER_SECOND = 600f
+private const val MAX_KEYBOARD_PAN_FRAME_SECONDS = 0.05f
 
 /** Below this speed a release is a click rather than a throw. The phone's own threshold. */
 private const val FLING_MINIMUM_SPEED = 50f

@@ -91,6 +91,7 @@ import com.cytarch.cellularity.shared.settings.CellularityThemeColors
 import com.cytarch.cellularity.shared.settings.normalizeHexColor
 import com.cytarch.cellularity.shared.ui.components.CellularityAlertDialog
 import com.cytarch.cellularity.shared.ui.components.DefaultLabeledRadioButton
+import com.cytarch.cellularity.shared.ui.components.confirmOnEnter
 import com.cytarch.cellularity.shared.ui.theme.CellularityDimensions
 import com.cytarch.cellularity.shared.ui.theme.cellularityOutlinedTextFieldColors
 import org.jetbrains.compose.resources.stringArrayResource
@@ -326,12 +327,53 @@ private fun ThemeEditorPreference(
         var sliderTrackHeight by remember(theme, components) { mutableStateOf(formatComponentValue(components.sliderTrackHeight)) }
         var swatchSize by remember(theme, components) { mutableStateOf(formatComponentValue(components.swatchSize)) }
 
+        fun confirmTheme() {
+            onThemePresetChange(
+                CellularityThemeColors(
+                    name = name.ifBlank { CellularityThemeColors.Default.name },
+                    primary = normalizeHexColor(primary, CellularityThemeColors.Default.primary),
+                    secondary = normalizeHexColor(secondary, CellularityThemeColors.Default.secondary),
+                    primaryContainer = normalizeHexColor(
+                        primaryContainer,
+                        CellularityThemeColors.Default.primaryContainer
+                    ),
+                    background = normalizeHexColor(background, CellularityThemeColors.Default.background),
+                    surfaceVariant = normalizeHexColor(
+                        surfaceVariant,
+                        CellularityThemeColors.Default.surfaceVariant
+                    ),
+                    onSurfaceVariant = normalizeHexColor(
+                        onSurfaceVariant,
+                        CellularityThemeColors.Default.onSurfaceVariant
+                    ),
+                    textFieldText = normalizeHexColor(
+                        textFieldText,
+                        CellularityThemeColors.Default.textFieldText
+                    )
+                ),
+                CellularityThemeComponents(
+                    cardCorner = parseComponentValue(cardCorner, CellularityThemeComponents.Default.cardCorner),
+                    cardElevation = parseComponentValue(cardElevation, CellularityThemeComponents.Default.cardElevation),
+                    itemSpacing = parseComponentValue(itemSpacing, CellularityThemeComponents.Default.itemSpacing),
+                    contentPadding = parseComponentValue(contentPadding, CellularityThemeComponents.Default.contentPadding),
+                    listPadding = parseComponentValue(listPadding, CellularityThemeComponents.Default.listPadding),
+                    iconButtonSize = parseComponentValue(iconButtonSize, CellularityThemeComponents.Default.iconButtonSize),
+                    sliderThumbSize = parseComponentValue(sliderThumbSize, CellularityThemeComponents.Default.sliderThumbSize),
+                    sliderTrackHeight = parseComponentValue(sliderTrackHeight, CellularityThemeComponents.Default.sliderTrackHeight),
+                    swatchSize = parseComponentValue(swatchSize, CellularityThemeComponents.Default.swatchSize)
+                ).normalized()
+            )
+            showDialog = false
+        }
+
         CellularityAlertDialog(
             onDismissRequest = { showDialog = false },
             title = { Text(stringResource(Res.string.settings_theme_editor_title)) },
             text = {
                 Column(
-                    modifier = Modifier.verticalScroll(rememberScrollState()),
+                    modifier = Modifier
+                        .verticalScroll(rememberScrollState())
+                        .confirmOnEnter(onConfirm = ::confirmTheme),
                     verticalArrangement = Arrangement.spacedBy(dimensions.medium)
                 ) {
                     OutlinedTextField(
@@ -369,35 +411,7 @@ private fun ThemeEditorPreference(
                 }
             },
             confirmButton = {
-                TextButton(onClick = {
-                    onThemePresetChange(
-                        CellularityThemeColors(
-                            name = name.ifBlank { CellularityThemeColors.Default.name },
-                            primary = normalizeHexColor(primary, CellularityThemeColors.Default.primary),
-                            secondary = normalizeHexColor(secondary, CellularityThemeColors.Default.secondary),
-                            primaryContainer = normalizeHexColor(primaryContainer, CellularityThemeColors.Default.primaryContainer),
-                            background = normalizeHexColor(background, CellularityThemeColors.Default.background),
-                            surfaceVariant = normalizeHexColor(surfaceVariant, CellularityThemeColors.Default.surfaceVariant),
-                            onSurfaceVariant = normalizeHexColor(onSurfaceVariant, CellularityThemeColors.Default.onSurfaceVariant),
-                            textFieldText = normalizeHexColor(
-                                textFieldText,
-                                CellularityThemeColors.Default.textFieldText
-                            )
-                        ),
-                        CellularityThemeComponents(
-                            cardCorner = parseComponentValue(cardCorner, CellularityThemeComponents.Default.cardCorner),
-                            cardElevation = parseComponentValue(cardElevation, CellularityThemeComponents.Default.cardElevation),
-                            itemSpacing = parseComponentValue(itemSpacing, CellularityThemeComponents.Default.itemSpacing),
-                            contentPadding = parseComponentValue(contentPadding, CellularityThemeComponents.Default.contentPadding),
-                            listPadding = parseComponentValue(listPadding, CellularityThemeComponents.Default.listPadding),
-                            iconButtonSize = parseComponentValue(iconButtonSize, CellularityThemeComponents.Default.iconButtonSize),
-                            sliderThumbSize = parseComponentValue(sliderThumbSize, CellularityThemeComponents.Default.sliderThumbSize),
-                            sliderTrackHeight = parseComponentValue(sliderTrackHeight, CellularityThemeComponents.Default.sliderTrackHeight),
-                            swatchSize = parseComponentValue(swatchSize, CellularityThemeComponents.Default.swatchSize)
-                        ).normalized()
-                    )
-                    showDialog = false
-                }) {
+                TextButton(onClick = ::confirmTheme) {
                     Text(ok)
                 }
             },
@@ -725,6 +739,14 @@ private fun EditTextPreference(
     }
 
     if (showDialog) {
+        fun confirmValue() {
+            if (isValueValid(tempValue)) {
+                onValueChange(tempValue)
+                showDialog = false
+            } else {
+                validationFailed = true
+            }
+        }
         CellularityAlertDialog(
             onDismissRequest = { showDialog = false },
             title = { Text(title) },
@@ -743,18 +765,12 @@ private fun EditTextPreference(
                     } else {
                         null
                     },
+                    modifier = Modifier.confirmOnEnter(onConfirm = ::confirmValue),
                     colors = cellularityOutlinedTextFieldColors()
                 )
             },
             confirmButton = {
-                TextButton(onClick = {
-                    if (isValueValid(tempValue)) {
-                        onValueChange(tempValue)
-                        showDialog = false
-                    } else {
-                        validationFailed = true
-                    }
-                }) {
+                TextButton(onClick = ::confirmValue) {
                     Text(ok)
                 }
             },

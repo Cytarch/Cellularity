@@ -93,6 +93,7 @@ import com.cytarch.cellularity.shared.generated.resources.file_collection_switch
 import com.cytarch.cellularity.shared.settings.CollectionLayoutMode
 import com.cytarch.cellularity.shared.settings.CollectionSortDirection
 import com.cytarch.cellularity.shared.ui.components.CellularityAlertDialog
+import com.cytarch.cellularity.shared.ui.components.confirmOnEnter
 import com.cytarch.cellularity.shared.ui.theme.CellularityDimensions
 import com.cytarch.cellularity.shared.ui.theme.cellularityOutlinedTextFieldColors
 import org.jetbrains.compose.resources.stringResource
@@ -660,6 +661,9 @@ internal fun FileCollectionRenameDialog(
     onConfirm: (String) -> Unit
 ) {
     var text by remember(initialName) { mutableStateOf(initialName) }
+    fun confirmName() {
+        if (text.isNotBlank()) onConfirm(text.trim())
+    }
     CellularityAlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(title) },
@@ -668,12 +672,14 @@ internal fun FileCollectionRenameDialog(
                 value = text,
                 onValueChange = { text = it },
                 singleLine = true,
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .confirmOnEnter(onConfirm = ::confirmName),
                 colors = cellularityOutlinedTextFieldColors()
             )
         },
         confirmButton = {
-            TextButton(onClick = { if (text.isNotBlank()) onConfirm(text.trim()) }) {
+            TextButton(onClick = ::confirmName) {
                 Text(stringResource(Res.string.common_ok_action))
             }
         },

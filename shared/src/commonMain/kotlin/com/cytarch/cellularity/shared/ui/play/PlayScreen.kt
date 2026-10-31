@@ -66,6 +66,7 @@ import com.cytarch.cellularity.shared.generated.resources.play_reload_plate_acti
 import com.cytarch.cellularity.shared.generated.resources.play_sterilize_plate_action
 import com.cytarch.cellularity.shared.generated.resources.substrate_icon
 import com.cytarch.cellularity.shared.ui.components.CellularityAlertDialog
+import com.cytarch.cellularity.shared.ui.components.confirmOnEnter
 import com.cytarch.cellularity.shared.ui.theme.CellularityDimensions
 import com.cytarch.cellularity.shared.ui.theme.cellularityOutlinedTextFieldColors
 import org.jetbrains.compose.resources.painterResource
@@ -418,7 +419,9 @@ private fun SavePlateDialog(
                 value = name,
                 onValueChange = onNameChanged,
                 singleLine = true,
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .confirmOnEnter(enabled = !saving, onConfirm = onConfirm),
                 colors = cellularityOutlinedTextFieldColors()
             )
         },

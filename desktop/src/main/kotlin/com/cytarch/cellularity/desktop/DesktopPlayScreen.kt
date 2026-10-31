@@ -25,8 +25,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.isAltPressed
+import androidx.compose.ui.input.key.isCtrlPressed
+import androidx.compose.ui.input.key.isShiftPressed
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
@@ -41,6 +45,7 @@ import com.cytarch.cellularity.shared.files.StoredSubstrateId
 import com.cytarch.cellularity.shared.model.GenomeDraft
 import com.cytarch.cellularity.shared.model.SimulationConfiguration
 import com.cytarch.cellularity.shared.ui.play.PlayAction
+import com.cytarch.cellularity.shared.ui.play.PlayDialog
 import com.cytarch.cellularity.shared.ui.play.PlayEffect
 import com.cytarch.cellularity.shared.ui.play.PlayLaunchSource
 import com.cytarch.cellularity.shared.ui.play.PlayPlateAction
@@ -256,72 +261,88 @@ fun DesktopPlayScreen(
         focusRequester.requestFocus()
     }
 
+    var heldCameraKeys by remember { mutableStateOf(setOf<Key>()) }
+    val cameraInputEnabled = playState.selectedTab == PlayTab.MICROSCOPE &&
+        playState.dialog == PlayDialog.NONE
+    LaunchedEffect(cameraInputEnabled) {
+        if (!cameraInputEnabled) heldCameraKeys = emptySet()
+    }
+
     Box(
         modifier = modifier
             .fillMaxSize()
             .focusRequester(focusRequester)
+            .onFocusChanged { focus ->
+                // Alt-Tab must not leave a key logically held after its release went to another
+                // window. The next physical press starts a fresh movement instead.
+                if (!focus.hasFocus) heldCameraKeys = emptySet()
+            }
             .focusable()
             .onPreviewKeyEvent { event ->
-                if (event.type != KeyEventType.KeyDown) {
-                    return@onPreviewKeyEvent false
+                val cameraUpdate = if (
+                    cameraInputEnabled &&
+                    (!event.isCtrlPressed && !event.isAltPressed || event.type == KeyEventType.KeyUp)
+                ) {
+                    updatedDesktopCameraKeys(heldCameraKeys, event.key, event.type)
+                } else {
+                    null
                 }
-                // Escape is the window's own command and works wherever it is pressed; the rest
-                // belong to the microscope, and answering them while a text field has focus
-                // would mean a genome could not be called "2".
-                val onMicroscope = playState.selectedTab == PlayTab.MICROSCOPE
-                when (event.key) {
-                    // Escape follows the same route as the back button in the tab bar,
-                    // so it asks before discarding rather than leaving outright.
-                    Key.Escape -> {
-                        scope.launch { playStore.dispatch(PlayAction.BackRequested) }
-                        true
-                    }
-
-                    // Sterilising from the keyboard is the same request the plate's menu makes --
-                    // including whether it asks first -- so the two cannot drift apart: there is
-                    // one action, and the setting decides whether it asks.
-                    Key.R -> {
-                        if (!onMicroscope) return@onPreviewKeyEvent false
-                        scope.launch {
-                            playStore.dispatch(
-                                PlayAction.SelectPlateAction(
-                                    action = PlayPlateAction.STERILIZE,
-                                    confirmationRequired = askSterilize
-                                )
+                when {
+                    // Ctrl+Tab belongs to the experiment even when a text field has focus. Both
+                    // press and release are consumed so the key cannot move focus instead.
+                    event.key == Key.Tab && event.isCtrlPressed -> {
+                        if (event.type == KeyEventType.KeyDown) {
+                            val target = cyclePlayTab(
+                                current = playState.selectedTab,
+                                forward = !event.isShiftPressed
                             )
+                            scope.launch { playStore.dispatch(PlayAction.SelectTab(target)) }
                         }
                         true
                     }
 
-                    Key.One -> if (!onMicroscope) false else selectTemperature(
-                        microscopeStore,
-                        MicroscopeTemperature.FREEZE
-                    )
-                    Key.Two -> if (!onMicroscope) false else selectTemperature(
-                        microscopeStore,
-                        MicroscopeTemperature.OBSERVE
-                    )
-                    Key.Three -> if (!onMicroscope) false else selectTemperature(
-                        microscopeStore,
-                        MicroscopeTemperature.INCUBATE
-                    )
-                    Key.Four -> if (!onMicroscope) false else selectTemperature(microscopeStore, MicroscopeTemperature.SLOW)
-                    Key.Five -> if (!onMicroscope) false else selectTemperature(
-                        microscopeStore,
-                        MicroscopeTemperature.INCUBATE_NO_RENDER
-                    )
+                    cameraUpdate != null -> {
+                        heldCameraKeys = cameraUpdate
+                        true
+                    }
 
-                    // The tools, on the keys the standalone host used: 6 to 9 and 0, in the
-                    // order the tool dialog lists them. A keyboard route to each is worth more
-                    // than it sounds on a desktop -- it is the only way to change tools without
-                    // moving the pointer off the cell being looked at.
-                    Key.Six -> if (!onMicroscope) false else selectTool(microscopeStore, MicroscopeTool.CELL)
-                    Key.Seven -> if (!onMicroscope) false else selectTool(microscopeStore, MicroscopeTool.MOVE)
-                    Key.Eight -> if (!onMicroscope) false else selectTool(microscopeStore, MicroscopeTool.ADD)
-                    Key.Nine -> if (!onMicroscope) false else selectTool(microscopeStore, MicroscopeTool.REMOVE)
-                    Key.Zero -> if (!onMicroscope) false else selectTool(microscopeStore, MicroscopeTool.DIAGNOSIS)
+                    event.type != KeyEventType.KeyDown -> false
 
-                    else -> false
+                    else -> when (event.key) {
+                        // Escape follows the same route as the back button in the tab bar,
+                        // so it asks before discarding rather than leaving outright.
+                        Key.Escape -> {
+                            scope.launch { playStore.dispatch(PlayAction.BackRequested) }
+                            true
+                        }
+
+                        // Sterilising from the keyboard is the same request the plate's menu makes --
+                        // including whether it asks first -- so the two cannot drift apart: there is
+                        // one action, and the setting decides whether it asks.
+                        Key.R -> {
+                            if (!cameraInputEnabled) return@onPreviewKeyEvent false
+                            scope.launch {
+                                playStore.dispatch(
+                                    PlayAction.SelectPlateAction(
+                                        action = PlayPlateAction.STERILIZE,
+                                        confirmationRequired = askSterilize
+                                    )
+                                )
+                            }
+                            true
+                        }
+
+                        else -> {
+                            if (!cameraInputEnabled) return@onPreviewKeyEvent false
+                            val temperature = desktopTemperatureShortcut(event.key)
+                            val tool = desktopToolShortcut(event.key)
+                            when {
+                                temperature != null -> selectTemperature(microscopeStore, temperature)
+                                tool != null -> selectTool(microscopeStore, tool)
+                                else -> false
+                            }
+                        }
+                    }
                 }
             }
     ) {
@@ -337,6 +358,7 @@ fun DesktopPlayScreen(
                 MicroscopeTab(
                     state = microscopeState,
                     isVisible = isVisible,
+                    cameraPanDirection = desktopCameraPanDirection(heldCameraKeys),
                     assetRoots = assetRoots,
                     configuration = configuration,
                     substratePath = substratePath,

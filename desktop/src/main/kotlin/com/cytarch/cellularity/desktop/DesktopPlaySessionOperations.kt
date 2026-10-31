@@ -103,10 +103,14 @@ class DesktopPlaySessionOperations(
 
     override suspend fun reset(): PlaySessionCommandResult {
         val gateway = session.await()
+        // Acceptance belongs to the state on which the command was issued. The gateway publishes
+        // the post-reset revision during execute; returning that newer snapshot here would make
+        // the play machine wait for a later observation that this desktop gateway never emits.
+        // Its collector is blocked by the play store's dispatch mutex until this result is
+        // reduced, so the already-published revision is delivered afterwards and releases the lock.
+        val contentBeforeReset = gateway.contentState.value
         return when (val result = gateway.execute(SimulationCommand.Reset)) {
-            SimulationResult.Queued -> PlaySessionCommandResult.Accepted(
-                gateway.contentState.value
-            )
+            SimulationResult.Queued -> PlaySessionCommandResult.Accepted(contentBeforeReset)
 
             is SimulationResult.Failure -> PlaySessionCommandResult.Failure(
                 PlayFailureCause.Simulation(result.error)

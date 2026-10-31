@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import com.cytarch.cellularity.desktop.nativebridge.DesktopAssetRoots
 import com.cytarch.cellularity.desktop.nativebridge.MicroscopeRenderSurface
 import com.cytarch.cellularity.desktop.nativebridge.SubstratePreviewCapture
@@ -41,6 +42,8 @@ import com.cytarch.cellularity.shared.ui.play.microscope.MicroscopeTool
 fun MicroscopeTab(
     state: MicroscopeState,
     isVisible: Boolean,
+    /** Held WASD keys translated to the same screen delta used by a pointer pan. */
+    cameraPanDirection: Offset = Offset.Zero,
     assetRoots: DesktopAssetRoots.Roots?,
     configuration: SimulationConfiguration,
     substratePath: String?,
@@ -99,6 +102,7 @@ fun MicroscopeTab(
                 // not: the session keeps running, so coming back costs a frame rather than a
                 // restart.
                 isVisible = isVisible,
+                cameraPanDirection = cameraPanDirection,
                 onCellCount = onCellCount,
                 onFailure = onFailure,
                 onSessionReady = onSessionReady,
