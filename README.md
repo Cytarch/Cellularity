@@ -1,18 +1,30 @@
 # Cellularity
 
-Cellularity is an open-source cellular simulation for Android. The simulation core and renderer are implemented in C++, while the application UI uses Java, Kotlin, and Compose Multiplatform shared code.
+Cellularity is an open-source cellular simulation for Android and Windows. The simulation core and renderer are implemented in C++; the application UI uses Kotlin and Compose Multiplatform shared code.
 
-The current release line is **0.1.0-alpha.1** (`versionCode 1`). It is an Android-only prerelease, and GitHub Releases is its only planned binary distribution channel. Release binaries must be signed by the project team; signing material is never stored in this repository.
+The current public release line is **0.1.0-alpha.1** (`versionCode 1`) for Android. The `windows-vulkan-port` branch also contains the Windows desktop application and its Vulkan renderer. Windows MSI packages are development artifacts, not a separate published release line.
 
 ## Requirements
 
-- JDK 21
+Common:
+
+- JDK 21 as the Gradle runtime.
+
+Android:
+
 - Android SDK Platform 36
 - Android SDK Build-Tools 36.1.0
 - Android NDK 28.2.13676358
 - CMake 3.22.1
 
-Android Studio can install the Android components declared by the project. For command-line builds, set `ANDROID_HOME` or add an untracked `local.properties` file:
+Windows desktop:
+
+- MSVC and CMake with Ninja support
+- Vulkan headers and loader
+- `glslc` and `spirv-val`
+- zlib
+
+The Windows native dependencies can be supplied through vcpkg. Android Studio can install the Android components declared by the project. For command-line Android builds, set `ANDROID_HOME` or add an untracked `local.properties` file:
 
 ```properties
 sdk.dir=/absolute/path/to/Android/Sdk
@@ -40,17 +52,54 @@ Build the unsigned release APK:
 
 The Android package and application ID are both `com.cytarch.cellularity`. Release signing is intentionally left to the distributor and is not stored in this repository.
 
+### Windows desktop
+
+Install the native dependencies with vcpkg, then configure and build the desktop JNI library from an x64 MSVC developer shell:
+
+```powershell
+vcpkg install zlib:x64-windows vulkan-headers:x64-windows vulkan-loader:x64-windows shaderc:x64-windows 'spirv-tools[tools]:x64-windows'
+
+cmake -S native -B build/win-cmake -G Ninja `
+  -DCMAKE_BUILD_TYPE=Release `
+  -DVCPKG_TARGET_TRIPLET=x64-windows `
+  -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake"
+cmake --build build/win-cmake --target cellularity_desktop_jni
+```
+
+Copy the runtime support libraries beside `cellularity_desktop.dll` when vcpkg has not already done so:
+
+```powershell
+Copy-Item "$env:VCPKG_ROOT\installed\x64-windows\bin\vulkan-1.dll", `
+  "$env:VCPKG_ROOT\installed\x64-windows\bin\z.dll" build\win-cmake\
+```
+
+Run the desktop application and its JVM tests:
+
+```powershell
+.\gradlew.bat :desktop:run
+.\gradlew.bat :desktop:test :shared:jvmTest
+```
+
+Build the MSI with the same Gradle runtime:
+
+```powershell
+.\gradlew.bat :desktop:packageMsi
+```
+
+The installer is written under `desktop\build\compose\binaries\main\msi`. It registers a Start Menu shortcut, offers an installation-directory choice, and does not create a desktop shortcut. Packaging stages the native library, Vulkan support libraries, generated shaders, and textures from `build\win-cmake`; warnings from `stageNativeAssets` identify any missing input.
+
 ## Data compatibility and limits
 
-Current and legacy substrate files remain supported, as do existing genome files. External files are imported through Android's document-provider interface and copied into private application storage before use.
+Current and legacy substrate files remain supported, as do existing genome files. Android imports external files through the document-provider interface and copies them into private application storage. Desktop imports use local files; desktop data is stored under `%APPDATA%\Cellularity` unless `CELLULARITY_DATA_DIR` overrides it.
 
 Input files and decompressed legacy substrate data have an absolute 2 GiB safety limit. Simulation capacity is also rejected when its estimated allocation exceeds 2 GiB. These are upper rejection boundaries, not a promise that every device can run a world near the limit; practical capacity depends on available RAM and GPU resources.
 
 ## Modules
 
 - `app` — Android activities, platform integration, and packaging.
-- `shared` — shared Compose UI, resources, and presentation logic used by Android.
-- `native` — C++ simulation, file formats, interaction, renderer, JNI, and host tests.
+- `shared` — Compose UI, resources, and presentation logic shared by Android and desktop.
+- `desktop` — Compose Desktop window, Windows storage and settings, desktop JNI, and MSI packaging.
+- `native` — C++ simulation, file formats, interaction, GLES/Vulkan rendering, JNI, and host tests.
 
 ## Native host tests
 
@@ -60,13 +109,13 @@ The C++ parity tests can run on Linux with Clang, CMake, Ninja, lld, and zlib de
 scripts/native/test.sh
 ```
 
-See [`scripts/native/README.md`](scripts/native/README.md) for benchmark commands.
+See [`scripts/native/README.md`](scripts/native/README.md) for Windows host requirements, sanitizer commands, and benchmarks.
 
 ## Contributing
 
 See [`CONTRIBUTING.md`](CONTRIBUTING.md) before submitting a change. Security issues should follow [`SECURITY.md`](SECURITY.md).
 
-Release operators should follow [`RELEASE_CHECKLIST.md`](RELEASE_CHECKLIST.md). User-visible changes are recorded in [`CHANGELOG.md`](CHANGELOG.md).
+Android release operators should follow [`RELEASE_CHECKLIST.md`](RELEASE_CHECKLIST.md). User-visible changes are recorded in [`CHANGELOG.md`](CHANGELOG.md).
 
 ## License
 

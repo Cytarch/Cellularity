@@ -1,42 +1,41 @@
 # Cellularity Project Status
 
-Last reviewed: 2026-09-11
+Last reviewed: 2026-10-31
 
 ## Overall state
 
-Cellularity is prepared as an Android-focused open-source project. The current release candidate is `0.1.0-alpha.1` (`versionCode 1`). The repository contains the Android application, shared UI and application contracts, the active native simulation and renderer, tests, build tooling, and required third-party source licenses.
+Cellularity has a public Android prerelease line and an active Windows desktop port. The current Android release candidate remains `0.1.0-alpha.1` (`versionCode 1`). The `windows-vulkan-port` branch adds a Compose Desktop application, Windows storage and settings, desktop JNI, Vulkan rendering, and MSI packaging; Windows installers are development artifacts rather than a published release line.
 
-The public package namespace and Android application ID are consistently set to `com.cytarch.cellularity`. Native packaging produces `libcellularity.so`. GitHub Releases is the only planned binary distribution channel for this prerelease.
+The public Android package namespace and application ID are consistently `com.cytarch.cellularity`. Android native packaging produces `libcellularity.so`; the desktop JNI build produces `cellularity_desktop.dll`. GitHub Releases remains the planned binary distribution channel for the Android prerelease.
 
 ## Release scope
 
-The public source tree consists of two Gradle modules and one root native source tree:
+The source tree consists of three Gradle modules and one root native source tree:
 
 | Module | Purpose | Main technology |
 | --- | --- | --- |
 | `app` | Android application and platform integration | Java, Kotlin |
-| `shared` | UI, resources, and presentation logic consumed by Android | Kotlin, Compose Multiplatform |
-| `native` | Simulation, formats, interaction, rendering, JNI, and host tests | C++ |
+| `shared` | UI, resources, and presentation logic consumed by Android and desktop | Kotlin, Compose Multiplatform |
+| `desktop` | Windows window, storage, settings, JNI integration, and packaging | Kotlin, Compose Desktop |
+| `native` | Simulation, formats, interaction, GLES/Vulkan rendering, JNI, and host tests | C++ |
 
 No signing keys, local SDK paths, generated APKs, build outputs, crash logs, or local IDE state are part of the release tree.
 
 ## Repository and publication boundary
 
-This directory is a standalone Git repository. It has one `main` branch and one root commit with no parent. It has no inherited remotes, submodules, additional worktrees, alternates, replace references, stashes, retained reflog entries, or unreachable commits. The previous private repository and its history are not Git objects in this repository.
+This directory is a standalone Git repository with an intentional public history. The Android publication line is maintained on `main`; `windows-vulkan-port` carries the desktop port and shares the Android application and native sources. Private-repository metadata and migration archives are outside the public source tree.
 
-Generated Gradle, Kotlin, CMake, native, lint, test, and APK outputs are ignored and are removed after validation. There are no tracked archives, APK/AAB files, signing files, local SDK configuration, symlinks, or files larger than 5 MiB.
+Generated Gradle, Kotlin, CMake, native, lint, test, APK, and MSI outputs are ignored. Signing files, local SDK configuration, credentials, and local IDE state must remain untracked.
 
 ## Explicit exclusions
 
 The public tree does not contain:
 
-- the unfinished desktop application or a desktop source set;
-- desktop JNI, desktop OpenGL, or desktop render-target implementations;
 - the legacy Java simulation engine;
-- the old standalone Java substrate-conversion project; legacy decoding required by the Android application remains in the active codecs;
-- private-repository metadata, earlier commits, migration archives, internal work plans, or generated artifacts.
+- the old standalone Java substrate-conversion project; legacy decoding required by the applications remains in the active codecs;
+- private-repository metadata, migration archives, internal work plans, signing material, or generated artifacts.
 
-The `shared` module remains in scope. Its plain JVM target only compiles and tests common code; it has no desktop entry point, window, JNI, or renderer implementation. Host-native parity tests, performance tools, and the genome development CLI remain as development tooling for the current C++ simulation core; they are not desktop application code and are not packaged into the Android APK.
+The `desktop` module is present and active on this branch. It owns the Compose Desktop entry point, Windows platform adapters, and desktop JNI integration; the native tree owns the Vulkan implementation and Win32 host. The `shared` module remains platform-neutral and has no window, JNI, or renderer implementation. Host-native parity tests, performance tools, and the genome development CLI are development tooling, not packaged desktop application entry points.
 
 ## Naming and privacy audit
 
@@ -58,7 +57,7 @@ The exact locations are documented in `THIRD_PARTY_NOTICES.md`, and the public r
 
 ## Android configuration
 
-- Minimum SDK: 21 (Android 5.0)
+- Minimum SDK: 24 (Android 7.0)
 - Target and compile SDK: 36
 - Java/Kotlin bytecode target: 17
 - Build JDK: 21
@@ -78,7 +77,9 @@ Compose screens use immutable contracts and gateway interfaces from `shared`. An
 
 Native CMake is split into static `cellularity_simulation`, `cellularity_formats`, `cellularity_interaction`, and `cellularity_rendering` layers. Android-only JNI, GLES, and asset adapters compose them into the single main `libcellularity.so`; the small independent `libcellularity_diagnostics.so` supports recovery from crashes that happen before the simulation library is loaded.
 
-Substrate data is decoded by the active native codec. UI-facing state changes are serialized through the controller and revision tracking. `shared` owns no low-level GL API: one Android adapter forwards surface lifecycle to the application renderers, while bitmap upload remains in the Android platform layer. Surface recreation reloads renderer resources without replacing the native simulation world; simulation load/save commands are separate from the surface contract.
+Substrate data is decoded by the active native codec. UI-facing state changes are serialized through the controller and revision tracking. `shared` owns no low-level GL or Vulkan API: platform adapters own surface lifecycle and native rendering, while bitmap upload remains in the Android platform layer. Surface recreation reloads renderer resources without replacing the native simulation world; simulation load/save commands are separate from the surface contract.
+
+On Windows, `desktop/Main.kt` owns the Compose window and process services. `DesktopEnvironment` provides the roaming data directory, settings, and file repositories. `DesktopNativeRenderer` binds the shared C++ renderer through `cellularity_desktop.dll`; the Gradle `stageNativeAssets` task packages that library, `vulkan-1.dll`, `z.dll`, generated SPIR-V shaders, and textures. The MSI task uses the same desktop and shared JARs as development runs and registers a Start Menu shortcut without a desktop shortcut.
 
 Current and legacy substrate formats remain supported. External imports are streamed to a temporary private file and atomically installed after validation rather than being loaded into a Java `byte[]`. Input files, decompressed legacy data, and estimated simulation allocations have a 2 GiB safety ceiling. Native collection counts, topology counts, file headers, environment sizes, and world capacity are validated before large allocations.
 
@@ -94,18 +95,20 @@ Play uses one immutable shared store and one retained Android session owner. Lau
 
 ## Validation status
 
-The release gate covers:
+### Android public-release baseline
+
+The Android release gate on `main` covers:
 
 - host-JVM compilation and tests for the complete shared common source set;
 - JVM unit tests for native contracts, genome editing, pending environment changes, and substrate file handling;
-- Android lint, including API-level compatibility from SDK 21;
+- Android lint, including API-level compatibility from SDK 24;
 - debug and release Android compilation;
 - 13 native contract, compatibility, behavior, and parity suites on a Linux host;
 - a synthetic legacy Java-serialization/gzip substrate conversion test;
 - JNI export verification against the built native library;
 - a public-tree scan for excluded components, credentials, signing material, generated artifacts, and obsolete identifiers.
 
-Local release validation completed on 2026-09-11 with these results:
+Local Android release validation completed on 2026-09-11 with these results:
 
 - 129 host-JVM common, 130 Android shared, and 97 app unit tests passed with no failures or skipped tests;
 - Android lint completed with 0 errors and 26 dependency/toolchain upgrade notices;
@@ -127,6 +130,17 @@ Static checks and automated tests are the release gates. Runtime checks on Andro
 targets can provide useful vendor- and GPU-specific diagnostics, but they are
 optional and do not determine release readiness.
 
+### Windows desktop checks
+
+The current desktop verification path is:
+
+```powershell
+cmake --build build/win-cmake --target cellularity_desktop_jni
+.\gradlew.bat :desktop:test :shared:jvmTest :desktop:packageMsi
+```
+
+The packaged app image and installed MSI should also be smoke-tested for a cold Start Menu launch, native Vulkan rendering, genome editing, and substrate import/save/reopen flows. The Android public-tree gate is not applicable to this branch because it intentionally requires only `:app` and `:shared` in `settings.gradle`.
+
 ## Known maintenance work
 
 - Android lint reports 26 upgrade-only dependency/toolchain notices; upgrades remain isolated follow-up changes rather than part of the build-system migration.
@@ -136,9 +150,9 @@ optional and do not determine release readiness.
 - A 2 GiB rejection ceiling is not a guarantee that low-memory devices can run simulations near that size.
 - GitHub release notes, release signing, screenshots, and signed APK publication remain project-team tasks; private signing material must not enter this repository.
 
-## Release readiness criteria
+## Android release readiness criteria
 
-A revision is ready to publish when all of the following pass:
+An Android revision on `main` is ready to publish when all of the following pass:
 
 ```bash
 scripts/check-public-release.sh
