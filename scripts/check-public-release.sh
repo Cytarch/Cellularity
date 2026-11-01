@@ -489,7 +489,7 @@ simulation_world=native/core/SimulationWorld.cpp
 native_bridge=app/src/main/java/com/cytarch/cellularity/NativeCellularityControllerBridge.java
 android_file_repository=app/src/main/java/com/cytarch/cellularity/platform/files/AndroidCellularityFileRepository.kt
 if ! rg -q 'runtimeLimitsForDevice' "${memory_policy}" \
-    || ! rg -q 'kPhysicalMemoryBudgetDivisor' "${memory_policy}" \
+    || ! rg -q 'kPhysicalMemoryBudgetDenominator' "${memory_policy}" \
     || ! rg -q 'estimateCurrentWorldAllocation' "${memory_policy}" \
     || ! rg -q 'validatedAllocationEnvironment' "${simulation_world}"; then
     echo "Native allocation policy must validate ABI, device RAM, and configuration before allocation" >&2

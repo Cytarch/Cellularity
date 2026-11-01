@@ -271,7 +271,15 @@ void testFileAndAdmissionPolicy() {
         },
                 "Absolute file boundary rejects one extra byte");
         const auto deviceLimits = runtimeLimitsForDevice(limits.addressBits, 512U * kMiB);
-        assertTrue(deviceLimits.worldAllocationBudgetBytes == 128U * kMiB, "Device RAM applies the existing quarter-memory budget");
+#if defined(_WIN32)
+        const std::uint64_t expectedDeviceBudget = 384U * kMiB;
+#elif defined(__ANDROID__)
+        const std::uint64_t expectedDeviceBudget = 256U * kMiB;
+#else
+        const std::uint64_t expectedDeviceBudget = 128U * kMiB;
+#endif
+        assertTrue(deviceLimits.worldAllocationBudgetBytes == expectedDeviceBudget,
+                "Device RAM applies the platform 75% Windows / 50% Android budget without the legacy fixed cap");
         const auto environment = Environment::constructDefaultEnvironment(10000, 0, 1.0);
         const auto world = estimateWorldAllocation(environment, limits.addressBits);
         RendererMemoryEstimate renderer;

@@ -476,10 +476,31 @@ void testRuntimeFileAndAllocationPolicy() {
             memory::runtimeLimitsForDevice(64, twoGib);
     const memory::RuntimeLimits oneGibDevice32 =
             memory::runtimeLimitsForDevice(32, twoGib / 2);
-    assertTrue(twoGibDevice64.worldAllocationBudgetBytes == twoGib / 4,
-            "64-bit world budget does not account for device RAM");
-    assertTrue(oneGibDevice32.worldAllocationBudgetBytes == twoGib / 8,
-            "32-bit world budget does not combine RAM and address-space limits");
+#if defined(_WIN32)
+    const std::uint64_t expectedTwoGibBudget = twoGib / 4 * 3;
+    const std::uint64_t expectedOneGibBudget = twoGib / 2 / 4 * 3;
+#elif defined(__ANDROID__)
+    const std::uint64_t expectedTwoGibBudget = twoGib / 2;
+    const std::uint64_t expectedOneGibBudget = twoGib / 4;
+#else
+    const std::uint64_t expectedTwoGibBudget = twoGib / 4;
+    const std::uint64_t expectedOneGibBudget = twoGib / 8;
+#endif
+    assertTrue(twoGibDevice64.worldAllocationBudgetBytes == expectedTwoGibBudget,
+            "64-bit world budget does not apply the platform RAM share without the legacy fixed cap");
+    assertTrue(oneGibDevice32.worldAllocationBudgetBytes == expectedOneGibBudget,
+            "32-bit world budget does not apply the same platform RAM share");
+#if defined(_WIN32) || defined(__ANDROID__)
+    const memory::RuntimeLimits fourGibDevice64 =
+            memory::runtimeLimitsForDevice(64, twoGib * 2);
+#if defined(_WIN32)
+    const std::uint64_t expectedFourGibBudget = twoGib * 2 / 4 * 3;
+#else
+    const std::uint64_t expectedFourGibBudget = twoGib;
+#endif
+    assertTrue(fourGibDevice64.worldAllocationBudgetBytes == expectedFourGibBudget,
+            "The platform RAM share must apply above the legacy 1 GiB fixed cap");
+#endif
 
     memory::validateSubstrateFileSize(twoGib, limits64);
     expectCode([&] {

@@ -18,6 +18,7 @@ import com.cytarch.cellularity.shared.ui.play.PlayOpenResult
 import com.cytarch.cellularity.shared.ui.play.PlaySaveResult
 import com.cytarch.cellularity.shared.ui.play.PlaySessionCommandResult
 import com.cytarch.cellularity.shared.ui.play.PlaySessionOperations
+import java.util.concurrent.atomic.AtomicReference
 import kotlinx.coroutines.CompletableDeferred
 
 /**
@@ -51,15 +52,26 @@ class DesktopPlaySessionOperations(
     /** Where a saved plate's picture is taken, which is renderer work. */
     private val previewCapture: SubstratePreviewCapture
 ) : PlaySessionOperations {
-    private val session = CompletableDeferred<DesktopSimulationGateway>()
+    private val firstSession = CompletableDeferred<DesktopSimulationGateway>()
+    private val currentSession = AtomicReference<DesktopSimulationGateway?>(null)
 
-    /** Called by the screen once the renderer has made the session this screen is showing. */
+    /**
+     * Called by the screen whenever its renderer has made the session this screen is showing.
+     * A stored plate replaces the provisional surface after resolving its path, so the newest
+     * attachment must replace the gateway used by subsequent operations rather than being dropped.
+     */
     fun attachGateway(gateway: DesktopSimulationGateway) {
-        session.complete(gateway)
+        currentSession.set(gateway)
+        firstSession.complete(gateway)
+    }
+
+    private suspend fun awaitCurrentSession(): DesktopSimulationGateway {
+        firstSession.await()
+        return checkNotNull(currentSession.get())
     }
 
     override suspend fun open(source: PlayLaunchSource): PlayOpenResult {
-        val gateway = session.await()
+        val gateway = awaitCurrentSession()
         return PlayOpenResult.Opened(gateway.contentState.value)
     }
 
@@ -67,7 +79,7 @@ class DesktopPlaySessionOperations(
         fileRepository.substrateExists(name)
 
     override suspend fun save(target: StoredSubstrateId): PlaySaveResult {
-        val gateway = session.await()
+        val gateway = awaitCurrentSession()
         return when (
             val result = gateway.savePlate(
                 id = target,
@@ -89,7 +101,7 @@ class DesktopPlaySessionOperations(
     }
 
     override suspend fun reload(source: StoredSubstrateId): PlaySessionCommandResult {
-        val gateway = session.await()
+        val gateway = awaitCurrentSession()
         return when (val result = gateway.execute(SimulationCommand.Reload(source))) {
             is SimulationResult.Failure -> PlaySessionCommandResult.Failure(
                 PlayFailureCause.Simulation(result.error)
@@ -102,7 +114,7 @@ class DesktopPlaySessionOperations(
     }
 
     override suspend fun reset(): PlaySessionCommandResult {
-        val gateway = session.await()
+        val gateway = awaitCurrentSession()
         // Acceptance belongs to the state on which the command was issued. The gateway publishes
         // the post-reset revision during execute; returning that newer snapshot here would make
         // the play machine wait for a later observation that this desktop gateway never emits.
