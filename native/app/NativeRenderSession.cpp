@@ -506,7 +506,10 @@ bool NativeRenderSession::drawMicroscopeIntoRgba(
             && last.width == width && last.height == height
             && last.backgroundColor == presentation.backgroundColor
             && last.destination == destination && last.rowStride == rowStride) {
-        return false;
+        // Presented, with nothing written: the caller's picture is already this frame. The
+        // frame still counts as presented, so the runtime's presentation bookkeeping moves on
+        // exactly as it does for a window re-presenting an unchanged image.
+        return true;
     }
     mLastRgbaFrame.valid = false;
     auto& backend = surfaceSession();

@@ -5,7 +5,7 @@
 package com.cytarch.cellularity.desktop.nativebridge
 
 import com.cytarch.cellularity.shared.model.CellInspectionSnapshot
-import com.cytarch.cellularity.shared.model.CellSnapshotWireCodec
+import com.cytarch.cellularity.shared.nativewire.NativeWireCodec
 import com.cytarch.cellularity.shared.model.GenomeDraft
 import com.cytarch.cellularity.shared.model.GenomeDraftWireCodec
 
@@ -68,7 +68,7 @@ object DesktopCellDiagnosis {
         // A malformed document is not thrown away quietly: it is a disagreement between the
         // runtime and the codec about a shared format, which is the one thing that cannot be
         // discovered by either side alone, so it is allowed to surface.
-        val cell = CellSnapshotWireCodec.decode(document) ?: return null
+        val cell = NativeWireCodec.decodeCellSnapshot(document) ?: return null
         return CellInspectionSnapshot(cell = cell, genome = readGenome(sessionHandle))
     }
 

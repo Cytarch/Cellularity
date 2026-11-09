@@ -117,7 +117,7 @@ internal data class MainMenuTransition(
     val effects: List<MainMenuEffect> = emptyList()
 )
 
-/** Pure product and navigation rules. Android import transport lives outside this reducer. */
+/** Pure product and navigation rules. The platform import transport lives outside this reducer. */
 internal object MainMenuReducer {
     fun reduce(state: MainMenuState, action: MainMenuAction): MainMenuTransition {
         return when (action) {

@@ -70,9 +70,8 @@ data class ExternalFileName(
 /**
  * The application's private document store: substrates and genomes in one directory.
  *
- * This is the Android repository's implementation, moved here unchanged so the desktop runs
- * the same code: naming, limits, durable atomic replacement, codecs, validation and the
- * preview cache. A platform supplies only the directory, its native bridge, its durable
+ * One implementation for every platform: naming, limits, durable atomic replacement, codecs,
+ * validation and the preview cache. A platform supplies only the directory, its native bridge, its durable
  * file primitives and -- outside this class -- how an external file is opened or shared.
  */
 class CellularityFileStore(

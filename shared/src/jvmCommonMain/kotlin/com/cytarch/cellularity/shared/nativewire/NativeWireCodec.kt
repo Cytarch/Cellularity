@@ -43,7 +43,6 @@ data class NativeSubstratePreviewDescriptor(
     val usable: Boolean
 )
 
-/** Decodes the small, transient native-to-Android payloads into shared immutable models. */
 /**
  * Decoder for the documents the native layer returns (cell snapshot, substrate inspection).
  * Shared by the Android and desktop bridges, which call the same C++ producers.

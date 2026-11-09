@@ -199,7 +199,7 @@ ANDROID_GLES_MICROSCOPE_SURFACE = (
 )
 ANDROID_MICROSCOPE_PRESENTATION_POLICY = (
     REPO_ROOT
-    / "app/src/main/java/com/cytarch/cellularity/platform/render/microscope/MicroscopePresentationPolicy.kt"
+    / "shared/src/commonMain/kotlin/com/cytarch/cellularity/shared/ui/play/microscope/MicroscopePresentationPolicy.kt"
 )
 ANDROID_MICROSCOPE_PRESENTATION_STATE = (
     REPO_ROOT

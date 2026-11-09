@@ -239,7 +239,7 @@ fun PlayScreen(
 }
 
 /**
- * Keeps Android-backed render surfaces attached while this content is not the
+ * Keeps platform render surfaces attached while this content is not the
  * selected tab. Moving an already presented Surface back on-screen is atomic;
  * disposing and recreating it would expose an empty first frame.
  */

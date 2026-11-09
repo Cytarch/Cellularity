@@ -14,7 +14,7 @@ import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 
-/** Executes every UI-facing file operation away from the Android main dispatcher. */
+/** Executes every UI-facing file operation away from the UI thread. */
 /** Runs a storage operation off the caller's thread and maps every failure to a typed result. */
 class StorageExecutor(
     private val dispatcher: CoroutineDispatcher = Dispatchers.IO

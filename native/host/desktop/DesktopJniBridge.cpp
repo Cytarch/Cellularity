@@ -311,12 +311,6 @@ struct DesktopSession final {
 std::mutex gStateMutex;
 std::unordered_set<BridgeWindow> gChildWindows;
 
-// Windows this bridge presents into without having created them, registered by
-// nativeAdoptWindow. They are kept apart from the child windows above because every
-// operation that changes a window -- moving it, showing it, destroying it -- belongs to
-// whoever created it, and for these that is the JVM. A window in this set is one this
-// bridge may draw into and resize its own swapchain for, and nothing more.
-std::unordered_set<BridgeWindow> gAdoptedWindows;
 std::unordered_map<jlong, std::shared_ptr<DesktopSession>> gSessions;
 jlong gNextSessionHandle = 1;
 
@@ -341,8 +335,7 @@ void registerChildWindow(BridgeWindow window) {
         return false;
     }
     std::lock_guard<std::mutex> lock(gStateMutex);
-    return gChildWindows.find(window) != gChildWindows.end()
-            || gAdoptedWindows.find(window) != gAdoptedWindows.end();
+    return gChildWindows.find(window) != gChildWindows.end();
 }
 
 #if defined(_WIN32)
@@ -356,18 +349,6 @@ void registerChildWindow(BridgeWindow window) {
 }
 
 #endif
-
-// True for a window this bridge draws into but does not own. Such a window is the JVM's,
-// and every call that would change it -- position, visibility, lifetime -- is refused
-// rather than performed, because the JVM decides those and a bridge that moved a window
-// out from under AWT would be answering a question nobody asked it.
-[[nodiscard]] bool isAdoptedWindow(BridgeWindow window) {
-    if (window == nullptr) {
-        return false;
-    }
-    std::lock_guard<std::mutex> lock(gStateMutex);
-    return gAdoptedWindows.find(window) != gAdoptedWindows.end();
-}
 
 [[nodiscard]] std::shared_ptr<DesktopSession> findSessionByWindow(BridgeWindow window) {
     if (window == nullptr) {
@@ -679,49 +660,6 @@ Java_com_cytarch_cellularity_desktop_nativebridge_DesktopNativeRenderer_nativeEs
 }
 
 #if defined(_WIN32)
-// Creates the child window the renderer presents into. Returns the HWND as a jlong,
-// or 0 if the window could not be created.
-//
-// The window is a child of the managed side's window rather than a window of its own:
-// the application decides where the renderer sits and when it goes away, and the
-// WS_CHILD style is what makes Windows clip and move it with its parent. No border or
-// caption style is requested, so the client area is the whole window and the extent
-// the session is attached with is the extent that is visible.
-//
-// The window belongs to the calling thread's message queue. Nothing here needs that
-// thread to pump messages -- the swapchain and the renderer present directly -- but a
-// caller that both creates and drives the window from a thread that never pumps is
-// choosing to leave that thread's queue unserviced.
-extern "C" JNIEXPORT jlong JNICALL
-Java_com_cytarch_cellularity_desktop_nativebridge_DesktopNativeRenderer_nativeCreateWindow(
-        JNIEnv*, jclass, jlong ownerHwnd, jint x, jint y, jint width, jint height) {
-    try {
-        const HWND owner = windowFromHandle(ownerHwnd);
-        if (owner == nullptr || ::IsWindow(owner) == 0) {
-            return 0;
-        }
-        // A zero-extent swapchain is not a meaningful request and a zero-extent child
-        // window cannot be presented into, so it is refused here rather than allowed
-        // to fail later inside the backend.
-        if (width <= 0 || height <= 0) {
-            return 0;
-        }
-        if (!ensureChildWindowClassRegistered()) {
-            return 0;
-        }
-        const HWND child = ::CreateWindowExW(0, kChildWindowClassName, L"",
-                WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS, x, y, width, height, owner,
-                nullptr, moduleInstance(), nullptr);
-        if (child == nullptr) {
-            return 0;
-        }
-        registerChildWindow(child);
-        return handleFromWindow(child);
-    } catch (...) {
-        return 0;
-    }
-}
-
 // Creates the window a Vulkan surface needs, and nothing else.
 //
 // A device is created against a surface, so a session that draws every frame into
@@ -760,235 +698,6 @@ Java_com_cytarch_cellularity_desktop_nativebridge_DesktopNativeRenderer_nativeCr
     } catch (...) {
         return 0;
     }
-}
-
-// Takes a window the caller already owns as the surface this bridge presents into, and
-// returns its handle. Nothing is created: the window is the caller's, and this only
-// records that the bridge may draw into it.
-//
-// This exists because of the one property of Win32 that no amount of care on the managed
-// side can work around: a window receives its messages on the thread that created it, and
-// only that thread. A window created by the render loop -- a loop that draws frames and
-// sleeps -- belongs to a queue nobody reads, and Windows eventually answers for it by
-// marking the whole application as not responding; the picture keeps coming because the
-// loop is still turning, while the interface stops accepting anything at all.
-//
-// Moving the creation to the event thread was tried and is not the answer, because the
-// AWT event thread does not pump either: the toolkit's message pump runs on a thread of
-// its own (WToolkit.eventLoop), and the event thread waits on a Java condition for work
-// to arrive from it. A window created there is a window whose messages are still never
-// dispatched, which is measured rather than reasoned: WM_NULL sent to such a window
-// times out after four seconds while the same message to any AWT window returns in none.
-//
-// So the surface is not given a window of its own at all. It is given the heavyweight
-// canvas the interface already put on the screen -- a window the toolkit created on the
-// thread that pumps it, hit-tests it and resizes it. Input then arrives as ordinary AWT
-// events, resizing is an AWT layout operation, and hiding the picture is the composition
-// taking the canvas out of its layout, which needs no window call from any thread.
-extern "C" JNIEXPORT jlong JNICALL
-Java_com_cytarch_cellularity_desktop_nativebridge_DesktopNativeRenderer_nativeAdoptWindow(
-        JNIEnv*, jclass, jlong ownerHwnd) {
-    try {
-        const HWND window = windowFromHandle(ownerHwnd);
-        if (window == nullptr || ::IsWindow(window) == 0) {
-            return 0;
-        }
-        // A window this bridge created is already registered and already its own; taking
-        // it through this path as well would make the two sets disagree about who may
-        // destroy it.
-        if (isChildWindow(window)) {
-            return handleFromWindow(window);
-        }
-        {
-            std::lock_guard<std::mutex> lock(gStateMutex);
-            gAdoptedWindows.insert(window);
-        }
-        return handleFromWindow(window);
-    } catch (...) {
-        return 0;
-    }
-}
-
-// Moves and resizes the child window to (0, 0, width, height) inside its parent.
-// Returns 0 on success, 1 if the request was refused or Win32 refused it, and 2 if
-// the handle is not a live window this bridge created.
-//
-// This resizes the window, and only the window. The Vulkan swapchain belongs to the
-// session, which this entry point is not given, so a caller that needs the presented
-// extent to follow the window has to recreate the session at the new size. Leaving it
-// as a window-only operation keeps the two handles independent and keeps this call
-// safe to make before a session exists.
-// Describes how this process relates to the display's scaling, and how large the child
-// window's client area actually is, as one string.
-//
-// This is the fact that decides whether any of the other numbers mean what they appear to.
-// A process that declares itself aware of the display's scaling is given real pixels by every
-// Win32 call; one that does not is given virtualised ones, and the same value then means two
-// different things depending on who is asked. A window sized from one space and hit-tested in
-// the other lands somewhere neither side intended -- and every attempt to reason about it from
-// the managed side alone has produced a confident answer that the next measurement contradicted.
-extern "C" JNIEXPORT jstring JNICALL
-Java_com_cytarch_cellularity_desktop_nativebridge_DesktopNativeRenderer_nativeDescribeScaling(
-        JNIEnv* env, jclass, jlong windowHandle) {
-    try {
-        std::string report;
-        const DPI_AWARENESS_CONTEXT context = ::GetThreadDpiAwarenessContext();
-        const DPI_AWARENESS awareness = ::GetAwarenessFromDpiAwarenessContext(context);
-        report += "awareness=";
-        switch (awareness) {
-            case DPI_AWARENESS_UNAWARE:
-                report += "unaware";
-                break;
-            case DPI_AWARENESS_SYSTEM_AWARE:
-                report += "system";
-                break;
-            case DPI_AWARENESS_PER_MONITOR_AWARE:
-                report += "per-monitor";
-                break;
-            default:
-                report += "unknown";
-                break;
-        }
-        report += " systemDpi=";
-        report += std::to_string(::GetDpiForSystem());
-        const HWND window = windowFromHandle(windowHandle);
-        if (window != nullptr && isBridgeWindow(window)) {
-            const UINT windowDpi = ::GetDpiForWindow(window);
-            report += " windowDpi=";
-            report += std::to_string(windowDpi);
-            // Whether this window and every one above it are shown. A child is only on screen if
-            // its ancestors are, so a check that stopped at the child would report a window as
-            // visible while the thing it sits in is not -- and a picture nobody can see is the
-            // same to a person as a picture that was never drawn.
-            report += " selfVisible=";
-            report += ::IsWindowVisible(window) != 0 ? "yes" : "no";
-            report += " allAncestorsVisible=";
-            report += allAncestorsVisible(window) ? "yes" : "no";
-            RECT onScreen{};
-            if (::GetWindowRect(window, &onScreen) != 0) {
-                report += " windowRect=";
-                report += std::to_string(onScreen.left);
-                report += ",";
-                report += std::to_string(onScreen.top);
-            }
-
-            RECT client{};
-            if (::GetClientRect(window, &client) != 0) {
-                report += " childClient=";
-                report += std::to_string(client.right - client.left);
-                report += "x";
-                report += std::to_string(client.bottom - client.top);
-            }
-            RECT bounds{};
-            if (::GetWindowRect(window, &bounds) != 0) {
-                report += " childWindow=";
-                report += std::to_string(bounds.right - bounds.left);
-                report += "x";
-                report += std::to_string(bounds.bottom - bounds.top);
-            }
-            const HWND parent = ::GetParent(window);
-            // Where the child sits inside its parent, which is the number that decides whether it
-            // covers something the interface drew. A child window is in front of everything the
-            // interface paints, so a viewport one row too high is a viewport on top of the bar
-            // beneath it -- and the two rectangles being the same size says nothing about it.
-            //
-            // Both sides of this subtraction are Win32 screen coordinates, so no scale is involved
-            // and none is applied. Adding one is what made an earlier measurement of this kind
-            // meaningless.
-            if (parent != nullptr) {
-                RECT parentBounds{};
-                if (::GetWindowRect(parent, &parentBounds) != 0) {
-                    report += " offsetInParent=";
-                    report += std::to_string(onScreen.left - parentBounds.left);
-                    report += ",";
-                    report += std::to_string(onScreen.top - parentBounds.top);
-                    report += " parentSize=";
-                    report += std::to_string(parentBounds.right - parentBounds.left);
-                    report += "x";
-                    report += std::to_string(parentBounds.bottom - parentBounds.top);
-                }
-            }
-            if (parent != nullptr) {
-                RECT parentClient{};
-                if (::GetClientRect(parent, &parentClient) != 0) {
-                    report += " parentClient=";
-                    report += std::to_string(parentClient.right - parentClient.left);
-                    report += "x";
-                    report += std::to_string(parentClient.bottom - parentClient.top);
-                }
-            }
-        }
-        return env->NewStringUTF(report.c_str());
-    } catch (...) {
-        return nullptr;
-    }
-}
-// Shows or hides the child window. Returns 0 on success, 1 if Win32 refused, and 2 if the
-// handle is not a live window this bridge created.
-//
-// A child window is not clipped by what the interface draws, so it is in front of the
-// interface wherever it lies -- which is what lets the simulation be visible at all, and also
-// what made it cover every other tab. The surface stays mounted while another tab is showing
-// because it owns the Vulkan device and the simulation thread, and tearing it down to hide a
-// picture would stop the world and start a different one when the tab came back. Hiding the
-// window is what keeps the session alive without keeping the picture in front of everything.
-extern "C" JNIEXPORT jint JNICALL
-Java_com_cytarch_cellularity_desktop_nativebridge_DesktopNativeRenderer_nativeShowWindow(
-        JNIEnv*, jclass, jlong windowHandle, jboolean visible) {
-    try {
-        const HWND window = windowFromHandle(windowHandle);
-        if (!isBridgeWindow(window)) {
-            return kStatusInvalidHandle;
-        }
-        // An adopted window is shown and hidden by the composition that lays it out, which
-        // does it by giving the canvas no extent at all. There is nothing to do here, and
-        // doing something -- hiding a window AWT believes is visible -- would leave the
-        // toolkit's idea of the component and Win32's idea of its window disagreeing.
-        if (isAdoptedWindow(window)) {
-            return kStatusOk;
-        }
-        if (::ShowWindow(window, visible != 0 ? SW_SHOWNA : SW_HIDE) == 0) {
-            // ShowWindow reports the previous visibility rather than success, so a zero here
-            // only means the window was already hidden. The call itself cannot fail for a
-            // window this bridge created.
-        }
-        return kStatusOk;
-    } catch (...) {
-        return kStatusFailed;
-    }
-}
-// Reports the extent the surface is presenting at, as {width, height}, or null when the
-// handle is not a live session or no frame has been presented yet.
-//
-// This is the number the picture is actually drawn into, and it is deliberately not the
-// window's size: the swapchain is resized from the thread that presents, so between a window
-// resize and the next frame the two disagree, and a session that never got the resize keeps
-// presenting into its creation extent for the rest of its life. A window larger than the
-// surface it presents is a picture that fills part of its own viewport, which is worth being
-// able to measure rather than infer from a screenshot.
-extern "C" JNIEXPORT jlongArray JNICALL
-Java_com_cytarch_cellularity_desktop_nativebridge_DesktopNativeRenderer_nativeSurfaceExtent(
-        JNIEnv* env, jclass, jlong sessionHandle) {
-    const std::shared_ptr<DesktopSession> session = findSession(sessionHandle);
-    if (!session) {
-        return nullptr;
-    }
-    // Both fields belong to the thread that presents and are read here from a caller that is
-    // not that thread. That is deliberate and safe in the direction it is used: a probe
-    // comparing them against the window wants to know whether the surface has caught up, and
-    // a stale reading can only ever report an extent that was true a frame ago.
-    const jlong values[2] = {
-            static_cast<jlong>(session->appliedSurfaceWidth),
-            static_cast<jlong>(session->appliedSurfaceHeight)};
-    if (values[0] <= 0 || values[1] <= 0) {
-        return nullptr;
-    }
-    jlongArray result = env->NewLongArray(2);
-    if (result == nullptr) {
-        return nullptr;
-    }
-    env->SetLongArrayRegion(result, 0, 2, values);
-    return result;
 }
 
 // Captures one of this bridge's windows into a 32-bit top-down BMP file and returns the byte
@@ -1211,134 +920,6 @@ Java_com_cytarch_cellularity_desktop_nativebridge_DesktopNativeRenderer_nativeDe
         return nullptr;
     }
 }
-// Reports what Win32 would deliver a click at a screen point to, among the windows this
-// bridge made: 1 when the point belongs to one of them, 0 when it belongs to some other
-// window inside the same top-level window (which is what the interface drawing over the
-// simulation looks like), and -1 when the point is not in that top-level window at all or
-// belongs to no window.
-//
-// This settles a question that cannot be settled from either side alone. The simulation lives
-// in a native child window and the interface is drawn by Compose into the same top-level
-// window, so whether a click reaches the simulation depends on which of the two Win32
-// considers to be on top at that pixel -- and neither system knows about the other's
-// windows. Asking Windows directly is the only account of it that is not a guess, and it is
-// the difference between "the interface is over the simulation" and "the simulation is over
-// the interface and not receiving anything", which have opposite fixes.
-extern "C" JNIEXPORT jint JNICALL
-Java_com_cytarch_cellularity_desktop_nativebridge_DesktopNativeRenderer_nativeWindowAtPoint(
-        JNIEnv*, jclass, jint screenX, jint screenY) {
-    try {
-        // Screen coordinates in the same space WindowFromPoint answers in, with no conversion.
-        // An earlier version scaled them by the system dots per inch on the theory that the
-        // caller worked in physical pixels and Windows did not; the measurements then came
-        // back as "no window" everywhere, which is what a conversion applied to coordinates
-        // that were already correct looks like. GetWindowRect and WindowFromPoint agree with
-        // each other, so handing one's answer to the other needs nothing in between.
-        POINT point{screenX, screenY};
-        const HWND hit = ::WindowFromPoint(point);
-        if (hit == nullptr) {
-            return -1;
-        }
-        if (isBridgeWindow(hit)) {
-            return 1;
-        }
-        // Walk up to the top-level window. A point inside a nested editor or a dialog would
-        // otherwise be compared against the wrong ancestor and read as "somewhere else".
-        HWND top = hit;
-        for (int hop = 0; hop < kMaximumAncestorHops; hop++) {
-            const HWND parent = ::GetAncestor(top, GA_PARENT);
-            if (parent == nullptr || parent == top || ::GetAncestor(parent, GA_PARENT) == nullptr) {
-                break;
-            }
-            top = parent;
-        }
-        // A bridge window that reaches the point through a child of its own is still the
-        // bridge's window, and the walk above may have started inside one.
-        if (isBridgeWindow(top)) {
-            return 1;
-        }
-        std::lock_guard<std::mutex> lock(gStateMutex);
-        for (const HWND window : gChildWindows) {
-            if (::IsWindow(window) != 0 && ::GetAncestor(window, GA_ROOT) == top) {
-                return 0;
-            }
-        }
-        // Adopted windows are asked about the same way and for the same reason: a point
-        // inside the application but not on the surface has to read as "elsewhere in this
-        // application", whether the surface is a window this bridge made or the canvas the
-        // interface lent it.
-        for (const HWND window : gAdoptedWindows) {
-            if (::IsWindow(window) != 0 && ::GetAncestor(window, GA_ROOT) == top) {
-                return 0;
-            }
-        }
-        return -1;
-    } catch (...) {
-        return -1;
-    }
-}
-
-// Reads the child window's rectangle and the client area of its parent.
-//
-// Returns {x, y, width, height of the child window}, {width, height of the parent's client
-// area}, and {the child's x and y relative to the parent's client origin}, or null when the
-// handle is not a live window this bridge created.
-//
-// This exists because "the simulation is drawn into a corner" is a claim about two
-// rectangles that are decided by two different systems: the child window's rectangle is set
-// by Win32 calls this bridge makes, and the place reserved for it in the interface is decided
-// by the Compose layout. Neither can see the other's numbers, so a disagreement between them
-// is invisible from inside either one and shows up only as a picture that is the wrong size
-// in the wrong place. Reporting both together is what makes the disagreement measurable.
-extern "C" JNIEXPORT jlongArray JNICALL
-Java_com_cytarch_cellularity_desktop_nativebridge_DesktopNativeRenderer_nativeWindowGeometry(
-        JNIEnv* env, jclass, jlong windowHandle) {
-    try {
-        const HWND window = windowFromHandle(windowHandle);
-        if (!isBridgeWindow(window)) {
-            return nullptr;
-        }
-        RECT windowRect{};
-        if (::GetWindowRect(window, &windowRect) == 0) {
-            return nullptr;
-        }
-        const HWND parent = ::GetParent(window);
-        RECT clientRect{};
-        POINT clientOrigin{0, 0};
-        if (parent != nullptr) {
-            if (::GetClientRect(parent, &clientRect) == 0) {
-                return nullptr;
-            }
-            if (::ClientToScreen(parent, &clientOrigin) == 0) {
-                return nullptr;
-            }
-        }
-        const jlong values[10] = {
-                static_cast<jlong>(windowRect.left),
-                static_cast<jlong>(windowRect.top),
-                static_cast<jlong>(windowRect.right - windowRect.left),
-                static_cast<jlong>(windowRect.bottom - windowRect.top),
-                static_cast<jlong>(clientRect.right - clientRect.left),
-                static_cast<jlong>(clientRect.bottom - clientRect.top),
-                static_cast<jlong>(windowRect.left - clientOrigin.x),
-                static_cast<jlong>(windowRect.top - clientOrigin.y),
-                // Whether Win32 considers the window visible. A hidden window still has a
-                // rectangle and is still reported by GetWindowRect, but WindowFromPoint
-                // ignores it entirely -- so a scan that finds no window anywhere is
-                // indistinguishable from a scan of a hidden one unless this is known.
-                ::IsWindowVisible(window) != 0 ? 1 : 0,
-                static_cast<jlong>(::GetParent(window) != nullptr ? 1 : 0)};
-        jlongArray result = env->NewLongArray(10);
-        if (result == nullptr) {
-            return nullptr;
-        }
-        env->SetLongArrayRegion(result, 0, 10, values);
-        return result;
-    } catch (...) {
-        return nullptr;
-    }
-}
-
 extern "C" JNIEXPORT jint JNICALL
 Java_com_cytarch_cellularity_desktop_nativebridge_DesktopNativeRenderer_nativeResizeWindow(
         JNIEnv*, jclass, jlong windowHandle, jint width, jint height) {
@@ -1350,13 +931,7 @@ Java_com_cytarch_cellularity_desktop_nativebridge_DesktopNativeRenderer_nativeRe
         if (width <= 0 || height <= 0) {
             return kStatusFailed;
         }
-        // The window is only resized when this bridge created it. An adopted window is laid
-        // out by AWT, and AWT has already put it at this size -- the caller is reporting what
-        // the layout did, not asking for it. Resizing it here would be a second authority on
-        // the same rectangle, and the two would disagree for as long as it took the next
-        // layout pass to correct it.
-        if (!isAdoptedWindow(window)
-                && ::SetWindowPos(window, nullptr, 0, 0, width, height,
+        if (::SetWindowPos(window, nullptr, 0, 0, width, height,
                             SWP_NOZORDER | SWP_NOACTIVATE)
                         == 0) {
             return kStatusFailed;
@@ -1381,62 +956,6 @@ Java_com_cytarch_cellularity_desktop_nativebridge_DesktopNativeRenderer_nativeRe
     }
 }
 
-// Places the child window so that its top-left corner sits at a screen point, and gives it an
-// extent, in one call.
-//
-// The point arrives in screen coordinates and is converted here, because the conversion is
-// from the desktop's coordinate space into the parent's client space and this is the side that
-// can ask Win32 to do it. The managed side knows where the interface put the viewport, but it
-// cannot know the parent's client origin or how the two coordinate spaces are scaled -- and
-// guessing either is how a window ends up over the interface.
-//
-// Returns 0 on success, 1 if the request was refused, and 2 if the handle is not a live window
-// this bridge created.
-extern "C" JNIEXPORT jint JNICALL
-Java_com_cytarch_cellularity_desktop_nativebridge_DesktopNativeRenderer_nativeSetChildWindowBounds(
-        JNIEnv*, jclass, jlong windowHandle, jint offsetX, jint offsetY, jint width,
-        jint height) {
-    try {
-        const HWND window = windowFromHandle(windowHandle);
-        if (!isBridgeWindow(window)) {
-            return kStatusInvalidHandle;
-        }
-        if (width <= 0 || height <= 0) {
-            return kStatusFailed;
-        }
-        // Placing a window is the one thing an adopted window may never be asked for: it is
-        // where the interface put it, which is the whole reason it was adopted. The refusal is
-        // explicit so a caller that still believes it must place the surface finds out here
-        // rather than by watching the picture sit somewhere the layout never chose.
-        if (isAdoptedWindow(window)) {
-            return kStatusFailed;
-        }
-        // The offset is taken as already being relative to the parent's client area, and the
-        // screen coordinates in the signature are only a cross-check. Converting from the
-        // desktop's space was tried first and was wrong in a way worth recording: the managed
-        // side works in AWT's logical coordinates while this side sees physical pixels, and
-        // under display scaling ScreenToClient turned a viewport offset into a negative one.
-        // A caller that knows where the canvas sits inside its AWT parent can state the
-        // offset directly, and then no coordinate space has to be reconciled at all.
-        POINT origin{offsetX, offsetY};
-        // The window is moved and resized, and the surface follows a frame later: the
-        // swapchain may only be touched by the thread that presents. Both are recorded the
-        // same way a plain resize records them, so this cannot leave the two disagreeing.
-        if (::SetWindowPos(window, nullptr, origin.x, origin.y, width, height,
-                    SWP_NOZORDER | SWP_NOACTIVATE)
-                == 0) {
-            return kStatusFailed;
-        }
-        if (const std::shared_ptr<DesktopSession> session =
-                    findSessionByWindow(window)) {
-            session->pendingSurfaceWidth.store(width, std::memory_order_release);
-            session->pendingSurfaceHeight.store(height, std::memory_order_release);
-        }
-        return kStatusOk;
-    } catch (...) {
-        return kStatusFailed;
-    }
-}
 #else // !_WIN32
 
 // Linux: the window a Vulkan surface needs, and nothing else. Like the Windows
@@ -1511,10 +1030,9 @@ Java_com_cytarch_cellularity_desktop_nativebridge_DesktopNativeRenderer_nativeDe
         if (window == nullptr) {
             return kStatusOk;
         }
-        const bool adopted = isAdoptedWindow(window);
         {
             std::lock_guard<std::mutex> lock(gStateMutex);
-            if (!adopted && gChildWindows.find(window) == gChildWindows.end()) {
+            if (gChildWindows.find(window) == gChildWindows.end()) {
                 return kStatusInvalidHandle;
             }
             // A session's window member is fixed once the session is published, so
@@ -1524,15 +1042,6 @@ Java_com_cytarch_cellularity_desktop_nativebridge_DesktopNativeRenderer_nativeDe
                     return kStatusFailed;
                 }
             }
-        }
-        if (adopted) {
-            // Forgetting the window is the whole of this bridge's part in its lifetime: it
-            // is AWT's window and AWT will destroy it. Destroying it here would take a
-            // component the interface still owns out from under the toolkit, which is a
-            // crash in the middle of an unrelated repaint rather than a visible mistake.
-            std::lock_guard<std::mutex> lock(gStateMutex);
-            gAdoptedWindows.erase(window);
-            return kStatusOk;
         }
 #if defined(_WIN32)
         // DestroyWindow is called outside the registry lock: it dispatches messages,
@@ -2503,33 +2012,6 @@ Java_com_cytarch_cellularity_desktop_nativebridge_DesktopNativeRenderer_nativeSe
     }
 }
 
-// The three microscope settings the interface owns and the simulation has to be
-// told about. They are here for the same reason the temperature and the tool are:
-// the interface's value is the interface's, and the simulation is only consistent
-// with it if both sides were told. Without these the controls moved and the
-// simulation never heard, which is a control that lies about what it did.
-//
-// Each returns 0 on success and 2 when the handle is not a live session.
-extern "C" JNIEXPORT jint JNICALL
-Java_com_cytarch_cellularity_desktop_nativebridge_DesktopNativeRenderer_nativeSetSlowMotionSpeed(
-        JNIEnv*, jclass, jlong sessionHandle, jfloat speed) {
-    const std::shared_ptr<DesktopSession> session = findSession(sessionHandle);
-    if (!session) {
-        return kStatusInvalidHandle;
-    }
-    try {
-        const std::shared_ptr<NativeCellularityController> controller =
-                liveController(session);
-        if (!controller) {
-            return kStatusInvalidHandle;
-        }
-        controller->setMicroscopeSlowMotionSpeed(speed);
-        return kStatusOk;
-    } catch (...) {
-        return kStatusFailed;
-    }
-}
-
 extern "C" JNIEXPORT jint JNICALL
 Java_com_cytarch_cellularity_desktop_nativebridge_DesktopNativeRenderer_nativeSetIncubateTargetUps(
         JNIEnv*, jclass, jlong sessionHandle, jdouble targetUps) {
@@ -2962,28 +2444,6 @@ Java_com_cytarch_cellularity_desktop_nativebridge_DesktopNativeRenderer_nativeCa
             static_cast<std::size_t>(capacity), rowStride, nullptr);
 }
 
-// The same into a direct java.nio.ByteBuffer, for callers that hold one -- a probe, or anything
-// that would otherwise have to ask the module system for the address of its memory.
-extern "C" JNIEXPORT jint JNICALL
-Java_com_cytarch_cellularity_desktop_nativebridge_DesktopNativeRenderer_nativeCaptureGenomePreviewWithCamera(
-        JNIEnv* env, jclass, jlong sessionHandle, jbyteArray genomeBytes,
-        jdouble maximumSimulationTime, jdouble cameraCenterX, jdouble cameraCenterY,
-        jfloat cameraZoom, jobject pixelBuffer, jint rowStride) {
-    if (pixelBuffer == nullptr) {
-        return kStatusInvalidHandle;
-    }
-    auto* destination = static_cast<std::uint8_t*>(
-            env->GetDirectBufferAddress(pixelBuffer));
-    const jlong capacity = env->GetDirectBufferCapacity(pixelBuffer);
-    if (destination == nullptr || capacity <= 0) {
-        return kStatusInvalidHandle;
-    }
-    const GenomePreviewController::Camera camera{
-            cameraCenterX, cameraCenterY, cameraZoom};
-    return captureGenomePreviewInto(env, sessionHandle, genomeBytes,
-            maximumSimulationTime, destination,
-            static_cast<std::size_t>(capacity), rowStride, &camera);
-}
 // Hands the preview session the genome it should be showing, and where the view stands. This is
 // the phone's publication path, on the desktop's single session: the same endpoint, the same
 // content-and-view split, so an interactive preview works here for the same reason it works there.

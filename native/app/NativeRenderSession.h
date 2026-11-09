@@ -105,7 +105,8 @@ public:
                     debugHudTelemetry = nullptr);
     // Draws the same frame into caller storage instead of the surface. Returns
     // false when there is nothing to draw yet, in which case `written` stays
-    // zero and the caller keeps the picture it already has. Throws when the
+    // zero and the caller keeps the picture it already has. Returns true with
+    // `written` zero when the caller already holds exactly this frame. Throws when the
     // backend refuses the frame, because that is a fault and not an idle state.
     [[nodiscard]] bool drawMicroscopeIntoRgba(
             const cellularity::render::RenderPresentationState& presentation,

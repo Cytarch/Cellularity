@@ -95,7 +95,7 @@ interface MicroscopeInputCommandSink {
 
 /**
  * Platform-neutral interpretation of the microscope's existing one-finger pan and two-finger
- * pan/pinch behavior. Android only translates MotionEvent snapshots into this contract.
+ * pan/pinch behavior. Each platform only translates its pointer events into this contract.
  */
 class MicroscopeGestureInterpreter(
     initialTimestampMillis: Long? = null

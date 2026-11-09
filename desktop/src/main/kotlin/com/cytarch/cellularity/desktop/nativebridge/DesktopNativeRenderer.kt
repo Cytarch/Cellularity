@@ -201,65 +201,7 @@ object DesktopNativeRenderer {
         }
     }
 
-    /** Creates the child window the renderer presents into. Returns 0 on failure. */
-    external fun nativeCreateWindow(
-        ownerWindowHandle: Long,
-        x: Int,
-        y: Int,
-        width: Int,
-        height: Int
-    ): Long
-
-    /**
-     * Takes a window the caller already owns as the surface to present into, and returns its
-     * handle, or 0 if it is not a live window.
-     *
-     * Nothing is created. What this buys is the message queue: a window receives its messages on
-     * the thread that created it, and the only window in this process whose messages are
-     * dispatched is one the AWT toolkit made on the thread that pumps them. The heavyweight
-     * canvas the interface puts on the screen is exactly that window, so the renderer is pointed
-     * at it instead of at a window of its own -- and input, resizing and hiding then arrive by
-     * the ordinary AWT routes rather than through Win32 calls from a thread that owns nothing.
-     *
-     * The window's geometry and lifetime stay the toolkit's: the bridge never moves, shows,
-     * hides or destroys an adopted window.
-     */
-    external fun nativeAdoptWindow(windowHandle: Long): Long
-
     external fun nativeResizeWindow(windowHandle: Long, width: Int, height: Int): Int
-
-    /**
-     * Where the child window is, and how much room its parent has.
-     *
-     * Eight numbers: the child's screen rectangle, the parent's client size, and the child's
-     * offset inside that client area. Two systems decide these -- Win32, which this bridge
-     * calls, and the layout, which Compose decides -- and a disagreement between them is
-     * invisible from inside either one. Reporting them together is what makes it visible.
-     *
-     * Null when the handle is not a live window this bridge created.
-     */
-    external fun nativeWindowGeometry(windowHandle: Long): LongArray?
-
-    /**
-     * The extent the surface is actually presenting at, as {width, height}.
-     *
-     * Not the window's size, and not the requested size: the swapchain is resized from the
-     * thread that presents, so between a window resize and the next frame these disagree.
-     * Reading it is how a caller tells "the surface caught up" from "it never will".
-     */
-    external fun nativeSurfaceExtent(sessionHandle: Long): LongArray?
-
-    /**
-     * What Win32 would hand a click at this screen point to, among the windows the bridge
-     * made: 1 for one of them, 0 for something else inside the same top-level window, -1 for
-     * somewhere else entirely.
-     *
-     * The simulation is a native child window and the interface is drawn by Compose into the
-     * same top-level window, so which one a click reaches depends on what Windows considers
-     * to be on top at that pixel. Neither side knows about the other's windows, so this is the
-     * only account of it that is not a guess.
-     */
-    external fun nativeWindowAtPoint(screenX: Int, screenY: Int): Int
 
     /**
      * Writes one of the bridge's windows into a BMP file and returns the byte count, or -1.
@@ -280,45 +222,6 @@ object DesktopNativeRenderer {
      * above the renderer here takes clicks before the renderer sees them.
      */
     external fun nativeDescribeWindows(): String?
-
-    /**
-     * Places the child window at a screen point with an extent, in one call.
-     *
-     * The point is in screen coordinates and is converted to the parent's client space by the
-     * bridge, because that conversion is Win32's to make: the managed side knows where the
-     * interface put the viewport but not where the parent's client area begins or how the two
-     * spaces are scaled, and guessing either is how a window ends up over the interface.
-     */
-    /**
-     * Shows or hides the renderer's window.
-     *
-     * A child window is not clipped by what the interface draws, so it is in front of the
-     * interface wherever it lies. That is what makes the simulation visible and also what made
-     * it cover every other tab: the surface stays mounted while another tab is showing,
-     * because it owns the device and the simulation thread, and the picture has to be taken
-     * out of the way without the session being torn down.
-     */
-    external fun nativeShowWindow(windowHandle: Long, visible: Boolean): Int
-
-    /**
-     * How this process relates to the display's scaling, and how large the child window's
-     * client area really is.
-     *
-     * This decides whether every other number means what it appears to. A process that declares
-     * itself aware of the display's scaling is given real pixels by Win32; one that does not is
-     * given virtualised ones, so the same value means two different things depending on who is
-     * asked. A window sized from one space and hit-tested in the other lands where neither side
-     * intended, and no amount of reasoning from one side alone can tell which space is which.
-     */
-    external fun nativeDescribeScaling(windowHandle: Long): String?
-
-    external fun nativeSetChildWindowBounds(
-        windowHandle: Long,
-        screenX: Int,
-        screenY: Int,
-        width: Int,
-        height: Int
-    ): Int
 
     /**
      * Creates a simulation and attaches it to [windowHandle].
@@ -618,8 +521,6 @@ object DesktopNativeRenderer {
 
     external fun nativeSetToolOrdinal(sessionHandle: Long, ordinal: Int): Int
 
-    external fun nativeSetSlowMotionSpeed(sessionHandle: Long, speed: Float): Int
-
     external fun nativeSetIncubateTargetUps(sessionHandle: Long, targetUps: Double): Int
 
     external fun nativeSetPerformanceHudEnabled(sessionHandle: Long, enabled: Boolean): Int
@@ -757,17 +658,7 @@ object DesktopNativeRenderer {
         pixels: java.nio.ByteBuffer,
         rowStride: Int
     ): Int
-    /** The same into a direct buffer, for callers that hold one. */
-    external fun nativeCaptureGenomePreviewWithCamera(
-        sessionHandle: Long,
-        genomeBytes: ByteArray,
-        maximumSimulationTime: Double,
-        cameraCenterX: Double,
-        cameraCenterY: Double,
-        cameraZoom: Float,
-        pixels: java.nio.ByteBuffer,
-        rowStride: Int
-    ): Int
+
     /**
      * Hands the preview session the genome it should show. The phone publishes content and view
      * state separately and then asks the preview to draw -- that is what makes an interactive

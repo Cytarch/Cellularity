@@ -23,7 +23,7 @@ sealed interface PlayLaunchDecodeResult {
     data class Invalid(val reason: PlayLaunchFailureReason) : PlayLaunchDecodeResult
 }
 
-/** Pure decoder shared by Android Intent and saved-state adapters. */
+/** Pure decoder shared by the platforms' launch and saved-state adapters. */
 object PlayLaunchContract {
     fun decode(
         stored: Boolean,

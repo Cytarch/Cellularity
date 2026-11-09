@@ -29,7 +29,7 @@ data class GenomeOscillatorPresetSource(
     val amplificationFactor: Float
 )
 
-/** Pure form of the Neurocyte oscillator setup previously embedded in the Android dialog. */
+/** Pure form of the Neurocyte oscillator setup. */
 object GenomeOscillatorPreset {
     const val MIN_PERIOD_HOURS = 0.25f
     const val MAX_PERIOD_HOURS = 9.25f
