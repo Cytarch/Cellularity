@@ -19,7 +19,14 @@ namespace cellularity::paths {
 }
 
 [[nodiscard]] inline std::string toUtf8(const std::filesystem::path& path) {
+    // From C++20 u8string() returns std::u8string (char8_t), so a compiler that defaults to
+    // C++20 rejects the plain return; the bytes are the same either way.
+#if defined(__cpp_char8_t)
+    const std::u8string utf8 = path.u8string();
+    return std::string(utf8.begin(), utf8.end());
+#else
     return path.u8string();
+#endif
 }
 
 // fopen for a UTF-8 path. Returns nullptr on failure, like std::fopen.

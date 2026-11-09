@@ -1003,7 +1003,10 @@ void storeSignalBlock(float* values, SignalBlock block) noexcept {
 }
 
 [[nodiscard]] SignalBlock splatSignalBlock(float value) noexcept {
-    return {value, value, value, value};
+    // A named initializer rather than return {...}: GCC does not accept a braced return
+    // for a vector_size type, clang does.
+    const SignalBlock block = {value, value, value, value};
+    return block;
 }
 #endif
 
