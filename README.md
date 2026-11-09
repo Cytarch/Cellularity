@@ -4,6 +4,8 @@ Cellularity is an open-source cellular simulation for Android, Windows and Linux
 
 The current public release line is **0.1.0-alpha.1** (`versionCode 1`) for Android. The repository also contains the desktop application for Windows and Linux and its Vulkan renderer. Desktop packages (MSI, deb, rpm, AppImage) are development artifacts, not a separate published release line.
 
+Desktop platform status: the Linux desktop application is built, tested and run. The Windows desktop application is experimental: its native library compiles and links (checked with a MinGW cross-build, which does not cover the MSVC-only code paths), but it has not yet been run or packaged on a real Windows system.
+
 ## Requirements
 
 Common:
@@ -63,6 +65,8 @@ Build the unsigned release APK:
 The Android package and application ID are both `com.cytarch.cellularity`. Release signing is intentionally left to the distributor and is not stored in this repository.
 
 ### Windows desktop
+
+Experimental: these steps have not yet been verified end to end on a Windows system; see the platform status above.
 
 Install the native dependencies with vcpkg, then configure and build the desktop JNI library from an x64 MSVC developer shell:
 
