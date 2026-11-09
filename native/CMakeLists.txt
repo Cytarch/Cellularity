@@ -47,7 +47,16 @@ find_package(ZLIB REQUIRED)
 
 option(CELLULARITY_ENABLE_NATIVE_PROFILE "Enable native profiling counters in non-Android host builds" ON)
 option(CELLULARITY_ENABLE_RENDER_TIMELINE "Enable local input-to-presentation timeline collection" OFF)
-option(CELLULARITY_ENABLE_PERFORMANCE_HUD "Build the native microscope performance HUD" OFF)
+# The HUD is drawn by the native renderer, so an application whose settings offer it has
+# to be built with it: Android passes it from app/build.gradle, and the desktop build
+# turns it on here. Host test builds keep it off.
+if(WIN32 OR CELLULARITY_BUILD_DESKTOP)
+    set(CELLULARITY_PERFORMANCE_HUD_DEFAULT ON)
+else()
+    set(CELLULARITY_PERFORMANCE_HUD_DEFAULT OFF)
+endif()
+option(CELLULARITY_ENABLE_PERFORMANCE_HUD "Build the native microscope performance HUD"
+        ${CELLULARITY_PERFORMANCE_HUD_DEFAULT})
 option(CELLULARITY_ENABLE_VULKAN_PROFILING "Build opt-in Vulkan frame profiling" OFF)
 option(CELLULARITY_ENABLE_SIMULATION_SCHEDULER "Build the native simulation scheduler" ON)
 option(CELLULARITY_ENABLE_FUZZING "Build libFuzzer decoder targets with ASan and UBSan" OFF)
