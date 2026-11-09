@@ -62,7 +62,7 @@ Build the unsigned release APK:
 ./gradlew :app:assembleRelease
 ```
 
-The Android package and application ID are both `com.cytarch.cellularity`. Release signing is intentionally left to the distributor and is not stored in this repository.
+The Android package and application ID are both `com.cytarch.cellularity`. Release signing is intentionally left to the distributor and is not stored in this repository. After `./gradlew :app:assembleRelease :app:bundleRelease`, `scripts/sign-android-release.sh --keystore <file.jks>` signs and verifies both outputs; it reads the passwords from the terminal and never stores them.
 
 ### Windows desktop
 
