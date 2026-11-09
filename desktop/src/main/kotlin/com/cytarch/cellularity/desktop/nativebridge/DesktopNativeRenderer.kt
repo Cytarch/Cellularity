@@ -204,26 +204,6 @@ object DesktopNativeRenderer {
     external fun nativeResizeWindow(windowHandle: Long, width: Int, height: Int): Int
 
     /**
-     * Writes one of the bridge's windows into a BMP file and returns the byte count, or -1.
-     *
-     * This is how the renderer's output is inspected without inspecting the machine: a screen
-     * capture would photograph whatever is in front and would take the screen from whoever is
-     * using it, while capturing one window by its handle reads only that window and leaves
-     * everyone else's screen untouched.
-     */
-    external fun nativeCaptureWindow(windowHandle: Long, path: String): Int
-
-    /**
-     * The process's top-level windows in their real stacking order, topmost first.
-     *
-     * Neither half of this port can report a z-order about itself: Compose knows which of its
-     * own surfaces is above which, Win32 knows which window is above which, and "is the
-     * simulation underneath the interface" is the second question. A window that appears
-     * above the renderer here takes clicks before the renderer sees them.
-     */
-    external fun nativeDescribeWindows(): String?
-
-    /**
      * Creates a simulation and attaches it to [windowHandle].
      *
      * Returns an opaque session handle, or 0 if the renderer could not start. The
