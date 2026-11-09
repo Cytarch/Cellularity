@@ -1,5 +1,8 @@
 package com.cytarch.cellularity.platform.render.microscope
 
+import com.cytarch.cellularity.shared.ui.play.microscope.MicroscopePresentationPlan
+import com.cytarch.cellularity.shared.ui.play.microscope.MicroscopePresentationPolicy
+import com.cytarch.cellularity.shared.ui.play.microscope.MicroscopeRenderCadence
 import com.cytarch.cellularity.shared.ui.play.microscope.MicroscopeTemperature
 
 /**

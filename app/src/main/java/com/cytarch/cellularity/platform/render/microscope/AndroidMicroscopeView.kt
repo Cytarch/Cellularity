@@ -1,5 +1,6 @@
 package com.cytarch.cellularity.platform.render.microscope
 
+import com.cytarch.cellularity.shared.ui.play.microscope.MicroscopeRenderCadence
 import android.annotation.SuppressLint
 import android.content.Context
 import android.os.SystemClock

@@ -1,5 +1,7 @@
 package com.cytarch.cellularity.platform.render.microscope
 
+import com.cytarch.cellularity.shared.ui.play.microscope.MicroscopePresentationPolicy
+import com.cytarch.cellularity.shared.ui.play.microscope.MicroscopeRenderCadence
 import com.cytarch.cellularity.shared.ui.play.microscope.MicroscopeTemperature
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse

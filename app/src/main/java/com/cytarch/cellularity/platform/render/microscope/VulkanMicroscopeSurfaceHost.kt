@@ -1,5 +1,6 @@
 package com.cytarch.cellularity.platform.render.microscope
 
+import com.cytarch.cellularity.shared.ui.play.microscope.MicroscopeRenderCadence
 import android.content.Context
 import com.cytarch.cellularity.platform.render.RenderSurfaceLifecycle
 import com.cytarch.cellularity.platform.render.vulkan.VulkanClearFrameView

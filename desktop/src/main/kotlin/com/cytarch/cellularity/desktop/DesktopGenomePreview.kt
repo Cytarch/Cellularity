@@ -275,6 +275,17 @@ private class PreviewSurface(
     private val pendingCaptures = ConcurrentLinkedQueue<PendingGenomeCapture>()
     private val retiredPictures = ConcurrentLinkedQueue<FrameTarget>()
     private val frameRequested = AtomicBoolean(false)
+
+    /**
+     * Wakes the session thread when there is something for it: new content or view, a gesture,
+     * a capture, a size or a close. The thread otherwise sleeps instead of polling, which is what
+     * keeps an idle editor from holding a core awake.
+     */
+    private val wakeup = java.util.concurrent.Semaphore(0)
+
+    private fun wake() {
+        if (wakeup.availablePermits() == 0) wakeup.release()
+    }
     private val running = AtomicBoolean(false)
 
     private var appliedContent: ContentRequest? = null
@@ -296,6 +307,7 @@ private class PreviewSurface(
 
     fun close() {
         running.set(false)
+        wake()
         val worker = thread
         thread = null
         worker?.join(SHUTDOWN_TIMEOUT_MILLIS)
@@ -307,6 +319,7 @@ private class PreviewSurface(
     fun setExtent(size: IntSize) {
         if (size.width <= 0 || size.height <= 0) return
         requestedExtent.set(size)
+        wake()
     }
 
     /**
@@ -340,6 +353,7 @@ private class PreviewSurface(
                 treeEnabled = preview.treeEnabled
             )
         )
+        wake()
     }
 
     /** A saved genome's picture, taken on this surface's session thread (see [DesktopGenomePreviewCapture]). */
@@ -350,6 +364,7 @@ private class PreviewSurface(
     ): Boolean {
         if (!running.get()) return false
         pendingCaptures.add(PendingGenomeCapture(genomeDraftBytes, maximumSimulationTime, completion))
+        wake()
         return true
     }
 
@@ -392,6 +407,7 @@ private class PreviewSurface(
             )
             if (status == INTERACTION_ACCEPTED) frameRequested.set(true)
         }
+        wake()
     }
 
     private fun run() {
@@ -434,7 +450,8 @@ private class PreviewSurface(
                 if (frameRequested.getAndSet(false) && extent.width > 0 && extent.height > 0) {
                     draw(session, extent)
                 }
-                Thread.sleep(IDLE_MILLIS)
+                wakeup.tryAcquire(IDLE_WAIT_MILLIS, java.util.concurrent.TimeUnit.MILLISECONDS)
+                wakeup.drainPermits()
             }
         } catch (interrupted: InterruptedException) {
             Thread.currentThread().interrupt()
@@ -667,7 +684,8 @@ private class PreviewSurface(
     }
 
     private companion object {
-        const val IDLE_MILLIS = 4L
+        /** The longest the session thread sleeps without a wake-up; a safety net only. */
+        const val IDLE_WAIT_MILLIS = 250L
         const val SHUTDOWN_TIMEOUT_MILLIS = 5_000L
     }
 }

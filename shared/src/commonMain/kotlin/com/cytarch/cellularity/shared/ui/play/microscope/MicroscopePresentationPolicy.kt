@@ -1,13 +1,12 @@
-package com.cytarch.cellularity.platform.render.microscope
-
-import com.cytarch.cellularity.shared.ui.play.microscope.MicroscopeTemperature
+package com.cytarch.cellularity.shared.ui.play.microscope
 
 /**
  * Describes the base presentation cadence independently from the simulation scheduler.
+ * Shared by Android and the desktop, so both draw the microscope at the same rates.
  * A hidden Play tab never needs a swap, but its simulation keeps the selected
  * temperature policy and continues running.
  */
-internal object MicroscopePresentationPolicy {
+object MicroscopePresentationPolicy {
     const val INCUBATE_FRAME_INTERVAL_MILLIS = 34L
     const val NO_RENDER_STATUS_INTERVAL_MILLIS = 100L
     const val TEST_PUBLICATION_INTERVAL_MILLIS = 50L
@@ -52,12 +51,12 @@ internal object MicroscopePresentationPolicy {
     }
 }
 
-internal enum class MicroscopeRenderCadence {
+enum class MicroscopeRenderCadence {
     CONTINUOUS,
     ON_DEMAND
 }
 
-internal data class MicroscopePresentationPlan(
+data class MicroscopePresentationPlan(
     val cadence: MicroscopeRenderCadence,
     val requestInitialFrame: Boolean,
     val frameIntervalMillis: Long?,

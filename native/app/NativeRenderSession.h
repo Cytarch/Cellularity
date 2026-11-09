@@ -136,4 +136,19 @@ private:
             mFramePipeline;
     std::unique_ptr<cellularity::render::RenderSurfaceSession> mSurfaceSession;
     std::unique_ptr<SubstratePreviewState> mSubstratePreview;
+
+    // What the last caller-memory frame showed, so an unchanged frame is not drawn,
+    // read back and copied again. A window presents a repeated frame almost for free;
+    // a host that reads every frame back to the CPU does not.
+    struct LastRgbaFrame {
+        bool valid = false;
+        cellularity::render::RenderFrameIdentity identity{};
+        std::uint64_t viewportRevision = 0;
+        int width = 0;
+        int height = 0;
+        std::array<float, 3> backgroundColor{};
+        const std::uint8_t* destination = nullptr;
+        std::size_t rowStride = 0;
+    };
+    LastRgbaFrame mLastRgbaFrame;
 };

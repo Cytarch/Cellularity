@@ -493,6 +493,22 @@ bool NativeRenderSession::drawMicroscopeIntoRgba(
     }
     const int width = viewport.surfaceWidth;
     const int height = viewport.surfaceHeight;
+    // The picture already in the caller's memory is this frame: nothing to draw. The HUD
+    // changes every frame on its own, so a frame that carries it is always drawn.
+    const auto& identity = frame->identity;
+    const auto& last = mLastRgbaFrame;
+    if (debugHudTelemetry == nullptr && last.valid
+            && last.identity.captureSequence == identity.captureSequence
+            && last.identity.worldEpoch == identity.worldEpoch
+            && last.identity.modeGeneration == identity.modeGeneration
+            && last.identity.completedUpdateId == identity.completedUpdateId
+            && last.viewportRevision == viewport.revision
+            && last.width == width && last.height == height
+            && last.backgroundColor == presentation.backgroundColor
+            && last.destination == destination && last.rowStride == rowStride) {
+        return false;
+    }
+    mLastRgbaFrame.valid = false;
     auto& backend = surfaceSession();
     backend.beginOffscreenRgba(
             cellularity::render::OffscreenRenderTarget::LiveFrame, width,
@@ -508,6 +524,10 @@ bool NativeRenderSession::drawMicroscopeIntoRgba(
         written = backend.finishOffscreenRgbaInto(
                 cellularity::render::OffscreenRenderTarget::LiveFrame, width,
                 height, destination, destinationSize, rowStride);
+        if (written != 0) {
+            mLastRgbaFrame = {true, identity, viewport.revision, width, height,
+                    presentation.backgroundColor, destination, rowStride};
+        }
         return written != 0;
     } catch (...) {
         backend.cancelOffscreenRgba(

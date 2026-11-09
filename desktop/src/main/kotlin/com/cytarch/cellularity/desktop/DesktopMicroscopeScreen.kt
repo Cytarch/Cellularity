@@ -69,7 +69,8 @@ fun MicroscopeTab(
     previewCapture: SubstratePreviewCapture? = null,
     onPlateActionClick: () -> Unit,
     onAction: (MicroscopeAction) -> Unit,
-    onCellCount: (Long) -> Unit,
+    /** For probes that watch the plate from outside; null means nobody reads it. */
+    onCellCount: ((Long) -> Unit)?,
     onFailure: (String) -> Unit,
     onSessionReady: (Long) -> Unit
 ) {

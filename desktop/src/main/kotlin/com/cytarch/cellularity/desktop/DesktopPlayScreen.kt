@@ -378,7 +378,7 @@ fun DesktopPlayScreen(
                     // The count exists for the probes that watch the plate from outside; this
                     // screen shows the plate itself, and the number of cells is read where it is
                     // displayed -- in the substrate tab.
-                    onCellCount = {},
+                    onCellCount = null,
                     // A failure to prepare the plate is reported through the interface the phone
                     // reports it through, so the banner over the world is the same banner: the
                     // message is kept for the window title bar and the state drives the banner.

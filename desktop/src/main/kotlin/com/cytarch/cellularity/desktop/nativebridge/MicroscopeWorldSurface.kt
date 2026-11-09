@@ -4,6 +4,10 @@
 
 package com.cytarch.cellularity.desktop.nativebridge
 
+import com.cytarch.cellularity.shared.ui.play.microscope.MicroscopeTemperature
+import com.cytarch.cellularity.shared.ui.play.microscope.MicroscopeRenderCadence
+import com.cytarch.cellularity.shared.ui.play.microscope.MicroscopePresentationPolicy
+import com.cytarch.cellularity.shared.ui.play.microscope.MicroscopePresentationPlan
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -111,7 +115,7 @@ fun MicroscopeRenderSurface(
     isVisible: Boolean,
     /** Unit-length direction supplied by held WASD keys; zero disables keyboard movement. */
     cameraPanDirection: Offset = Offset.Zero,
-    onCellCount: (Long) -> Unit,
+    onCellCount: ((Long) -> Unit)?,
     onFailure: (String) -> Unit,
     onSessionReady: (Long) -> Unit,
     /**
@@ -151,7 +155,7 @@ fun MicroscopeRenderSurface(
             dishRadius = dishRadius,
             dishInnerRadius = dishInnerRadius,
             substratePath = substratePath,
-            onCellCount = { count -> currentOnCellCount(count) },
+            onCellCount = if (onCellCount == null) null else { count -> currentOnCellCount?.invoke(count) },
             onFailure = { message -> currentOnFailure(message) },
             onSessionReady = { handle -> currentOnSessionReady(handle) }
         )
@@ -467,7 +471,7 @@ private class WorldSurface(
     private val dishRadius: Double,
     private val dishInnerRadius: Double,
     private val substratePath: String?,
-    private val onCellCount: (Long) -> Unit,
+    private val onCellCount: ((Long) -> Unit)?,
     private val onFailure: (String) -> Unit,
     private val onSessionReady: (Long) -> Unit
 ) : SubstratePreviewSource {
@@ -498,6 +502,9 @@ private class WorldSurface(
 
     private val requestedExtent = AtomicReference(IntSize.Zero)
     private val requestedTemperature = AtomicInteger(NO_REQUEST)
+
+    /** The temperature the session runs at, which decides how often a frame is drawn. */
+    private var appliedTemperatureMode = MicroscopeTemperature.OBSERVE.nativeMode
     private val requestedTool = AtomicInteger(NO_REQUEST)
     /** The renderer's performance readout, as the settings' switch last set it. */
     private val requestedPerformanceHud = AtomicReference(false)
@@ -667,11 +674,13 @@ private class WorldSurface(
         var consecutiveFailures = 0
         var reportedFailure = false
         var lastCellCountMillis = 0L
+        // The plan whose one requested initial frame has been drawn (see presentationPlan).
+        var drawnInitialFrameFor: MicroscopePresentationPlan? = null
         try {
             while (running.get() && session == 0L) {
                 val extent = requestedExtent.get()
                 if (extent.width <= 0 || extent.height <= 0) {
-                    Thread.sleep(IDLE_MILLIS)
+                    Thread.sleep(FRAME_INTERVAL_NANOS / 1_000_000L)
                     continue
                 }
                 anchor = DesktopNativeRenderer.nativeCreateSurfaceAnchorWindow(
@@ -725,14 +734,28 @@ private class WorldSurface(
                 }
                 applyInterfaceRequests(session)
 
-                if (!presenting.get()) {
-                    // Nothing asks for a frame while another tab is showing, exactly as on the
-                    // phone: the presentation stops, the simulation does not. The session, the
-                    // device and the world all stay as they are, so coming back costs a frame
-                    // rather than a restart.
-                    Thread.sleep(PARKED_MILLIS)
+                // How often to draw is Android's policy (shared MicroscopePresentationPolicy):
+                // nothing while another tab is showing or under Incubate-without-render, a
+                // frame every 34 ms under Incubate, and every display frame otherwise. Input,
+                // captures and the simulation carry on regardless; only the picture waits.
+                val plan = presentationPlan()
+                val drawThisTick = when {
+                    plan.cadence == MicroscopeRenderCadence.CONTINUOUS -> true
+                    plan.frameIntervalMillis != null -> true
+                    plan.requestInitialFrame && drawnInitialFrameFor != plan -> true
+                    else -> false
+                }
+                val planInterval = plan.frameIntervalMillis
+                val tickNanos = when {
+                    plan.cadence == MicroscopeRenderCadence.CONTINUOUS -> FRAME_INTERVAL_NANOS
+                    planInterval != null -> planInterval * 1_000_000L
+                    else -> MicroscopePresentationPolicy.NO_RENDER_STATUS_INTERVAL_MILLIS * 1_000_000L
+                }
+                if (!drawThisTick) {
+                    sleepRemaining(frameStartedNanos, tickNanos)
                     continue
                 }
+                if (plan.cadence == MicroscopeRenderCadence.ON_DEMAND) drawnInitialFrameFor = plan
 
                 when (publish(session, width, height)) {
                     FRAME_DRAWN -> {
@@ -740,7 +763,7 @@ private class WorldSurface(
                         reportedFailure = false
                     }
 
-                    FRAME_IDLE -> Thread.sleep(IDLE_MILLIS)
+                    FRAME_IDLE -> Unit
 
                     else -> {
                         consecutiveFailures++
@@ -755,16 +778,13 @@ private class WorldSurface(
                 }
 
                 val now = System.currentTimeMillis()
-                if (now - lastCellCountMillis >= CELL_COUNT_INTERVAL_MILLIS) {
+                val cellCountListener = onCellCount
+                if (cellCountListener != null && now - lastCellCountMillis >= CELL_COUNT_INTERVAL_MILLIS) {
                     lastCellCountMillis = now
-                    onCellCount(DesktopNativeRenderer.nativeCellCount(session))
+                    cellCountListener(DesktopNativeRenderer.nativeCellCount(session))
                 }
 
-                val elapsed = System.nanoTime() - frameStartedNanos
-                val remaining = FRAME_INTERVAL_NANOS - elapsed
-                if (remaining > 0L) {
-                    Thread.sleep(remaining / 1_000_000L, (remaining % 1_000_000L).toInt())
-                }
+                sleepRemaining(frameStartedNanos, tickNanos)
             }
         } catch (interrupted: InterruptedException) {
             Thread.currentThread().interrupt()
@@ -827,11 +847,26 @@ private class WorldSurface(
             )
         }
 
+    private fun presentationPlan(): MicroscopePresentationPlan = MicroscopePresentationPolicy.plan(
+        temperature = MicroscopeTemperature.fromNativeMode(appliedTemperatureMode)
+            ?: MicroscopeTemperature.OBSERVE,
+        presentationVisible = presenting.get(),
+        publicationIntervalMillis = STATS_PUBLICATION_INTERVAL_MILLIS
+    )
+
+    private fun sleepRemaining(startedNanos: Long, tickNanos: Long) {
+        val remaining = tickNanos - (System.nanoTime() - startedNanos)
+        if (remaining > 0L) {
+            Thread.sleep(remaining / 1_000_000L, (remaining % 1_000_000L).toInt())
+        }
+    }
+
     /** Applies whatever the interface has changed since the last frame. */
     private fun applyInterfaceRequests(session: Long) {
         val mode = requestedTemperature.getAndSet(NO_REQUEST)
         if (mode != NO_REQUEST) {
             DesktopNativeRenderer.nativeSetTemperatureMode(session, mode)
+            appliedTemperatureMode = mode
         }
         val ordinal = requestedTool.getAndSet(NO_REQUEST)
         if (ordinal != NO_REQUEST) {
@@ -1023,8 +1058,8 @@ private class WorldSurface(
         const val FRAME_INTERVAL_NANOS = 16_666_667L
 
         /** How long to wait when there is nothing to draw, or the plate is not on screen. */
-        const val IDLE_MILLIS = 4L
-        const val PARKED_MILLIS = 50L
+        /** The status publication interval handed to the shared presentation plan. */
+        const val STATS_PUBLICATION_INTERVAL_MILLIS = 250L
 
         /** How many refused frames in a row before the loop stops asking every interval. */
         const val FAILURE_PARK_THRESHOLD = 3
