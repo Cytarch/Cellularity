@@ -47,8 +47,11 @@ class DesktopSubstratePathTest {
                 resolved is StorageResult.Success,
                 "a plate whose file is present must resolve, not report $resolved"
             )
+            // The store works with canonical paths, and on Windows the canonical form expands
+            // 8.3 short names (a temporary directory under RUNNER~1, for example), so the
+            // expected path is compared in the same form.
             assertEquals(
-                written.toAbsolutePath(),
+                written.toFile().canonicalFile.toPath(),
                 (resolved as StorageResult.Success).value,
                 "the renderer must be pointed at the file the repository itself would read"
             )

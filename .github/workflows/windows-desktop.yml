@@ -42,10 +42,10 @@ jobs:
         shell: pwsh
     steps:
       - name: Check out
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up JDK 21
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: "21"
@@ -74,7 +74,8 @@ jobs:
             Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
 
       - name: Restore the vcpkg binary cache
-        uses: actions/cache@v4
+        id: vcpkg-cache
+        uses: actions/cache/restore@v4
         with:
           path: ${{ runner.temp }}\vcpkg-binary-cache
           key: vcpkg-${{ runner.os }}-${{ env.VCPKG_COMMIT }}-${{ hashFiles('.github/workflows/windows-desktop.yml') }}
@@ -86,6 +87,15 @@ jobs:
           "$env:VCPKG_ROOT\installed\x64-windows\bin" | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
           "$env:VCPKG_ROOT\installed\x64-windows\tools\shaderc" | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
           "$env:VCPKG_ROOT\installed\x64-windows\tools\spirv-tools" | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
+
+      # Saved as soon as the packages are built, so a later failing step does not throw away
+      # the most expensive part of the run (shaderc builds from source).
+      - name: Save the vcpkg binary cache
+        if: ${{ steps.vcpkg-cache.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ runner.temp }}\vcpkg-binary-cache
+          key: ${{ steps.vcpkg-cache.outputs.cache-primary-key }}
 
       - name: Configure the native build
         run: |
@@ -113,6 +123,24 @@ jobs:
           name: cellularity-windows-msi
           path: desktop/build/compose/binaries/main/msi/*.msi
           if-no-files-found: error
+
+      # GitHub's Windows runners have no GPU. Mesa's lavapipe is a software Vulkan driver, so
+      # the renderer tests run for real instead of being skipped. It is used only by the tests
+      # and is not part of the installer.
+      - name: Install a software Vulkan driver for the tests
+        run: |
+          $archive = "${{ runner.temp }}\mesa.7z"
+          Invoke-WebRequest -Uri "https://github.com/pal1000/mesa-dist-win/releases/download/26.2.6/mesa3d-26.2.6-release-msvc.7z" -OutFile $archive
+          $hash = (Get-FileHash -Algorithm SHA256 $archive).Hash.ToLowerInvariant()
+          if ($hash -ne "b2e00615feaba45942343c265cc8c5f576142ca682c1ac6661922d4b72492877") {
+            throw "Unexpected Mesa archive checksum: $hash"
+          }
+          $mesa = "${{ runner.temp }}\mesa"
+          7z x $archive "-o$mesa" "x64\vulkan_lvp.dll" "x64\lvp_icd.x86_64.json" -y | Out-Null
+          if ($LASTEXITCODE -ne 0) { throw "Could not extract lavapipe" }
+          $icd = "$mesa\x64\lvp_icd.x86_64.json"
+          "VK_DRIVER_FILES=$icd" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "VK_ICD_FILENAMES=$icd" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
 
       - name: Build and run the native tests
         run: |

@@ -125,6 +125,29 @@ function(cellularity_list_archive_symbols nm_tool archive out_var error_var)
     # was already symbol-shaped; drop the known non-symbol headings explicitly.
     list(FILTER symbols EXCLUDE REGEX "^(Microsoft|Copyright|Dump|File|COFF|Section|LIBRARY|LINK|warning|Summary|SECTION|RELOCATIONS)$")
 
+    # Objects compiled with MSVC link-time code generation (/GL) carry intermediate code
+    # rather than a COFF symbol table, so /SYMBOLS lists nothing for them. The archive's
+    # linker member still indexes their public symbols, since that is how the linker finds
+    # them; read the defined symbols from it instead. Undefined references are not in the
+    # index and stay unavailable for such archives.
+    if(use_dumpbin AND NOT symbols AND NOT ARG_UNDEFINED_ONLY)
+        execute_process(
+                COMMAND "${nm_tool}" /LINKERMEMBER:1 "${archive}"
+                RESULT_VARIABLE listed
+                OUTPUT_VARIABLE listing
+                ERROR_VARIABLE listing_error
+        )
+        if(listed EQUAL 0)
+            string(REPLACE "\r\n" "\n" listing "${listing}")
+            string(REPLACE "\n" ";" listing_lines "${listing}")
+            foreach(line IN LISTS listing_lines)
+                if(line MATCHES "^[ \t]*[0-9A-Fa-f]+[ \t]+([^ \t]+)[ \t]*$")
+                    list(APPEND symbols "${CMAKE_MATCH_1}")
+                endif()
+            endforeach()
+        endif()
+    endif()
+
     if(NOT symbols)
         # An empty undefined-symbol list is a legitimate result: an archive with
         # no external references is exactly what the client isolation wants.
