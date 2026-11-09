@@ -90,6 +90,53 @@ internal object DesktopSubstratePreviewEncoder {
      * in the first place -- it would leave a plate whose save failed for a reason that has nothing
      * to do with the plate. The signature is the format's own: `RIFF`, a size, then `WEBP`.
      */
+    /**
+     * A saved genome's picture as PNG, as Android's GenomePreviewEncoder makes it: straight alpha,
+     * fully transparent pixels canonicalised to black, at most 8 MiB.
+     */
+    fun encodeGenomePng(
+        rgbaBytes: ByteArray,
+        pixelWidth: Int,
+        pixelHeight: Int
+    ): com.cytarch.cellularity.shared.files.genome.EncodedGenomePreview? {
+        if (pixelWidth <= 0 || pixelHeight <= 0) return null
+        if (rgbaBytes.size.toLong() != pixelWidth.toLong() * pixelHeight * BYTES_PER_PIXEL) return null
+        val pixels = rgbaBytes.copyOf()
+        var offset = 0
+        while (offset < pixels.size) {
+            if (pixels[offset + 3].toInt() == 0) {
+                pixels[offset] = 0
+                pixels[offset + 1] = 0
+                pixels[offset + 2] = 0
+            }
+            offset += BYTES_PER_PIXEL
+        }
+        val bitmap = Bitmap()
+        return try {
+            bitmap.allocPixels(
+                ImageInfo(pixelWidth, pixelHeight, ColorType.RGBA_8888, ColorAlphaType.UNPREMUL)
+            )
+            bitmap.installPixels(pixels)
+            val encoded = Image.makeFromBitmap(bitmap)
+                .encodeToData(EncodedImageFormat.PNG)
+                ?.bytes
+                ?.takeIf { it.isNotEmpty() && it.size <= MAXIMUM_GENOME_PREVIEW_BYTES }
+                ?: return null
+            com.cytarch.cellularity.shared.files.genome.EncodedGenomePreview(
+                codec = com.cytarch.cellularity.shared.files.genome.PREVIEW_CODEC_PNG,
+                pixelWidth = pixelWidth,
+                pixelHeight = pixelHeight,
+                bytes = encoded
+            )
+        } catch (failure: RuntimeException) {
+            null
+        } finally {
+            bitmap.close()
+        }
+    }
+
+    private const val MAXIMUM_GENOME_PREVIEW_BYTES = 8 * 1024 * 1024
+
     private fun hasWebpSignature(bytes: ByteArray): Boolean =
         bytes.size > WEBP_HEADER_BYTES &&
             bytes[0] == 'R'.code.toByte() &&

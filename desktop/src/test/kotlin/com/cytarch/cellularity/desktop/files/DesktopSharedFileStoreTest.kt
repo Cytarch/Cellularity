@@ -184,4 +184,62 @@ class DesktopSharedFileStoreTest {
         )
         assertEquals(listOf(StoredSubstrateId("Plate")), value(repository.listSubstrateIds()))
     }
+
+    @Test
+    fun aGenomeSavedFromTheEditorCarriesItsPicture() = runBlocking {
+        val roots = com.cytarch.cellularity.desktop.nativebridge.DesktopAssetRoots.resolve()
+        assumeTrue("the compiled shaders and textures were not found", roots != null)
+        // The preview session belongs to the thread that created it, as the editor's preview
+        // surface owns its own: the session and every capture run on this one thread.
+        val owner = java.util.concurrent.Executors.newSingleThreadExecutor()
+        val handles = owner.submit<LongArray> {
+            val anchor = DesktopNativeRenderer.nativeCreateSurfaceAnchorWindow(16, 16)
+            val session = if (anchor == 0L) 0L else DesktopNativeRenderer
+                .nativeCreateGenomePreviewSession(
+                    anchor, roots!!.shaderRoot.toString(), roots.textureRoot.toString(), 64
+                )
+            longArrayOf(anchor, session)
+        }.get()
+        val (anchor, session) = handles[0] to handles[1]
+        try {
+            assumeTrue("no window system for the preview's surface", anchor != 0L)
+            assertTrue("the preview session did not start", session != 0L)
+            val capture = com.cytarch.cellularity.desktop.DesktopGenomePreviewCapture()
+            capture.attach { bytes, time, completion ->
+                owner.execute {
+                    val side = DesktopNativeRenderer.nativeGenomePreviewPixels()
+                    val pixels = java.nio.ByteBuffer.allocateDirect(side * side * 4)
+                    val status = DesktopNativeRenderer.nativeCaptureGenomePreview(
+                        session, bytes, time, pixels, side * 4
+                    )
+                    completion.complete(
+                        if (status != 0) null else {
+                            val rgba = ByteArray(side * side * 4).also { pixels.get(it) }
+                            com.cytarch.cellularity.desktop.CapturedGenomePreview(rgba, side, side)
+                        }
+                    )
+                }
+                true
+            }
+            val repository = DesktopCellularityFileRepository(storage())
+            val editorGenome = com.cytarch.cellularity.shared.ui.play.genome_editor
+                .GenomeEditorDefaults.createRandomizedEditorGenome()
+
+            value(repository.writeGenomeDraftWithPreview("Pictured", editorGenome) { wire ->
+                capture.capture(wire, 48.0)?.let {
+                    DesktopSubstratePreviewEncoder.encodeGenomePng(it.rgba, it.pixelWidth, it.pixelHeight)
+                }
+            })
+
+            val info = value(repository.readGenomeInfo(StoredGenomeId("Pictured.genome")))
+            assertTrue("the saved genome has no usable picture", info.previewAvailable)
+            assertTrue(repository.readGenomePreview(StoredGenomeId("Pictured.genome")) != null)
+        } finally {
+            owner.submit {
+                if (session != 0L) DesktopNativeRenderer.nativeStopSession(session)
+                if (anchor != 0L) DesktopNativeRenderer.nativeDestroyWindow(anchor)
+            }.get()
+            owner.shutdown()
+        }
+    }
 }

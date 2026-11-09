@@ -11,7 +11,9 @@ import com.cytarch.cellularity.desktop.files.DesktopCellularityFileRepository
 import com.cytarch.cellularity.shared.files.StorageResult
 import com.cytarch.cellularity.shared.model.GeneDraft
 import com.cytarch.cellularity.shared.model.GenomeDraft
+import com.cytarch.cellularity.desktop.files.DesktopSubstratePreviewEncoder
 import com.cytarch.cellularity.shared.ui.play.genome_editor.GenomeEditorAction
+import com.cytarch.cellularity.shared.ui.play.genome_editor.GenomeEditorConfig
 import com.cytarch.cellularity.shared.ui.play.genome_editor.GenomeEditorDefaults
 import com.cytarch.cellularity.shared.ui.play.genome_editor.GenomeEditorEffectHandler
 import com.cytarch.cellularity.shared.ui.play.genome_editor.GenomeEditorFileGateway
@@ -29,7 +31,8 @@ import kotlinx.coroutines.launch
  * would be a second place to keep correct.
  */
 private class RepositoryGenomeEditorFileGateway(
-    private val repository: DesktopCellularityFileRepository
+    private val repository: DesktopCellularityFileRepository,
+    private val previewCapture: DesktopGenomePreviewCapture?
 ) : GenomeEditorFileGateway {
     override suspend fun listGenomeNames(): StorageResult<List<String>> =
         repository.listGenomeNames()
@@ -37,13 +40,28 @@ private class RepositoryGenomeEditorFileGateway(
     override suspend fun readGenomeDraft(name: String): StorageResult<GenomeDraft> =
         repository.readGenomeDraft(name)
 
+    // Saved with its picture, as Android saves it (writeGenomeDraftWithPreview).
     override suspend fun writeGenomeDraft(
         name: String,
         genome: GenomeDraft
-    ): StorageResult<Unit> = repository.writeGenomeDraft(
-        nameOrFilename = name,
-        genome = genome
-    )
+    ): StorageResult<Unit> = repository.writeGenomeDraftWithPreview(name, genome) { wire ->
+        try {
+            previewCapture
+                ?.capture(wire, GenomeEditorConfig.PREVIEW_MAX_TIME_HOURS)
+                ?.let {
+                    DesktopSubstratePreviewEncoder.encodeGenomePng(
+                        it.rgba,
+                        it.pixelWidth,
+                        it.pixelHeight
+                    )
+                }
+        } catch (failure: Exception) {
+            System.err.println(
+                "Could not generate the saved genome preview; saving without it: $failure"
+            )
+            null
+        }
+    }
 }
 
 /**
@@ -72,10 +90,11 @@ class DesktopGenomeEditorStore(
     constructor(
         repository: DesktopCellularityFileRepository,
         genomeProvider: GenomeProvider,
+        previewCapture: DesktopGenomePreviewCapture? = null,
         initialGenome: GenomeDraft = createRandomizedEditorGenome(),
         onStateSettled: () -> Unit = { }
     ) : this(
-        fileGateway = RepositoryGenomeEditorFileGateway(repository),
+        fileGateway = RepositoryGenomeEditorFileGateway(repository, previewCapture),
         genomeProvider = genomeProvider,
         initialGenome = initialGenome,
         onStateSettled = onStateSettled

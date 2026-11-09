@@ -136,10 +136,13 @@ fun DesktopPlayScreen(
     val scope = rememberCoroutineScope()
     // The selected cell's genome, read as Android reads it: from the running session, on demand.
     val selectedGenome = remember { SelectedCellGenome() }
+    // A saved genome's picture comes from the editor's preview session, as on Android.
+    val genomePreviewCapture = remember { DesktopGenomePreviewCapture() }
     val genomeEditorStore = remember(fileRepository) {
         DesktopGenomeEditorStore(
             repository = fileRepository,
-            genomeProvider = selectedGenome
+            genomeProvider = selectedGenome,
+            previewCapture = genomePreviewCapture
         ).also { it.attach(scope) }
     }
 
@@ -409,7 +412,9 @@ fun DesktopPlayScreen(
                     )
                 }
             },
-            genomeContent = { GenomeTab(genomeEditorStore, genomePreviewMaxCells) }
+            genomeContent = {
+                GenomeTab(genomeEditorStore, genomePreviewMaxCells, genomePreviewCapture)
+            }
         )
     }
 
@@ -488,10 +493,15 @@ private fun SubstrateTabUnavailable(isVisible: Boolean) {
  * invisible to the microscope.
  */
 @Composable
-private fun GenomeTab(store: DesktopGenomeEditorStore, previewMaxCells: Int) {
+private fun GenomeTab(
+    store: DesktopGenomeEditorStore,
+    previewMaxCells: Int,
+    previewCapture: DesktopGenomePreviewCapture
+) {
     DesktopGenomeEditor(
         store = store,
         previewMaxCells = previewMaxCells,
+        previewCapture = previewCapture,
         modifier = Modifier.fillMaxSize()
     )
 }

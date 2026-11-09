@@ -75,6 +75,7 @@ fun DesktopGenomePreview(
     metrics: GenomePreviewMetrics,
     geometry: GenomePreviewSurfaceGeometry,
     previewMaxCells: Int,
+    previewCapture: DesktopGenomePreviewCapture? = null,
     modifier: Modifier = Modifier
 ) {
     val roots = remember { DesktopAssetRoots.resolve() }
@@ -102,10 +103,12 @@ fun DesktopGenomePreview(
 
     val currentOnGeneSelected = rememberUpdatedState(onGeneSelected)
 
-    DisposableEffect(surface) {
+    DisposableEffect(surface, previewCapture) {
         surface.start()
         handle.interaction = surface.interaction
+        previewCapture?.attach(surface)
         onDispose {
+            previewCapture?.detach(surface)
             if (handle.interaction === surface.interaction) handle.interaction = null
             surface.close()
         }
@@ -214,7 +217,7 @@ private class PreviewSurface(
     private val roots: DesktopAssetRoots.Roots,
     private val initialCamera: FloatArray?,
     private val previewMaxCells: Int
-) {
+) : GenomePreviewCaptureEndpoint {
     /** How many frames have been drawn into [frameBitmap], read by the drawing phase. */
     val frameVersion = mutableLongStateOf(0L)
 
@@ -269,6 +272,7 @@ private class PreviewSurface(
     private val requestedContent = AtomicReference<ContentRequest?>(null)
     private val requestedView = AtomicReference<ViewRequest?>(null)
     private val pendingGestures = ConcurrentLinkedQueue<(Long) -> Unit>()
+    private val pendingCaptures = ConcurrentLinkedQueue<PendingGenomeCapture>()
     private val retiredPictures = ConcurrentLinkedQueue<FrameTarget>()
     private val frameRequested = AtomicBoolean(false)
     private val running = AtomicBoolean(false)
@@ -338,6 +342,45 @@ private class PreviewSurface(
         )
     }
 
+    /** A saved genome's picture, taken on this surface's session thread (see [DesktopGenomePreviewCapture]). */
+    override fun enqueueCapture(
+        genomeDraftBytes: ByteArray,
+        maximumSimulationTime: Double,
+        completion: java.util.concurrent.CompletableFuture<CapturedGenomePreview?>
+    ): Boolean {
+        if (!running.get()) return false
+        pendingCaptures.add(PendingGenomeCapture(genomeDraftBytes, maximumSimulationTime, completion))
+        return true
+    }
+
+    private fun applyCaptures(session: Long) {
+        while (true) {
+            val request = pendingCaptures.poll() ?: return
+            if (request.completion.isDone) continue
+            val captured = runCatching {
+                val side = DesktopNativeRenderer.nativeGenomePreviewPixels()
+                val rowStride = side * BYTES_PER_PIXEL
+                val pixels = java.nio.ByteBuffer.allocateDirect(rowStride * side)
+                val status = DesktopNativeRenderer.nativeCaptureGenomePreview(
+                    sessionHandle = session,
+                    genomeBytes = request.genomeDraftBytes,
+                    maximumSimulationTime = request.maximumSimulationTime,
+                    pixels = pixels,
+                    rowStride = rowStride
+                )
+                if (status != PREVIEW_DRAWN || side <= 0) {
+                    null
+                } else {
+                    val bytes = ByteArray(rowStride * side)
+                    pixels.rewind()
+                    pixels.get(bytes)
+                    CapturedGenomePreview(bytes, side, side)
+                }
+            }.getOrNull()
+            request.completion.complete(captured)
+        }
+    }
+
     private fun queueInteraction(kind: Int, first: Float, second: Float, third: Float) {
         pendingGestures.add { session ->
             val status = DesktopNativeRenderer.nativeEnqueueGenomePreviewInteraction(
@@ -384,6 +427,7 @@ private class PreviewSurface(
                 )
             }
             while (running.get()) {
+                applyCaptures(session)
                 applyGestures(session)
                 publishWhatChanged(session)
                 val extent = appliedExtent
@@ -398,6 +442,10 @@ private class PreviewSurface(
             problem.value = "The preview could not be drawn: " +
                 (failure.message ?: failure::class.simpleName) + "."
         } finally {
+            while (true) {
+                // Answered rather than dropped: a save waits on this, and no picture still saves.
+                pendingCaptures.poll()?.completion?.complete(null) ?: break
+            }
             while (pendingGestures.poll() != null) {
                 // Deliberately dropped: the session these would have been applied to is going
                 // away, and a gesture applied to a stopped session is worse than a lost one.
@@ -700,3 +748,9 @@ private const val INTERACTION_CLEAR_GHOST = 5
 
 /** What the editor says when a genome grew into nothing, which is an answer about the genome. */
 private const val NOTHING_LIVING_MESSAGE = "This genome grows into nothing living yet."
+
+private class PendingGenomeCapture(
+    val genomeDraftBytes: ByteArray,
+    val maximumSimulationTime: Double,
+    val completion: java.util.concurrent.CompletableFuture<CapturedGenomePreview?>
+)

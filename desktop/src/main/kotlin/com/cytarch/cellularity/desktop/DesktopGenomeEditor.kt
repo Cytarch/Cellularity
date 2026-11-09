@@ -39,6 +39,7 @@ import org.jetbrains.compose.resources.getString
 fun DesktopGenomeEditor(
     store: DesktopGenomeEditorStore,
     previewMaxCells: Int,
+    previewCapture: DesktopGenomePreviewCapture? = null,
     modifier: Modifier = Modifier
 ) {
     val state = store.state
@@ -66,6 +67,7 @@ fun DesktopGenomeEditor(
             preview = { geometry, handle, metrics, previewModifier ->
                 DesktopGenomePreview(
                     previewMaxCells = previewMaxCells,
+                    previewCapture = previewCapture,
                     preview = state.preview,
                     layout = layout,
                     // A tap on the organism chooses the gene of the cell it landed on, which is
