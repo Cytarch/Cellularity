@@ -27,13 +27,6 @@ class DesktopTapSelectionTest {
     @Test
     fun `a tap selects the cell under it`() = tapSelects(zoomFirst = false)
 
-    /**
-     * Known desktop divergence: after the camera zooms, a diagnosis tap on the cell does not
-     * select it, while the same tap without the zoom does. Android submits taps in batches that
-     * carry their event-time viewport (submitMicroscopeInputBatch); the desktop bridge queues
-     * single taps (queueMicroscopeTap). Moving the desktop onto Android's input path is the fix.
-     */
-    @org.junit.Ignore("desktop taps after a zoom miss; fixed by adopting Android's batched input")
     @Test
     fun `a tap after the camera moved selects the cell under it`() = tapSelects(zoomFirst = true)
 
@@ -85,9 +78,9 @@ class DesktopTapSelectionTest {
             // would be a test of luck. The frame is in the buffer, so the point can be read out
             // of the picture the same way a person reads it off the screen.
             //
-            // The camera is moved first, because a tap carries the viewport revision it was
-            // computed against, and the case a person meets first is a tap after they have moved
-            // the camera rather than a tap on a plate that has never been touched.
+            // With zoomFirst the camera is moved first: a tap is resolved through the camera at
+            // the moment it is queued, and the case a person meets first is a tap after they
+            // have moved the camera rather than a tap on a plate that has never been touched.
             if (zoomFirst) {
                 DesktopNativeRenderer.nativeQueueZoom(session, 1.4f, width / 2f, height / 2f)
             }
@@ -145,7 +138,10 @@ class DesktopTapSelectionTest {
                 accepted++
             }
             attempts++
-            drawFrames(session, pixels, width, height, count = 4)
+            // A tap is applied at the world's next update, not at the next frame: frames come
+            // back in about a millisecond, and four of them can pass with no update at all.
+            // Checking after a fixed frame count made this test fail about one run in three.
+            drawUntilWorldUpdates(session, pixels, width, height, updates = 2)
             if (selectedCellId(session) >= 0) break
             // Nudge the search off the same cell: a cell whose body keeps being picked but whose
             // hit area is missed would otherwise be tapped for ever.
@@ -196,6 +192,24 @@ class DesktopTapSelectionTest {
         return if (values.size > SELECTED_CELL_SLOT) values[SELECTED_CELL_SLOT].toInt() else -1
     }
 
+    /** Draws until the world has completed [updates] more updates, or ten seconds pass. */
+    private fun drawUntilWorldUpdates(
+        session: Long,
+        pixels: java.nio.ByteBuffer,
+        width: Int,
+        height: Int,
+        updates: Long
+    ) {
+        val start = completedUpdates(session)
+        val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10)
+        while (completedUpdates(session) < start + updates && System.nanoTime() < deadline) {
+            drawFrames(session, pixels, width, height, count = 1)
+        }
+    }
+
+    private fun completedUpdates(session: Long): Long =
+        DesktopNativeRenderer.nativeReadStats(session)?.getOrNull(COMPLETED_UPDATES_SLOT) ?: 0L
+
     private fun drawFrames(
         session: Long,
         pixels: java.nio.ByteBuffer,
@@ -235,10 +249,12 @@ class DesktopTapSelectionTest {
         /** The input queue took the gesture. */
         const val INPUT_QUEUED = 1
 
+        /** Completed world updates are slot two of the status snapshot: see nativeReadStats. */
+        const val COMPLETED_UPDATES_SLOT = 2
+
         /** Selection is slot eight of the status snapshot: see nativeReadStats. */
         const val SELECTED_CELL_SLOT = 8
 
-        /** A five by five grid of taps covers the middle of the dish without ever missing it. */
         /** How many taps the search may spend before it concludes that tapping selects nothing. */
         const val MAXIMUM_TAPS = 12
 
