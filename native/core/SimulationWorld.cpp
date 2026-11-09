@@ -1515,33 +1515,46 @@ void SimulationWorld::eatFoods(double deltaTime) {
     {
         CELLULARITY_PROFILE_COARSE_REGION(mProfile, eatFoodDecayNanos);
         if (mEnvironment.mTestFoodDecay != 0.0) {
-            for (int foodIndex = 0; foodIndex < mFoodData.mFoodCount; foodIndex++) {
-                CELLULARITY_WORLD_PROFILE_IF {
+            // Two passes instead of one: every food is decayed exactly once, then the ones
+            // that went negative are removed in index order with the same swap-with-last
+            // removal. A food moved into a removed slot was already decayed in the first
+            // pass, which is the same value the single loop gave it on its revisit, so the
+            // world comes out identical; the first pass has no removals and vectorizes.
+            const float decayStep = static_cast<float>(mEnvironment.mTestFoodDecay * deltaTime);
+            const int decayedFoodCount = mFoodData.mFoodCount;
+            float* const foodMass = mFoodData.mMass.data();
+            bool anyFoodExhausted = false;
+            for (int foodIndex = 0; foodIndex < decayedFoodCount; foodIndex++) {
+                foodMass[foodIndex] -= decayStep;
+                anyFoodExhausted |= foodMass[foodIndex] < 0.0f;
+            }
+            CELLULARITY_WORLD_PROFILE_IF {
+                const double decayAmount = mEnvironment.mTestFoodDecay * deltaTime;
+                for (int foodIndex = 0; foodIndex < decayedFoodCount; foodIndex++) {
                     mProfile->eatFoodVisits++;
+                    const double oldFoodMass =
+                            static_cast<double>(foodMass[foodIndex]) + decayStep;
+                    mProfile->foodMassDecayed += std::min(oldFoodMass, decayAmount);
                 }
-                double oldFoodMass = mFoodData.mMass[foodIndex];
-                double decayedFoodMass = std::min(oldFoodMass, mEnvironment.mTestFoodDecay * deltaTime);
-                mFoodData.mMass[foodIndex] -= static_cast<float>(mEnvironment.mTestFoodDecay * deltaTime);
-                CELLULARITY_WORLD_PROFILE_IF {
-                    mProfile->foodMassDecayed += decayedFoodMass;
-                }
-
-                if (mFoodData.mMass[foodIndex] < 0.0f) {
-                    CELLULARITY_WORLD_PROFILE_IF {
-                        mProfile->eatFoodDecayRemovals++;
+            }
+            if (anyFoodExhausted) {
+                for (int foodIndex = 0; foodIndex < mFoodData.mFoodCount; foodIndex++) {
+                    if (foodMass[foodIndex] < 0.0f) {
+                        CELLULARITY_WORLD_PROFILE_IF {
+                            mProfile->eatFoodVisits++;
+                            mProfile->eatFoodDecayRemovals++;
+                        }
+                        removeFoodImmediately(foodIndex);
+                        foodIndex--;
                     }
-                    removeFoodImmediately(foodIndex);
-                    foodIndex--;
-                    continue;
                 }
-
-                if (mFoodData.mCellCollisionGridMappingGeneration[foodIndex]
-                        == mCellCollisionGridMappingGeneration) {
-                    CELLULARITY_WORLD_PROFILE_IF {
+            }
+            CELLULARITY_WORLD_PROFILE_IF {
+                for (int foodIndex = 0; foodIndex < mFoodData.mFoodCount; foodIndex++) {
+                    if (mFoodData.mCellCollisionGridMappingGeneration[foodIndex]
+                            == mCellCollisionGridMappingGeneration) {
                         mProfile->eatFoodGridIndexCacheHits++;
-                    }
-                } else {
-                    CELLULARITY_WORLD_PROFILE_IF {
+                    } else {
                         mProfile->eatFoodGridIndexCacheMisses++;
                     }
                 }
@@ -1556,6 +1569,15 @@ void SimulationWorld::eatFoods(double deltaTime) {
     if (mHasFoodPhysicsQueryConsumers) {
         CELLULARITY_PROFILE_COARSE_REGION(mProfile, eatFoodQueryAndUpdateNanos);
         int gridStride = mCellCollisionGrid->stride();
+        // World extent of one collision-grid slot, matching CollisionGrid's mapping: slot g
+        // holds positions in [(g - 1) / G * 2R - R, g / G * 2R - R). A neighbour slot whose
+        // rectangle the cell's contact disc cannot reach holds no contact, so it is skipped;
+        // every food in it would have failed the distance test below, which keeps the result
+        // and the visiting order of the remaining foods exactly as before. The margin keeps
+        // the test conservative against rounding in the slot bounds.
+        const double gridWorldRadius = mCellCollisionGrid->worldRadius();
+        const double gridSlotSize = 2.0 * gridWorldRadius / mCellCollisionGrid->gridSize();
+        const double gridSlotMargin = gridSlotSize * 1e-6;
         for (int cellIndex = 0; cellIndex < mCellData.mCellCount; cellIndex++) {
             if (mCellData.mIsDead[cellIndex]) {
                 continue;
@@ -1580,14 +1602,46 @@ void SimulationWorld::eatFoods(double deltaTime) {
             double cellRadius = mCellData.mRadius[cellIndex];
             double collisionDistance = cellRadius + FoodData::RADIUS;
             double collisionDistSq = collisionDistance * collisionDistance;
+            // Per-cell values the contact branches read; none of them changes while this
+            // cell's food contacts are processed, so they are computed once, not per contact.
+            double ciliocyteDirectionX = 0.0;
+            double ciliocyteDirectionY = 0.0;
+            double ciliocyteBending = 0.0;
+            double ciliocyteLifting = 0.0;
+            if (cellType == CellType::CILIOCYTE) {
+                ciliocyteDirectionX = std::cos(mCellData.mAngle[cellIndex]);
+                ciliocyteDirectionY = std::sin(mCellData.mAngle[cellIndex]);
+                ciliocyteBending = mCellData.getValue(cellIndex, Gene::MYOCYTE_BENDING_VALUE_INDEX, 0);
+                ciliocyteLifting = mCellData.getValue(cellIndex, Gene::MYOCYTE_LIFTING_VALUE_INDEX, 0);
+            }
+            const bool secretesLipase = cellType == CellType::SECROCYTE
+                    && mCellData.getActiveGeneView(cellIndex).integerValue(
+                               Gene::SECRETE_TYPE_INTEGER_INDEX)
+                            == Gene::SECRETE_TYPE_LIPASE;
             int centerGridX = cellGridIndex % gridStride;
             int centerGridY = cellGridIndex / gridStride;
             for (int gridY = centerGridY - 1; gridY <= centerGridY + 1; gridY++) {
                 if (gridY < 0 || gridY >= gridStride) {
                     continue;
                 }
+                const double slotMinY = (gridY - 1) * gridSlotSize - gridWorldRadius - gridSlotMargin;
+                const double slotMaxY = gridY * gridSlotSize - gridWorldRadius + gridSlotMargin;
+                const double gapY = cellPositionY < slotMinY
+                        ? slotMinY - cellPositionY
+                        : (cellPositionY > slotMaxY ? cellPositionY - slotMaxY : 0.0);
+                if (gapY * gapY >= collisionDistSq) {
+                    continue;
+                }
                 for (int gridX = centerGridX - 1; gridX <= centerGridX + 1; gridX++) {
                     if (gridX < 0 || gridX >= gridStride) {
+                        continue;
+                    }
+                    const double slotMinX = (gridX - 1) * gridSlotSize - gridWorldRadius - gridSlotMargin;
+                    const double slotMaxX = gridX * gridSlotSize - gridWorldRadius + gridSlotMargin;
+                    const double gapX = cellPositionX < slotMinX
+                            ? slotMinX - cellPositionX
+                            : (cellPositionX > slotMaxX ? cellPositionX - slotMaxX : 0.0);
+                    if (gapX * gapX + gapY * gapY >= collisionDistSq) {
                         continue;
                     }
                     int gridIndex = gridX + gridY * gridStride;
@@ -1635,14 +1689,14 @@ void SimulationWorld::eatFoods(double deltaTime) {
                             double distance = std::sqrt(distanceSq);
                             double nx = (mFoodData.mPositionX[foodIndex] - cellPositionX) / distance;
                             double ny = (mFoodData.mPositionY[foodIndex] - cellPositionY) / distance;
-                            double dx = std::cos(mCellData.mAngle[cellIndex]);
-                            double dy = std::sin(mCellData.mAngle[cellIndex]);
+                            double dx = ciliocyteDirectionX;
+                            double dy = ciliocyteDirectionY;
                             double cross = ny * dx - nx * dy;
                             double cv;
                             if ((0 < cross) != mCellData.mIsMirrored[cellIndex]) {
-                                cv = cross * MAX_TAX_SPEED * mCellData.getValue(cellIndex, Gene::MYOCYTE_BENDING_VALUE_INDEX, 0);
+                                cv = cross * MAX_TAX_SPEED * ciliocyteBending;
                             } else {
-                                cv = cross * MAX_TAX_SPEED * mCellData.getValue(cellIndex, Gene::MYOCYTE_LIFTING_VALUE_INDEX, 0);
+                                cv = cross * MAX_TAX_SPEED * ciliocyteLifting;
                             }
                             double dv = 40.0 * (cv - ny * (mFoodData.mVelocityX[foodIndex] - mCellData.mVelocityX[cellIndex]) + nx * (mFoodData.mVelocityY[foodIndex] - mCellData.mVelocityY[cellIndex]) - mCellData.mAngularVelocity[cellIndex] * cellRadius);
                             mFoodData.mVelocityX[foodIndex] += static_cast<float>((-0.12 * nx + ny * dv) * deltaTime);
@@ -1653,11 +1707,7 @@ void SimulationWorld::eatFoods(double deltaTime) {
                             CELLULARITY_WORLD_PROFILE_IF {
                                 mProfile->eatFoodSecrocyteContacts++;
                             }
-                            const cellularity::GeneView cellActiveGene =
-                                    mCellData.getActiveGeneView(cellIndex);
-                            if (cellActiveGene.integerValue(
-                                        Gene::SECRETE_TYPE_INTEGER_INDEX)
-                                    == Gene::SECRETE_TYPE_LIPASE) {
+                            if (secretesLipase) {
                                 mFoodData.mLipidLayer[foodIndex] -= static_cast<float>(deltaTime);
                             }
                         }
