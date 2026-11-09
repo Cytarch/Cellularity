@@ -67,6 +67,7 @@ fun main() {
                         assetRoots = DesktopAssetRoots.resolve(),
                         configuration = SimulationContract.defaultConfiguration,
                         substratePath = null,
+                        incubateTargetUps = com.cytarch.cellularity.shared.settings.CellularitySettings().incubateTargetUps,
                         // This probe opens no genome editor, so it has no draft to place and says
                         // so. Placement is measured where it exists: in the placement test.
                         placementGenome = null,

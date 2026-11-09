@@ -727,7 +727,9 @@ object DesktopNativeRenderer {
     external fun nativeCreateGenomePreviewSession(
         windowHandle: Long,
         shaderRoot: String,
-        textureRoot: String
+        textureRoot: String,
+        /** The preview's cell allocation: the user's genome preview limit, as on Android. */
+        previewMaxCells: Int
     ): Long
 
     /**

@@ -50,6 +50,8 @@ fun MicroscopeTab(
     // The performance HUD describes the renderer, so the renderer draws it and the setting has
     // to reach the session; the phone sends the same flag from the same shared state.
     performanceHudEnabled: Boolean = false,
+    /** The Incubate temperature's target update rate, the user's setting (as on Android). */
+    incubateTargetUps: Double,
     /**
      * The genome the editor is showing, which is what a synthesizer tap places.
      *
@@ -96,6 +98,7 @@ fun MicroscopeTab(
                 toolOrdinal = state.selectedTool.nativeOrdinal,
                 substratePath = substratePath,
                 performanceHudEnabled = performanceHudEnabled,
+                incubateTargetUps = incubateTargetUps,
                 placementGenomeBytes = placementGenomeBytes,
                 previewCapture = previewCapture,
                 // The picture stops being presented while another tab shows, and the world does

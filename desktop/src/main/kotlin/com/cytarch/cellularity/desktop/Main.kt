@@ -133,7 +133,9 @@ fun main(args: Array<String>) {
                         modifier = Modifier.fillMaxSize(),
                         storedPlateName = session.storedPlateName,
                         performanceHudEnabled = settings.performanceHudEnabled,
-                        askSterilize = settings.askSterilize
+                        askSterilize = settings.askSterilize,
+                        incubateTargetUps = settings.incubateTargetUps,
+                        genomePreviewMaxCells = settings.genomePreviewMaxCells
                     )
                 }
                 return@Window

@@ -2049,7 +2049,8 @@ Java_com_cytarch_cellularity_desktop_nativebridge_DesktopNativeRenderer_nativeDi
 // Returns an opaque handle, or 0 if the renderer could not be created.
 extern "C" JNIEXPORT jlong JNICALL
 Java_com_cytarch_cellularity_desktop_nativebridge_DesktopNativeRenderer_nativeCreateGenomePreviewSession(
-        JNIEnv* env, jclass, jlong windowHandle, jstring shaderRoot, jstring textureRoot) {
+        JNIEnv* env, jclass, jlong windowHandle, jstring shaderRoot, jstring textureRoot,
+        jint previewMaxCells) {
     try {
         // An anchor, not a window anyone looks at: the backend stands its device up against a
         // surface, and a preview that has none draws nothing at all. The caller passes the anchor
@@ -2085,7 +2086,7 @@ Java_com_cytarch_cellularity_desktop_nativebridge_DesktopNativeRenderer_nativeCr
             return 0;
         }
         Environment environment = Environment::setupPreviewSimulationEnvironment(
-                kGenomePreviewAllocationCells);
+                previewMaxCells > 0 ? previewMaxCells : kGenomePreviewAllocationCells);
         environment.addRandom = false;
         cellularity::snapshot_codec::validateEnvironmentForAllocation(environment);
         auto controller = std::make_shared<NativeCellularityController>(

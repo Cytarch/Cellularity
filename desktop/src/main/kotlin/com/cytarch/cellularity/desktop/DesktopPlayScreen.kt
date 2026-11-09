@@ -43,6 +43,7 @@ import com.cytarch.cellularity.desktop.nativebridge.DesktopAssetRoots
 import com.cytarch.cellularity.shared.files.StorageResult
 import com.cytarch.cellularity.shared.files.StoredSubstrateId
 import com.cytarch.cellularity.shared.model.GenomeDraft
+import com.cytarch.cellularity.shared.model.GenomeDraftWireCodec
 import com.cytarch.cellularity.shared.model.SimulationConfiguration
 import com.cytarch.cellularity.shared.ui.play.PlayAction
 import com.cytarch.cellularity.shared.ui.play.PlayDialog
@@ -57,6 +58,7 @@ import com.cytarch.cellularity.shared.ui.play.genome_editor.GenomeProvider
 import com.cytarch.cellularity.shared.ui.play.microscope.MicroscopeAction
 import com.cytarch.cellularity.shared.ui.play.microscope.MicroscopeStore
 import com.cytarch.cellularity.shared.ui.play.microscope.MicroscopeTemperature
+import com.cytarch.cellularity.desktop.nativebridge.DesktopNativeRenderer
 import com.cytarch.cellularity.desktop.nativebridge.SubstratePreviewCapture
 import kotlinx.coroutines.launch
 
@@ -97,7 +99,11 @@ fun DesktopPlayScreen(
      * answered here: the difference between a sterilise that asks and one that does not is a dialog
      * the shared screen owns.
      */
-    askSterilize: Boolean = false
+    askSterilize: Boolean = false,
+    /** The Incubate temperature's target update rate, the user's setting (as on Android). */
+    incubateTargetUps: Double,
+    /** The genome preview's cell limit, the user's setting (as on Android). */
+    genomePreviewMaxCells: Int
 ) {
     val microscopeStore = remember { MicroscopeStore() }
     val microscopeState by microscopeStore.state.collectAsState()
@@ -128,10 +134,12 @@ fun DesktopPlayScreen(
     // A store the tab owned would be invisible to the plate, which is why the plate used to place
     // the default Cell.
     val scope = rememberCoroutineScope()
+    // The selected cell's genome, read as Android reads it: from the running session, on demand.
+    val selectedGenome = remember { SelectedCellGenome() }
     val genomeEditorStore = remember(fileRepository) {
         DesktopGenomeEditorStore(
             repository = fileRepository,
-            genomeProvider = NoMicroscopeGenome
+            genomeProvider = selectedGenome
         ).also { it.attach(scope) }
     }
 
@@ -166,16 +174,8 @@ fun DesktopPlayScreen(
             source = openedPlate?.let { PlayLaunchSource.Stored(it) }
                 ?: PlayLaunchSource.New(configuration),
             operations = operations,
-            // An experiment opens on the plate, not on the panel that describes it.
-            //
-            // The phone opens on the substrate tab because that is where a person sets the
-            // environment up before starting, and the screen it opens on is the one they came for.
-            // On a desktop the same reasoning points the other way: the simulation is the reason
-            // the window exists, and the tab that shows it should be the one that is showing when
-            // the window appears. Opening on the substrate panel made the first thing a person saw
-            // a description of a world they had not looked at yet -- and, before the panel was
-            // reachable at all, a sentence saying it could not be read.
-            restoredUi = PlayRestoredUiState(selectedTab = PlayTab.MICROSCOPE)
+            // Opens on the same tab as Android (the shared default, the substrate panel).
+            restoredUi = PlayRestoredUiState()
         )
     }
     val playState by playStore.state.collectAsState()
@@ -210,6 +210,7 @@ fun DesktopPlayScreen(
     // gateway needs the same session the viewport draws, because the substrate panel must
     // edit the world on screen rather than a second one behind it.
     var sessionHandle by remember { mutableStateOf(0L) }
+    LaunchedEffect(sessionHandle) { selectedGenome.sessionHandle = sessionHandle }
     var gateway by remember { mutableStateOf<DesktopSimulationGateway?>(null) }
     LaunchedEffect(sessionHandle, fileRepository, openedPlate, previewCapture) {
         val handle = sessionHandle
@@ -364,6 +365,7 @@ fun DesktopPlayScreen(
                     configuration = configuration,
                     substratePath = substratePath,
                     performanceHudEnabled = performanceHudEnabled,
+                    incubateTargetUps = incubateTargetUps,
                     // What a synthesizer tap places: the genome the editor is showing.
                     placementGenome = genomeEditorStore.state.preview.snapshot,
                     // Where a save takes this plate's picture from: the surface that draws it.
@@ -407,7 +409,7 @@ fun DesktopPlayScreen(
                     )
                 }
             },
-            genomeContent = { GenomeTab(genomeEditorStore) }
+            genomeContent = { GenomeTab(genomeEditorStore, genomePreviewMaxCells) }
         )
     }
 
@@ -486,24 +488,34 @@ private fun SubstrateTabUnavailable(isVisible: Boolean) {
  * invisible to the microscope.
  */
 @Composable
-private fun GenomeTab(store: DesktopGenomeEditorStore) {
-    DesktopGenomeEditor(store = store, modifier = Modifier.fillMaxSize())
+private fun GenomeTab(store: DesktopGenomeEditorStore, previewMaxCells: Int) {
+    DesktopGenomeEditor(
+        store = store,
+        previewMaxCells = previewMaxCells,
+        modifier = Modifier.fillMaxSize()
+    )
 }
 
 /**
- * Says that there is no genome to take from the plate.
+ * The genome of the cell selected on the plate, for "take genome from plate".
  *
- * Selecting a cell and editing its genome is what the phone offers, and it needs a way to
- * read a cell's genome out of the running simulation. Taking a genome *from* the plate is the
- * direction that is still missing: the bridge can inspect a selected Cell, but nothing polls it
- * into a value the editor's provider can answer from, and a provider that blocked the interface
- * thread on the render thread would be the freeze this port was debugged for.
- *
- * Answering "none" makes the editor report that as the reason the option failed instead of
- * offering a choice that would do nothing.
+ * The same native read Android's PlaySessionController makes (the controller's
+ * inspectMicroscopeSelectedGenome), decoded the same way; null when nothing is selected or the
+ * session is gone.
  */
-private object NoMicroscopeGenome : GenomeProvider {
-    override val genome: GenomeDraft? = null
+private class SelectedCellGenome : GenomeProvider {
+    @Volatile
+    var sessionHandle: Long = 0L
+
+    override val genome: GenomeDraft?
+        get() {
+            val handle = sessionHandle
+            if (handle == 0L) return null
+            return runCatching {
+                DesktopNativeRenderer.nativeInspectSelectedGenome(handle)
+                    ?.let(GenomeDraftWireCodec::decode)
+            }.getOrNull()
+        }
 }
 /**
  * How often the diagnosis panel is refreshed while it is showing.

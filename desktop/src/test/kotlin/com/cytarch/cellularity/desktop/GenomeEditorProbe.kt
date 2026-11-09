@@ -57,7 +57,7 @@ fun main() {
             window.setLocation(40, 40)
             composePanel.setContent {
                 MaterialTheme {
-                    DesktopGenomeEditor(store = store)
+                    DesktopGenomeEditor(store = store, previewMaxCells = com.cytarch.cellularity.shared.settings.CellularitySettings().genomePreviewMaxCells)
                 }
             }
             panel.set(composePanel)

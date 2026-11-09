@@ -95,6 +95,8 @@ fun MicroscopeRenderSurface(
     toolOrdinal: Int,
     substratePath: String?,
     performanceHudEnabled: Boolean,
+    /** The Incubate temperature's target update rate, the user's setting (as on Android). */
+    incubateTargetUps: Double,
     /**
      * The genome a synthesizer tap places, as the editor encodes it, or null when there is no
      * editor to take one from.
@@ -157,6 +159,9 @@ fun MicroscopeRenderSurface(
     // is what a switch in a settings window is expected to do.
     LaunchedEffect(surface, performanceHudEnabled) {
         surface.setPerformanceHudEnabled(performanceHudEnabled)
+    }
+    LaunchedEffect(surface, incubateTargetUps) {
+        surface.setIncubateTargetUps(incubateTargetUps)
     }
     DisposableEffect(surface) {
         surface.start()
@@ -493,6 +498,9 @@ private class WorldSurface(
     /** The renderer's performance readout, as the settings' switch last set it. */
     private val requestedPerformanceHud = AtomicReference(false)
 
+    /** The Incubate target rate, as the settings last set it; applied on the render thread. */
+    private val requestedIncubateTargetUps = AtomicReference<Double?>(null)
+
     /**
      * The genome a synthesizer tap places, as the editor's draft last encoded it.
      *
@@ -574,6 +582,10 @@ private class WorldSurface(
      */
     fun setPerformanceHudEnabled(enabled: Boolean) {
         requestedPerformanceHud.set(enabled)
+    }
+
+    fun setIncubateTargetUps(targetUps: Double) {
+        requestedIncubateTargetUps.set(targetUps)
     }
 
     fun queuePan(deltaX: Float, deltaY: Float) {
@@ -824,6 +836,9 @@ private class WorldSurface(
         if (hud != appliedPerformanceHud) {
             appliedPerformanceHud = hud
             DesktopNativeRenderer.nativeSetPerformanceHudEnabled(session, hud)
+        }
+        requestedIncubateTargetUps.getAndSet(null)?.let { targetUps ->
+            DesktopNativeRenderer.nativeSetIncubateTargetUps(session, targetUps)
         }
         var action = pendingInput.poll()
         while (action != null) {

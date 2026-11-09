@@ -66,7 +66,7 @@ fun main() {
             // what the editor shows inside the application and not of what it would look like
             // without one.
             CellularityTheme {
-                DesktopGenomeEditor(store = store)
+                DesktopGenomeEditor(store = store, previewMaxCells = com.cytarch.cellularity.shared.settings.CellularitySettings().genomePreviewMaxCells)
             }
         }
         // The session is opened on a thread of the preview's own and the first frame has to be

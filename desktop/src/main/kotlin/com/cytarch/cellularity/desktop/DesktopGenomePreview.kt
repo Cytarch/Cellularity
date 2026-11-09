@@ -74,13 +74,15 @@ fun DesktopGenomePreview(
     handle: GenomePreviewHandle,
     metrics: GenomePreviewMetrics,
     geometry: GenomePreviewSurfaceGeometry,
+    previewMaxCells: Int,
     modifier: Modifier = Modifier
 ) {
     val roots = remember { DesktopAssetRoots.resolve() }
     // The camera the person left behind, read once: it is where the next session opens, not a
     // value to keep watching.
-    val surface = remember(roots) {
-        roots?.let { PreviewSurface(it, layout.restoreViewport()) }
+    // A new limit needs a new session, as on Android where the preview view is rebuilt.
+    val surface = remember(roots, previewMaxCells) {
+        roots?.let { PreviewSurface(it, layout.restoreViewport(), previewMaxCells) }
     }
 
     if (!DesktopNativeRenderer.isAvailable || surface == null) {
@@ -210,7 +212,8 @@ fun DesktopGenomePreview(
  */
 private class PreviewSurface(
     private val roots: DesktopAssetRoots.Roots,
-    private val initialCamera: FloatArray?
+    private val initialCamera: FloatArray?,
+    private val previewMaxCells: Int
 ) {
     /** How many frames have been drawn into [frameBitmap], read by the drawing phase. */
     val frameVersion = mutableLongStateOf(0L)
@@ -362,7 +365,8 @@ private class PreviewSurface(
             session = DesktopNativeRenderer.nativeCreateGenomePreviewSession(
                 windowHandle = anchor,
                 shaderRoot = roots.shaderRoot.toString(),
-                textureRoot = roots.textureRoot.toString()
+                textureRoot = roots.textureRoot.toString(),
+                previewMaxCells = previewMaxCells
             )
             if (session == 0L) {
                 problem.value = "The renderer could not be opened for the preview."

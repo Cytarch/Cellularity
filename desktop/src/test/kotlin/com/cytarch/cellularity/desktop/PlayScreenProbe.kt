@@ -73,7 +73,9 @@ fun main() {
                         onExit = { },
                         // The renderer's own readout, so that what the probe photographs is also
                         // the evidence that the setting reaches the session.
-                        performanceHudEnabled = true
+                        performanceHudEnabled = true,
+                        incubateTargetUps = com.cytarch.cellularity.shared.settings.CellularitySettings().incubateTargetUps,
+                        genomePreviewMaxCells = com.cytarch.cellularity.shared.settings.CellularitySettings().genomePreviewMaxCells
                     )
                 }
             }

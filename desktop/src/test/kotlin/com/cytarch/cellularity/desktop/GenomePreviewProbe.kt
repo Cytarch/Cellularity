@@ -98,7 +98,8 @@ fun main() {
         val previewSession = DesktopNativeRenderer.nativeCreateGenomePreviewSession(
             windowHandle = previewAnchor,
             shaderRoot = roots.shaderRoot.toString(),
-            textureRoot = roots.textureRoot.toString()
+            textureRoot = roots.textureRoot.toString(),
+            previewMaxCells = 64
         )
         println("GENOMEPREVIEW preview session=$previewSession")
         if (previewSession == 0L) {
