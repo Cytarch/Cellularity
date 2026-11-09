@@ -353,6 +353,7 @@ fun DesktopPlayScreen(
             // exactly when the file no longer describes it.
             askSterilize = askSterilize,
             avoidCameraCutout = false,
+            viewportAboveNavigationBar = true,
             onAction = { action -> scope.launch { playStore.dispatch(action) } },
             microscopeContent = { isVisible, onPlateActionClick ->
                 MicroscopeTab(

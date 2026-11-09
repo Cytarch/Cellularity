@@ -142,14 +142,5 @@
     <string name="genome_editor_signal_name_format">%1$s%2$d</string>
     <string name="genome_editor_signed_signal_name_format">%1$s%2$s%3$d</string>
     <string name="genome_editor_gene_with_type_format">%1$s%2$d %3$s</string>
-    <string name="genome_editor_gene_list_header_format">Genes (%1$d)</string>
-    <string name="genome_editor_genome_unchanged_message">Este genoma no ha cambiado desde que se creó o se cargó.</string>
-    <string name="genome_editor_genome_unsaved_message">Este genoma tiene cambios sin guardar.</string>
-    <string name="genome_editor_reading_stored_genomes_message">Leyendo los genomas guardados…</string>
-    <string name="genome_editor_choose_genome_message">Elige un genoma para cargar.</string>
-    <string name="genome_editor_name_genome_message">Escribe un nombre para este genoma.</string>
-    <string name="genome_editor_loading_message">Cargando…</string>
-    <string name="genome_editor_saving_message">Guardando…</string>
-    <string name="genome_editor_working_message">Procesando…</string>
 
 </resources>

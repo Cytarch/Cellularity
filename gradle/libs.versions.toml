@@ -11,8 +11,11 @@ targetSdk = "36"
 ndk = "28.2.13676358"
 cmake = "3.22.1"
 
-appVersionCode = "2"
+appVersionCode = "1"
 appVersionName = "0.1.0-alpha.1"
+# Windows Installer accepts only numeric MAJOR.MINOR.BUILD and upgrades only to a higher one;
+# bump it with every distributed MSI.
+desktopPackageVersion = "0.1.3"
 
 androidxCompose = "1.9.5"
 androidxMaterial3 = "1.4.0"

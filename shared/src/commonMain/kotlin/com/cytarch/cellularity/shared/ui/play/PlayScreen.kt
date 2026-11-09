@@ -104,6 +104,7 @@ fun PlayScreen(
     onAction: (PlayAction) -> Unit,
     modifier: Modifier = Modifier,
     genomeContentReady: Boolean = true,
+    viewportAboveNavigationBar: Boolean = false,
     microscopeContent: @Composable (isVisible: Boolean, onPlateActionClick: () -> Unit) -> Unit,
     substrateContent: @Composable (isVisible: Boolean, onPlateActionClick: () -> Unit) -> Unit,
     genomeContent: @Composable () -> Unit
@@ -180,16 +181,19 @@ fun PlayScreen(
                 state.selectedTab,
                 genomeContentReady
             )
-            // The viewport is given the area above the navigation bar, like every other tab.
-            // Without this it takes the whole window and the renderer's surface -- a native
-            // child window on the desktop, and a platform surface on the phone -- covers the
-            // bar, because neither is clipped by what Compose draws. On a desktop that is
-            // the difference between a screen with tabs and a way back, and a window showing
-            // a running world with no controls at all.
+            // A host whose viewport is a native child window (desktop) must keep it above the
+            // navigation bar: Compose cannot clip or draw over such a window, so it would hide
+            // the tabs. Android's surface draws under the bar as before.
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(bottom = paddingValues.calculateBottomPadding())
+                    .then(
+                        if (viewportAboveNavigationBar) {
+                            Modifier.padding(bottom = paddingValues.calculateBottomPadding())
+                        } else {
+                            Modifier
+                        }
+                    )
             ) {
                 microscopeContent(contentVisibility.microscope) {
                     onAction(PlayAction.RequestPlateActions)

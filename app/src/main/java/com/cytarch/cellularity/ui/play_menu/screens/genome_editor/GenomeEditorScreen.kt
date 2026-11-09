@@ -4,8 +4,9 @@ import android.widget.Toast
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
+import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -53,14 +54,15 @@ fun GenomeEditorScreen(
         }
     }
 
-    // A message is held rather than shown where it arrives, because reading a string resource is
-    // suspending and the editor asks for the message while composing. Holding it also means two
-    // messages in a row are shown in order rather than on top of each other.
-    var pendingMessage by remember { mutableStateOf<StringResource?>(null) }
-    LaunchedEffect(pendingMessage) {
-        val resource = pendingMessage ?: return@LaunchedEffect
+    // Messages are queued rather than shown where they arrive, because reading a string resource
+    // is suspending and the editor reports them while composing. The queue keeps two messages in
+    // a row in order instead of letting the second cancel the first.
+    val pendingMessages = remember { mutableStateListOf<StringResource>() }
+    val nextMessage = pendingMessages.firstOrNull()
+    LaunchedEffect(nextMessage) {
+        val resource = nextMessage ?: return@LaunchedEffect
         Toast.makeText(context, getString(resource), Toast.LENGTH_LONG).show()
-        pendingMessage = null
+        pendingMessages.removeAt(0)
     }
 
     SharedGenomeEditorScreen(
@@ -68,7 +70,7 @@ fun GenomeEditorScreen(
         onAction = viewModel::dispatch,
         defaultGeneFactory = GenomeEditorViewModel::createRandomizedEditorGene,
         layout = coordinator.layout,
-        onMessage = { resource -> pendingMessage = resource },
+        onMessage = { resource -> pendingMessages.add(resource) },
         preview = { geometry, handle, metrics, modifier ->
             AndroidGenomePreview(
                 preview = state.preview,
@@ -110,6 +112,12 @@ private fun AndroidGenomePreview(
     onGeneSelected: (Int) -> Unit,
     modifier: Modifier
 ) {
+    // The view captures its callbacks once, so they read the latest lambdas through state.
+    val currentOnPreviewReadyChanged by rememberUpdatedState(onPreviewReadyChanged)
+    val currentOnGeneSelected by rememberUpdatedState(onGeneSelected)
+    val currentOnRenderBackendFailure by rememberUpdatedState(onRenderBackendFailure)
+    // A new backend needs a new view: the old one is bound to the backend it was created on.
+    key(backendKind) {
     AndroidView(
         modifier = modifier,
         factory = { context ->
@@ -117,7 +125,7 @@ private fun AndroidGenomePreview(
                 context = context,
                 previewMaxCells = previewMaxCells,
                 backendKind = backendKind,
-                onRenderBackendFailure = onRenderBackendFailure,
+                onRenderBackendFailure = { message -> currentOnRenderBackendFailure(message) },
                 initialPreview = preview,
                 initialViewport = coordinator.restoreViewport(),
                 initialViewportWidth = geometry.viewportWidth,
@@ -126,10 +134,10 @@ private fun AndroidGenomePreview(
                 initialBackingSurfaceHeight = geometry.backingHeight
             ).also { view ->
                 coordinator.attachPreview(view)
-                view.setGeneSelectionCallback(onGeneSelected)
+                view.setGeneSelectionCallback { geneIndex -> currentOnGeneSelected(geneIndex) }
                 view.setViewportChangedCallback(coordinator::rememberViewport)
                 view.setPreviewCellCountCallback { metrics.cellCount = it }
-                view.setDisplayContentReadyCallback(onPreviewReadyChanged)
+                view.setDisplayContentReadyCallback { ready -> currentOnPreviewReadyChanged(ready) }
                 metrics.maximumCellCount = view.maxPreviewShow
                 // The editor holds the gestures and asks whoever is drawing to answer them; this
                 // view is that whoever, so it is handed over rather than reached into.
@@ -146,4 +154,5 @@ private fun AndroidGenomePreview(
             coordinator.releasePreview(view)
         }
     )
+    }
 }

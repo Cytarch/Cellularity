@@ -174,14 +174,5 @@
     <string name="genome_editor_signal_name_format">%1$s%2$d</string>
     <string name="genome_editor_signed_signal_name_format">%1$s%2$s%3$d</string>
     <string name="genome_editor_gene_with_type_format">%1$s%2$d %3$s</string>
-    <string name="genome_editor_gene_list_header_format">Гены (%1$d)</string>
-    <string name="genome_editor_genome_unchanged_message">Этот геном не изменился с момента создания или загрузки.</string>
-    <string name="genome_editor_genome_unsaved_message">В этом геноме есть несохранённые изменения.</string>
-    <string name="genome_editor_reading_stored_genomes_message">Чтение сохранённых геномов…</string>
-    <string name="genome_editor_choose_genome_message">Выберите геном для загрузки.</string>
-    <string name="genome_editor_name_genome_message">Введите название этого генома.</string>
-    <string name="genome_editor_loading_message">Загрузка…</string>
-    <string name="genome_editor_saving_message">Сохранение…</string>
-    <string name="genome_editor_working_message">Выполняется…</string>
 
 </resources>
