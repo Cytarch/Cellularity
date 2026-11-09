@@ -1534,6 +1534,63 @@ void testReplacementRuntimeConfigurationIsAppliedBeforeOwnerStart() {
 
 } // namespace
 
+// Dragging a cell is what the MOVE tool (optical tweezers) does, and only it: with any
+// other tool a press on a cell followed by a drag must leave the cell where it is.
+double dragCellWithTool(int toolOrdinal) {
+    Environment environment = Environment::constructDefaultEnvironment(8, 4, 1.0);
+    environment.addRandom = false;
+    NativeCellularityController controller(false, environment);
+    controller.setViewportSurfaceSize(320, 240);
+    controller.setViewportCamera(0.0f, 0.0f, 1.0f);
+    {
+        auto access = controller.writeWorld();
+        CellData& cellData = access.world().mCellData;
+        const int cell = cellularity::tests::addAliveCell(cellData, CellType::PHAGOCYTE);
+        cellData.mPositionX[cell] = 0.0;
+        cellData.mPositionY[cell] = 0.0;
+        cellData.mRadius[cell] = 0.05;
+        access.world().updateGrids();
+    }
+    controller.startMicroscopeRuntime();
+    controller.setMicroscopeToolOrdinal(toolOrdinal);
+    assertTrue(waitUntil(
+                       [&] {
+                           const auto snapshot = controller.microscopeRuntimeSnapshot();
+                           return snapshot.revision > 0 && snapshot.toolOrdinal == toolOrdinal;
+                       },
+                       std::chrono::seconds(2)),
+            "Owner applies the tool before the drag");
+    controller.queueMicroscopeTouchDown(1, 160.0f, 120.0f);
+    for (int step = 1; step <= 8; ++step) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        controller.queueMicroscopeTouchMove(1, 160.0f + 5.0f * step, 120.0f);
+    }
+    std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    controller.queueMicroscopeTouchUp(1);
+    std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    double distance = 0.0;
+    {
+        const auto access = controller.readWorld();
+        const CellData& cellData = access.world().mCellData;
+        distance = std::hypot(cellData.mPositionX[0], cellData.mPositionY[0]);
+    }
+    controller.stopMicroscopeRuntime();
+    return distance;
+}
+
+void testOnlyTheMoveToolDragsACell() {
+    constexpr int kMoveTool = 1;
+    const double moved = dragCellWithTool(kMoveTool);
+    assertTrue(moved > 0.01, "The MOVE tool drags the cell under the pointer");
+    for (const int tool : {0, 2, 3, 4}) {
+        const double distance = dragCellWithTool(tool);
+        if (distance > 0.01) {
+            std::cerr << "tool " << tool << " moved the cell by " << distance << '\n';
+        }
+        assertTrue(distance <= 0.01, "Only the MOVE tool drags a cell");
+    }
+}
+
 int main() {
     testWorkerOwnershipTransitions();
     testWorkerOutputMatchesSynchronousReference();
@@ -1555,6 +1612,7 @@ int main() {
     testRuntimeControllerRefreshesEverySwapWithoutRepeatUpload();
     testConcurrentProducerConsumerRaceContract();
     testReplacementRuntimeConfigurationIsAppliedBeforeOwnerStart();
+    testOnlyTheMoveToolDragsACell();
     std::cout << "microscope preparation worker pipeline tests passed\n";
     return 0;
 }

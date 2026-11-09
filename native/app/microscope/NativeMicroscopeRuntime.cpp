@@ -47,6 +47,7 @@ constexpr auto kActualRateWindow = 500ms;
 #ifdef CELLULARITY_PERFORMANCE_HUD
 constexpr auto kStageTimingSampleInterval = 500ms;
 #endif
+constexpr int kMoveToolOrdinal = 1;
 constexpr int kDiagnosisToolOrdinal = 4;
 
 std::int64_t timePointNanos(MicroscopeCommandTimePoint timePoint) noexcept {
@@ -301,6 +302,12 @@ MicroscopeCommandApplyResult NativeMicroscopeRuntime::applyCommand(
 
     switch (command.kind) {
         case MicroscopeWorldCommandKind::TouchDown: {
+            // Only the MOVE tool (optical tweezers) picks a cell up; with any other tool a
+            // press is a pan or a tap, as the synchronous path's processQueues already treats
+            // it. Without this a press-and-drag moved cells with every tool.
+            if (interaction.toolOrdinal() != kMoveToolOrdinal) {
+                return MicroscopeCommandApplyResult::applied();
+            }
             const bool changed =
                     drag.beginDragSlot(context, command.pointerSlot, command.pointerId,
                             command.worldX, command.worldY);
