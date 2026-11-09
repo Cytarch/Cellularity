@@ -123,8 +123,8 @@ def verify_expectations(label: str, entries: list[str] | tuple[str, ...]) -> Non
 
 def verify_native_inventory() -> None:
     expected = manifest_lines(NATIVE_MANIFEST)
-    if len(expected) != 269 or len(set(expected)) != 269:
-        fail("native baseline manifest must contain exactly 269 unique cases")
+    if len(expected) != 270 or len(set(expected)) != 270:
+        fail("native baseline manifest must contain exactly 270 unique cases")
 
     actual_paths = tuple(path.name for path in sorted(NATIVE_SOURCE_DIRECTORY.glob("*_tests.cpp")))
     if actual_paths != NATIVE_SOURCE_NAMES:

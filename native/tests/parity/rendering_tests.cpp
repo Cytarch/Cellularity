@@ -1,6 +1,7 @@
 #include <algorithm>
 #include <array>
 #include <chrono>
+#include <clocale>
 #include <cmath>
 #include <csignal>
 #include <cstdint>
@@ -1976,6 +1977,45 @@ void testPixelTextRendererOwnsReusableCachedGeometry() {
 }
 
 #ifdef CELLULARITY_PERFORMANCE_HUD
+// The HUD font has no comma, so a value written as "0,123" under a locale with a decimal
+// comma showed "?". A packaged desktop application's JVM sets the C locale from the system,
+// so the HUD must draw the same thing whatever LC_NUMERIC is.
+void testMicroscopeDebugHudIgnoresTheNumericLocale() {
+    cellularity::microscope::MicroscopeDebugHudTelemetry telemetry;
+    telemetry.rateSampleSequence = 1;
+    telemetry.actualRateValid = true;
+    telemetry.actualCompletedUps = 2'345.0;
+    telemetry.stageTimings.sequence = 1;
+    telemetry.stageTimings.totalNanos = 220'000.0;
+    telemetry.stageTimings.stageNanos.fill(10'000.0);
+
+    cellularity::microscope::MicroscopeDebugHud reference;
+    const std::vector<float> expected =
+            reference.prepareGeometry(1280, 720, telemetry).packedInstances();
+
+    const std::string previous = std::setlocale(LC_NUMERIC, nullptr);
+    const char* commaLocale = nullptr;
+    for (const char* candidate : {"ru_RU.UTF-8", "ru_RU.utf8", "de_DE.UTF-8", "de_DE.utf8"}) {
+        if (std::setlocale(LC_NUMERIC, candidate) != nullptr) {
+            commaLocale = candidate;
+            break;
+        }
+    }
+    if (commaLocale == nullptr) {
+        std::cout << "SKIP: no locale with a decimal comma is installed\n";
+        return;
+    }
+    cellularity::microscope::MicroscopeDebugHud localized;
+    const std::vector<float> actual =
+            localized.prepareGeometry(1280, 720, telemetry).packedInstances();
+    std::setlocale(LC_NUMERIC, previous.c_str());
+
+    assertTrue(actual == expected,
+            "Debug HUD numbers do not depend on the C numeric locale");
+}
+#endif
+
+#ifdef CELLULARITY_PERFORMANCE_HUD
 void testMicroscopeDebugHudCachesPixelGeometryInOneVbo() {
     FakeRenderAssets assets;
     FakeGlApi gl;
@@ -3802,6 +3842,7 @@ int main() {
     testNativeCellRendererResourcesLoadsPreviewArrowShader();
     testPixelTextRendererOwnsReusableCachedGeometry();
 #ifdef CELLULARITY_PERFORMANCE_HUD
+    testMicroscopeDebugHudIgnoresTheNumericLocale();
     testMicroscopeDebugHudCachesPixelGeometryInOneVbo();
 #endif
     testNativeSimulationWorldRendererUploadDynamicBuffers();

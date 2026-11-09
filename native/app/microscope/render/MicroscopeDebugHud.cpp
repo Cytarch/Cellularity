@@ -1,9 +1,10 @@
 #include "app/microscope/render/MicroscopeDebugHud.h"
 
 #include <array>
+#include <charconv>
 #include <cmath>
 #include <cstddef>
-#include <cstdio>
+#include <system_error>
 
 namespace cellularity::microscope {
 namespace {
@@ -43,6 +44,41 @@ constexpr std::array<const char*, SimulationWorldProfile::STAGE_COUNT>
                 "METABOLISM",
                 "APPLY METABOLISM",
                 "SIGNALS"};
+
+// The HUD's numbers are written with std::to_chars, which never consults the C locale. printf
+// does: under a locale with a decimal comma (ru_RU, de_DE, ...) it wrote "12,3", and the HUD
+// font has no comma, so the values showed "?". Resetting LC_NUMERIC when the library loaded
+// was not enough, because the JVM of a packaged desktop application sets the locale again
+// later. Writing into a fixed buffer keeps the HUD free of allocations.
+class HudValue final {
+public:
+    HudValue& text(const char* value) noexcept {
+        while (*value != '\0' && mEnd < mBuffer.data() + mBuffer.size() - 1) {
+            *mEnd++ = *value++;
+        }
+        *mEnd = '\0';
+        return *this;
+    }
+
+    HudValue& fixed(double value, int precision) noexcept {
+        char* const limit = mBuffer.data() + mBuffer.size() - 1;
+        const std::to_chars_result result = std::isfinite(value)
+                ? std::to_chars(mEnd, limit, value, std::chars_format::fixed, precision)
+                : std::to_chars_result{mEnd, std::errc::invalid_argument};
+        if (result.ec == std::errc()) {
+            mEnd = result.ptr;
+            *mEnd = '\0';
+            return *this;
+        }
+        return text("-");
+    }
+
+    [[nodiscard]] const char* c_str() const noexcept { return mBuffer.data(); }
+
+private:
+    std::array<char, 64> mBuffer{};
+    char* mEnd = mBuffer.data();
+};
 
 float choosePixelSize(int surfaceWidth, int surfaceHeight) {
     float pixelSize = surfaceHeight >= 1000 ? 3.0f : 2.0f;
@@ -136,29 +172,33 @@ void MicroscopeDebugHud::rebuildGeometry(
             titlePixelSize);
     y += titleHeight + pixelSize * 3.0f;
 
-    char value[64] = {};
     mTextRenderer.appendText(kLabelLayer, "FPS", labelX, y, pixelSize);
-    std::snprintf(value, sizeof(value), "%.1f", mFramesPerSecond);
-    mTextRenderer.appendText(kValueLayer, value, valueX, y, pixelSize);
+    mTextRenderer.appendText(kValueLayer, HudValue().fixed(mFramesPerSecond, 1).c_str(),
+            valueX, y, pixelSize);
     y += rowHeight;
 
     mTextRenderer.appendText(kLabelLayer, "UPS", labelX, y, pixelSize);
-    if (telemetry.actualRateValid && std::isfinite(telemetry.actualCompletedUps)) {
-        std::snprintf(value, sizeof(value), "%.0f", telemetry.actualCompletedUps);
-    } else {
-        std::snprintf(value, sizeof(value), "WAITING");
+    {
+        HudValue value;
+        if (telemetry.actualRateValid && std::isfinite(telemetry.actualCompletedUps)) {
+            value.fixed(telemetry.actualCompletedUps, 0);
+        } else {
+            value.text("WAITING");
+        }
+        mTextRenderer.appendText(kValueLayer, value.c_str(), valueX, y, pixelSize);
     }
-    mTextRenderer.appendText(kValueLayer, value, valueX, y, pixelSize);
     y += rowHeight;
 
     mTextRenderer.appendText(kLabelLayer, "SIM TOTAL", labelX, y, pixelSize);
-    if (telemetry.stageTimings.sequence != 0) {
-        std::snprintf(value, sizeof(value), "%.3f MS",
-                telemetry.stageTimings.totalNanos / 1'000'000.0);
-    } else {
-        std::snprintf(value, sizeof(value), "WAITING");
+    {
+        HudValue value;
+        if (telemetry.stageTimings.sequence != 0) {
+            value.fixed(telemetry.stageTimings.totalNanos / 1'000'000.0, 3).text(" MS");
+        } else {
+            value.text("WAITING");
+        }
+        mTextRenderer.appendText(kValueLayer, value.c_str(), valueX, y, pixelSize);
     }
-    mTextRenderer.appendText(kValueLayer, value, valueX, y, pixelSize);
     y += rowHeight;
 
     mTextRenderer.appendText(kAccentLayer, "SIMULATION STAGES", labelX, y,
@@ -174,12 +214,17 @@ void MicroscopeDebugHud::rebuildGeometry(
             const double percentage = telemetry.stageTimings.totalNanos > 0.0
                     ? stageNanos / telemetry.stageTimings.totalNanos * 100.0
                     : 0.0;
-            std::snprintf(value, sizeof(value), "%.3f %.1f%%",
-                    stageNanos / 1'000'000.0, percentage);
+            mTextRenderer.appendText(kValueLayer,
+                    HudValue()
+                            .fixed(stageNanos / 1'000'000.0, 3)
+                            .text(" ")
+                            .fixed(percentage, 1)
+                            .text("%")
+                            .c_str(),
+                    valueX, y, pixelSize);
         } else {
-            std::snprintf(value, sizeof(value), "-");
+            mTextRenderer.appendText(kValueLayer, "-", valueX, y, pixelSize);
         }
-        mTextRenderer.appendText(kValueLayer, value, valueX, y, pixelSize);
         y += rowHeight;
     }
 
