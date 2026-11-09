@@ -2,8 +2,14 @@
 
 Notable user-visible changes are recorded in this file.
 
-## Unreleased
+## 0.1.0-alpha.2 - 2026-11-09
 
+- Use one application version for Android and the desktop; the desktop packages
+  derive theirs from it.
+- Drag cells only with the optical tweezers (MOVE) tool; pressing and dragging a
+  cell moved it with every tool.
+- Speed up the food step without changing the simulation, including plates with
+  mobile food on x86, where settled food was about 35 times slower to move.
 - Add the Windows Compose Desktop application with the shared UI, native Vulkan
   rendering, local settings, genome editing, and substrate import/save flows.
 - Add Gradle MSI packaging with native runtime assets, an installation-directory

@@ -68,7 +68,7 @@ else
     for required_catalog_key in \
         agp kotlin composeMultiplatform jdk jvmTarget \
         compileSdk minSdk targetSdk ndk cmake \
-        appVersionCode appVersionName desktopPackageVersion; do
+        appVersionCode appVersionName; do
         if ! grep -Eq "^${required_catalog_key} = \"[^\"]+\"$" "${version_catalog}"; then
             echo "Missing catalogued build version: ${required_catalog_key}" >&2
             failed=1
@@ -78,8 +78,8 @@ else
         echo "The catalogued Gradle runtime must remain JDK 21" >&2
         failed=1
     fi
-    if ! grep -Fxq 'appVersionCode = "1"' "${version_catalog}" \
-        || ! grep -Fxq 'appVersionName = "0.1.0-alpha.1"' "${version_catalog}"; then
+    if ! grep -Fxq 'appVersionCode = "4"' "${version_catalog}" \
+        || ! grep -Fxq 'appVersionName = "0.1.0-alpha.2"' "${version_catalog}"; then
         echo "Unexpected Android release version metadata in ${version_catalog}" >&2
         failed=1
     fi

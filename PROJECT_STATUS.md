@@ -4,7 +4,7 @@ Last reviewed: 2026-10-31
 
 ## Overall state
 
-Cellularity has a public Android prerelease line and a desktop application for Windows and Linux. The current Android release candidate remains `0.1.0-alpha.1` (`versionCode 1`). The `desktop` module adds a Compose Desktop application, desktop storage and settings, desktop JNI, Vulkan rendering, and MSI/deb/rpm/AppImage packaging; desktop packages are development artifacts rather than a published release line.
+Cellularity has a public Android prerelease line and a desktop application for Windows and Linux. The current release candidate is `0.1.0-alpha.2` (`versionCode 4`), one version shared by Android and the desktop. The `desktop` module adds a Compose Desktop application, desktop storage and settings, desktop JNI, Vulkan rendering, and MSI/deb/rpm/AppImage packaging; the desktop packages derive their version from the application version (MSI `0.1.4`, deb/rpm `0.1.0~alpha.2`).
 
 The public Android package namespace and application ID are consistently `com.cytarch.cellularity`. Android native packaging produces `libcellularity.so`; the desktop JNI build produces `cellularity_desktop.dll` on Windows and `libcellularity_desktop.so` on Linux. GitHub Releases remains the planned binary distribution channel for the Android prerelease.
 

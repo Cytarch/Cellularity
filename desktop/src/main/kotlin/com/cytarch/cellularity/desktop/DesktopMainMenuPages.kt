@@ -286,5 +286,3 @@ private fun DesktopSettingsPage(
         }
     )
 }
-
-private const val DESKTOP_VERSION_NAME = "0.1.3"
