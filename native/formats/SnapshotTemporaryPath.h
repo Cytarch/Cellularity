@@ -1,60 +1,88 @@
 #pragma once
 
-// Naming of the temporary file a snapshot is written through.
+// Creation of the temporary file a snapshot is written through.
 //
 // The temporary has to sit beside its target, in the same directory, so that
 // placing it is a rename within one filesystem and therefore atomic. A system
 // temporary directory would break that, and on Windows it would also land the file
 // outside the directory whose permissions the caller expects.
 //
-// This lives in the format layer rather than in the platform layer on purpose: the
-// format layer must not depend on application, render, JNI or platform code, and
-// nothing here needs a platform API. Uniqueness is established by asking the
-// filesystem whether a candidate name is free, which is the same guarantee the
-// earlier mkstemp-style implementation provided in practice.
+// The file is created exclusively (O_CREAT | O_EXCL semantics) with an
+// unpredictable name, so a concurrent process, a stale leftover, or a planted link
+// can never be reused or followed. Only C runtime calls are used, which keeps the
+// format layer free of application, JNI, and platform-API dependencies.
 
-#include <atomic>
-#include <cstddef>
 #include <cstdint>
 #include <filesystem>
+#include <random>
 #include <string>
+#include <cerrno>
+#include <cstdio>
+#include <vector>
+
+#include "core/Utf8Path.h"
+
+#if defined(_WIN32)
+#include <fcntl.h>
+#include <io.h>
+#include <sys/stat.h>
+#else
+#include <cstdlib>
+#include <unistd.h>
+#endif
 
 namespace cellularity::snapshot_codec {
 
-// Composes a unique path beside an existing file. Returns an empty string when the
-// parent directory cannot be determined or when no free name could be found, so a
-// caller can report a placement failure rather than writing to a surprising path.
-[[nodiscard]] inline std::string makeUniqueAdjacentPath(
+// Creates an empty, exclusively owned file beside adjacentPath and returns its
+// path. Returns an empty string when no file could be created, so a caller can
+// report a placement failure rather than writing to a surprising path.
+[[nodiscard]] inline std::string createExclusiveAdjacentFile(
         const std::string& adjacentPath, const char* stem) {
-    const std::filesystem::path target(adjacentPath);
-    const std::filesystem::path parent = target.parent_path();
+    std::filesystem::path parent = cellularity::paths::fromUtf8(adjacentPath).parent_path();
+    if (parent.empty()) {
+        parent = ".";
+    }
     const std::string name =
             (stem != nullptr && stem[0] != '\0') ? std::string(stem)
-                                                 : std::string(".cellularity-tmp");
-
-    // A per-process counter separates concurrent placements inside one process and
-    // costs no platform call, which keeps this usable from the format layer on
-    // every platform. The counter plus the existence check is what the earlier
-    // mkstemp-style naming provided in practice.
-    static std::atomic<std::uint64_t> sequence{0};
-    const std::uint64_t slot =
-            sequence.fetch_add(1, std::memory_order_relaxed);
-    for (int attempt = 0; attempt < 32; ++attempt) {
-        std::filesystem::path candidate(parent);
-        candidate /= name + "-" + std::to_string(slot) + "-"
-                + std::to_string(attempt);
-        std::error_code status;
-        const bool taken = std::filesystem::exists(candidate, status);
-        if (status) {
-            // The directory could not be inspected; report failure rather than
-            // returning a name that may already be in use.
-            return {};
+                                                 : std::string(".cellularity-tmp-");
+#if defined(_WIN32)
+    static constexpr char kAlphabet[] = "abcdefghijklmnopqrstuvwxyz0123456789";
+    std::random_device entropy;
+    for (int attempt = 0; attempt < 64; ++attempt) {
+        std::string suffix(16, '0');
+        for (char& character : suffix) {
+            character = kAlphabet[entropy() % (sizeof(kAlphabet) - 1)];
         }
-        if (!taken) {
-            return candidate.string();
+        const std::filesystem::path candidate =
+                parent / cellularity::paths::fromUtf8(name + suffix);
+        const int descriptor = _wopen(candidate.c_str(),
+                _O_CREAT | _O_EXCL | _O_WRONLY | _O_BINARY | _O_NOINHERIT,
+                _S_IREAD | _S_IWRITE);
+        if (descriptor >= 0) {
+            _close(descriptor);
+            return cellularity::paths::toUtf8(candidate);
+        }
+        if (errno != EEXIST) {
+            return {};
         }
     }
     return {};
+#else
+    const std::string pattern = cellularity::paths::toUtf8(
+            parent / cellularity::paths::fromUtf8(name + "XXXXXX"));
+    std::vector<char> writablePattern(pattern.begin(), pattern.end());
+    writablePattern.push_back('\0');
+    const int descriptor = mkstemp(writablePattern.data());
+    if (descriptor < 0) {
+        return {};
+    }
+    std::string result(writablePattern.data());
+    if (close(descriptor) != 0) {
+        cellularity::paths::removeFile(result);
+        return {};
+    }
+    return result;
+#endif
 }
 
 } // namespace cellularity::snapshot_codec

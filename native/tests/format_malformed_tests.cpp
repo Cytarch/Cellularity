@@ -477,30 +477,32 @@ void testRuntimeFileAndAllocationPolicy() {
     const memory::RuntimeLimits oneGibDevice32 =
             memory::runtimeLimitsForDevice(32, twoGib / 2);
 #if defined(_WIN32)
-    const std::uint64_t expectedTwoGibBudget = twoGib / 4 * 3;
-    const std::uint64_t expectedOneGibBudget = twoGib / 2 / 4 * 3;
-#elif defined(__ANDROID__)
-    const std::uint64_t expectedTwoGibBudget = twoGib / 2;
-    const std::uint64_t expectedOneGibBudget = twoGib / 4;
+    constexpr std::uint64_t kTestBudgetDenominator = 2;
 #else
-    const std::uint64_t expectedTwoGibBudget = twoGib / 4;
-    const std::uint64_t expectedOneGibBudget = twoGib / 8;
+    constexpr std::uint64_t kTestBudgetDenominator = 4;
 #endif
+    const std::uint64_t expectedTwoGibBudget = twoGib / kTestBudgetDenominator;
+    // 32-bit: RAM share of 1 GiB, clamped by the 384 MiB address-space ceiling.
+    const std::uint64_t expectedOneGibBudget =
+            std::min<std::uint64_t>(384ULL * 1024ULL * 1024ULL,
+                    twoGib / 2 / kTestBudgetDenominator);
     assertTrue(twoGibDevice64.worldAllocationBudgetBytes == expectedTwoGibBudget,
-            "64-bit world budget does not apply the platform RAM share without the legacy fixed cap");
+            "64-bit world budget does not account for device RAM");
     assertTrue(oneGibDevice32.worldAllocationBudgetBytes == expectedOneGibBudget,
-            "32-bit world budget does not apply the same platform RAM share");
-#if defined(_WIN32) || defined(__ANDROID__)
-    const memory::RuntimeLimits fourGibDevice64 =
-            memory::runtimeLimitsForDevice(64, twoGib * 2);
+            "32-bit world budget does not combine RAM and address-space limits");
+    const memory::RuntimeLimits largeDevice64 =
+            memory::runtimeLimitsForDevice(64, twoGib * 8);
+    const memory::RuntimeLimits largeDevice32 =
+            memory::runtimeLimitsForDevice(32, twoGib * 8);
 #if defined(_WIN32)
-    const std::uint64_t expectedFourGibBudget = twoGib * 2 / 4 * 3;
+    assertTrue(largeDevice64.worldAllocationBudgetBytes == twoGib / 4 * 3,
+            "Desktop 64-bit budget must stay within its 1.5 GiB ceiling");
 #else
-    const std::uint64_t expectedFourGibBudget = twoGib;
+    assertTrue(largeDevice64.worldAllocationBudgetBytes == twoGib / 2,
+            "64-bit budget must stay within the 1 GiB ceiling on large-RAM devices");
 #endif
-    assertTrue(fourGibDevice64.worldAllocationBudgetBytes == expectedFourGibBudget,
-            "The platform RAM share must apply above the legacy 1 GiB fixed cap");
-#endif
+    assertTrue(largeDevice32.worldAllocationBudgetBytes == 384ULL * 1024ULL * 1024ULL,
+            "32-bit budget must never exceed the address-space ceiling");
 
     memory::validateSubstrateFileSize(twoGib, limits64);
     expectCode([&] {

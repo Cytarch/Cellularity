@@ -34,18 +34,22 @@ namespace {
 constexpr std::uint64_t kEstimateHeadroomNumerator = 5;
 constexpr std::uint64_t kEstimateHeadroomDenominator = 4;
 constexpr std::uint64_t kMinimumEstimateHeadroomBytes = 8ULL * 1024ULL * 1024ULL;
+// Share of physical RAM a world may claim. Desktop processes share RAM with fewer
+// competitors than a mobile app under a low-memory killer, so Windows gets a larger
+// share; every platform is still clamped by the ABI ceiling below.
 #if defined(_WIN32)
-constexpr std::uint64_t kPhysicalMemoryBudgetNumerator = 3;
-constexpr std::uint64_t kPhysicalMemoryBudgetDenominator = 4;
-#elif defined(__ANDROID__)
 constexpr std::uint64_t kPhysicalMemoryBudgetNumerator = 1;
 constexpr std::uint64_t kPhysicalMemoryBudgetDenominator = 2;
+// Desktop 64-bit ceiling: below the absolute 2 GiB file/allocation boundary, so a
+// world budget never promises the full file ceiling.
+constexpr std::uint64_t k64BitMaximumWorldAllocationBudgetBytes =
+        1536ULL * 1024ULL * 1024ULL;
 #else
 constexpr std::uint64_t kPhysicalMemoryBudgetNumerator = 1;
 constexpr std::uint64_t kPhysicalMemoryBudgetDenominator = 4;
-#endif
 constexpr std::uint64_t k64BitMaximumWorldAllocationBudgetBytes =
         1024ULL * 1024ULL * 1024ULL;
+#endif
 constexpr std::uint64_t k32BitMaximumWorldAllocationBudgetBytes =
         384ULL * 1024ULL * 1024ULL;
 
@@ -279,15 +283,11 @@ RuntimeLimits runtimeLimitsForDevice(
     if (physicalMemoryBytes >= kPhysicalMemoryBudgetDenominator) {
         const std::uint64_t sharedBudget = physicalMemoryBytes
                 / kPhysicalMemoryBudgetDenominator * kPhysicalMemoryBudgetNumerator;
-#if defined(_WIN32) || defined(__ANDROID__)
-        // Android and Windows use their explicit RAM shares directly. The ABI constants remain
-        // only as a fallback when physical memory cannot be queried, and for explicit-ABI estimates.
-        limits.worldAllocationBudgetBytes = sharedBudget;
-#else
+        // The RAM share never lifts the ABI ceiling: a 32-bit process cannot address
+        // more, and the 64-bit ceiling is the documented admission boundary.
         limits.worldAllocationBudgetBytes = std::min(
                 limits.worldAllocationBudgetBytes,
                 sharedBudget);
-#endif
     }
     return limits;
 }

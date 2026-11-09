@@ -1,4 +1,5 @@
 #include "formats/SnapshotFileIO.h"
+#include "core/Utf8Path.h"
 
 #include <algorithm>
 #include <array>
@@ -31,7 +32,7 @@ TemporarySnapshotFile::TemporarySnapshotFile(const std::string& adjacentPath) {
     // same-filesystem rename. A system temp directory would make the placement
     // non-atomic and, on Windows, would land the file outside the directory whose
     // permissions the caller expects.
-    mPath = makeUniqueAdjacentPath(adjacentPath, ".cellularity-load-");
+    mPath = createExclusiveAdjacentFile(adjacentPath, ".cellularity-load-");
     if (mPath.empty()) {
         failDecode(DecodeErrorCode::IoFailure,
                 "Could not create a temporary substrate file");
@@ -40,7 +41,7 @@ TemporarySnapshotFile::TemporarySnapshotFile(const std::string& adjacentPath) {
 
 TemporarySnapshotFile::~TemporarySnapshotFile() {
     if (!mPath.empty()) {
-        std::remove(mPath.c_str());
+        cellularity::paths::removeFile(mPath);
     }
 }
 
@@ -58,7 +59,7 @@ SnapshotInputFile openSnapshotFile(const std::string& path) {
         failDecode(DecodeErrorCode::InvalidValue,
                 "Substrate input path is empty");
     }
-    std::ifstream input(path, std::ios::binary | std::ios::ate);
+    std::ifstream input(cellularity::paths::fromUtf8(path), std::ios::binary | std::ios::ate);
     if (!input) {
         failDecode(DecodeErrorCode::IoFailure,
                 "Could not open substrate file: " + path);
