@@ -4,6 +4,12 @@ Notable user-visible changes are recorded in this file.
 
 ## 0.1.0-alpha.2 - 2026-11-09
 
+Packages for Android (APK, AAB) and Linux (deb, rpm, AppImage). No Windows package
+is published for this release: it could not be built and tested on Windows yet.
+The Windows code compiles and links in a cross-build, and a Windows package will
+follow once it has been built and run on a Windows system.
+
+- Give the desktop packages the Cellularity icon instead of the toolkit default.
 - Use one application version for Android and the desktop; the desktop packages
   derive theirs from it.
 - Drag cells only with the optical tweezers (MOVE) tool; pressing and dragging a
