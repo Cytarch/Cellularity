@@ -878,7 +878,6 @@ int main() {
     testUserAddedCellsStartWithZeroAge();
     testWorldEditingAcceptsDynamicGenomeRecords();
     testCellTapOwnsDynamicGenomeUntilApplied();
-    testSynthesizerTapWithoutGenomePlacesCell();
     testAddUserCellAtCapacityKeepsTopologyValid();
     testNativeCellularityControllerFreezeRedrawDoesNotAdvanceSimulation();
     testNativeCellularityControllerMicroscopeStepCountsCompletedUpdate();
@@ -890,6 +889,7 @@ int main() {
     testNativeCellularityControllerDiagnosisTapEmptyDeselectsCell();
     testNativeCellularityControllerForwardsUpdateStages();
     testNativeCellularityControllerCountsCompletedUpdates();
+    testSynthesizerTapWithoutGenomePlacesCell();
     std::cout << "native interaction parity tests passed\n";
     return 0;
 }

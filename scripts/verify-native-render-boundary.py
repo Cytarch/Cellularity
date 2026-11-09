@@ -2522,6 +2522,13 @@ def verify_v30c_genome_preview_reveal(errors: list[str]) -> None:
         / "shared/src/commonMain/kotlin/com/cytarch/cellularity/shared/ui/play/"
         "genome_editor/sections/GenomeEditorLayoutGeometry.kt"
     )
+    # The editor that computes the geometry is the shared screen; the Android wrapper
+    # above is the one that hands it to the native view.
+    shared_genome_screen = read(
+        REPO_ROOT
+        / "shared/src/commonMain/kotlin/com/cytarch/cellularity/shared/ui/play/"
+        "genome_editor/GenomeEditorScreen.kt"
+    )
     play_content = read(
         REPO_ROOT
         / "app/src/main/java/com/cytarch/cellularity/ui/play_menu/PlayContent.kt"
@@ -2666,12 +2673,12 @@ def verify_v30c_genome_preview_reveal(errors: list[str]) -> None:
             errors,
         )
     for snippet in (
-        "viewportWidth = previewSurfaceGeometry.viewportWidth",
-        "viewportHeight = previewSurfaceGeometry.viewportHeight",
-        "backingSurfaceWidth = previewSurfaceGeometry.backingWidth",
-        "backingSurfaceHeight = previewSurfaceGeometry.backingHeight",
-        "view.updateLogicalViewport(viewportWidth, viewportHeight)",
-        "view.updateBackingSurfaceSize(",
+        "initialViewportWidth = geometry.viewportWidth",
+        "initialViewportHeight = geometry.viewportHeight",
+        "initialBackingSurfaceWidth = geometry.backingWidth",
+        "initialBackingSurfaceHeight = geometry.backingHeight",
+        "view.updateLogicalViewport(geometry.viewportWidth, geometry.viewportHeight)",
+        "view.updateBackingSurfaceSize(geometry.backingWidth, geometry.backingHeight)",
     ):
         require(
             snippet in genome_screen,
@@ -2679,7 +2686,7 @@ def verify_v30c_genome_preview_reveal(errors: list[str]) -> None:
             errors,
         )
     require(
-        genome_screen.count(
+        shared_genome_screen.count(
             "val previewSurfaceGeometry = genomePreviewSurfaceGeometry("
         )
         == 2

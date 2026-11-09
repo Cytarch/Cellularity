@@ -1969,7 +1969,8 @@ def main() -> None:
         errors.append("GL session must poll the newest complete prepared frame")
     controller_draw = re.search(
         r"(?:void|cellularity::render::RenderFrameResult)\s+"
-        r"NativeCellularityController::drawMicroscope\(.*?\n\}",
+        # Surface and RGBA presentation share one body; drawMicroscope() forwards to it.
+        r"NativeCellularityController::drawMicroscopeInto\(.*?\n\}",
         controller_source,
         re.DOTALL,
     )

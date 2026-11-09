@@ -1,14 +1,17 @@
 # Portable archive symbol listing for the isolation tests.
 #
 # The isolation checks assert that a symbol does not appear in an archive. GNU
-# toolchains answer that with `nm -C`; MSVC has no nm and answers it with
+# toolchains answer that with `nm`; MSVC has no nm and answers it with
 # `dumpbin /SYMBOLS`. This module hides the difference behind one function and
 # returns cleaned symbol names, so each caller keeps a single substring test.
 #
-# Returned names are demangled where the tool can do it. On MSVC the compiler
-# mangling keeps the identifier text intact as a contiguous substring (for
-# example `?emitSemanticTrace@...`), so substring matching stays valid even
-# though the name is not fully demangled.
+# Returned names are the raw mangled names on every toolchain. Both Itanium
+# (`_ZN11cellularity12verification17emitSemanticTraceE...`) and MSVC
+# (`?emitSemanticTrace@...`) mangling keep each identifier as a contiguous
+# substring, so substring matching stays valid. Demangled output is avoided on
+# purpose: `nm -C` prints `::`, spaces and parentheses, which the per-line
+# cleanup below would cut at, reducing every namespaced symbol to its first
+# namespace and making absence checks pass vacuously.
 
 # cellularity_list_archive_symbols(<tool> <archive> <out_var> <error_var>
 #                                   [UNDEFINED_ONLY])
@@ -19,6 +22,8 @@
 # With UNDEFINED_ONLY, only symbols the archive references but does not define
 # are returned, which is how the Vulkan client isolation check proves that the
 # client has no Vulkan, Android or JNI dependency.
+cmake_policy(SET CMP0007 NEW)
+
 function(cellularity_list_archive_symbols nm_tool archive out_var error_var)
     set(options UNDEFINED_ONLY)
     cmake_parse_arguments(ARG "${options}" "" "" ${ARGN})
@@ -59,7 +64,7 @@ function(cellularity_list_archive_symbols nm_tool archive out_var error_var)
             )
         else()
             execute_process(
-                    COMMAND "${nm_tool}" -C "${archive}"
+                    COMMAND "${nm_tool}" "${archive}"
                     RESULT_VARIABLE listed
                     OUTPUT_VARIABLE listing
                     ERROR_VARIABLE listing_error

@@ -18,7 +18,7 @@ NATIVE_SOURCE_NAMES = (
 NATIVE_MANIFEST = REPO_ROOT / "native/tests/baseline/native-parity-cases-v1.txt"
 JVM_MANIFEST = REPO_ROOT / "app/src/test/baseline/jvm-expectations-v1.txt"
 TEST_SOURCE_SETS = (
-    ("shared common", REPO_ROOT / "shared/src/commonTest", 145),
+    ("shared common", REPO_ROOT / "shared/src/commonTest", 146),
     ("shared JVM", REPO_ROOT / "shared/src/jvmTest", 55),
     ("shared Android host", REPO_ROOT / "shared/src/androidHostTest", 7),
     ("app unit", REPO_ROOT / "app/src/test", 216),
@@ -123,8 +123,8 @@ def verify_expectations(label: str, entries: list[str] | tuple[str, ...]) -> Non
 
 def verify_native_inventory() -> None:
     expected = manifest_lines(NATIVE_MANIFEST)
-    if len(expected) != 268 or len(set(expected)) != 268:
-        fail("native baseline manifest must contain exactly 268 unique cases")
+    if len(expected) != 269 or len(set(expected)) != 269:
+        fail("native baseline manifest must contain exactly 269 unique cases")
 
     actual_paths = tuple(path.name for path in sorted(NATIVE_SOURCE_DIRECTORY.glob("*_tests.cpp")))
     if actual_paths != NATIVE_SOURCE_NAMES:

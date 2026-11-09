@@ -14,7 +14,7 @@ import kotlin.test.assertTrue
  */
 class ConfirmOnEnterTest {
     @Test
-    fun `only enter key down events request confirmation`() {
+    fun onlyEnterKeyDownEventsRequestConfirmation() {
         assertTrue(isConfirmEnterKey(Key.Enter, KeyEventType.KeyDown))
         assertTrue(isConfirmEnterKey(Key.NumPadEnter, KeyEventType.KeyDown))
 
