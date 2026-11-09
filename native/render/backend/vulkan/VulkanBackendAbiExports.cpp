@@ -461,12 +461,15 @@ CellularityVulkanSessionHandle createSession(
 
     // The asset roots are optional trailing fields, so they may only be read when
     // the caller declared a structure large enough to contain them.
-    const bool rootsReadable = info->struct_size
+    // Each field is gated on its own end offset.
+    const bool rootReadable = info->struct_size
             >= CELLULARITY_VULKAN_SESSION_CREATE_INFO_V1_ASSET_ROOT_OFFSET;
+    const bool secondaryRootReadable = info->struct_size
+            >= CELLULARITY_VULKAN_SESSION_CREATE_INFO_V1_FULL_SIZE;
     const char* assetRoot =
-            rootsReadable ? info->asset_root : nullptr;
+            rootReadable ? info->asset_root : nullptr;
     const char* assetRootSecondary =
-            rootsReadable ? info->asset_root_secondary : nullptr;
+            secondaryRootReadable ? info->asset_root_secondary : nullptr;
 
     if (info->asset_source == CELLULARITY_VULKAN_ASSET_SOURCE_ANDROID_MANAGER_V1) {
 #if defined(__ANDROID__)

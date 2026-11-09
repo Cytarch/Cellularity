@@ -1190,9 +1190,11 @@ def verify_saved_file_preview_backend() -> None:
         "preRotationMatrix(renderPreTransform())",
         "VulkanPipelineTarget::Offscreen",
         '"offscreen_output_row_order=top_left\\n"',
-        # A host that draws the live frame itself reads one back per frame, on its
-        # own target, into a buffer it owns. The diagnostic states which targets
-        # read back instead of claiming that only captures do.
+        # Android keeps the capture-only readback guarantee; a desktop host that
+        # draws the live frame itself reads one back per frame on its own target.
+        "#if defined(__ANDROID__)",
+        '"offscreen_readback_targets=genome_preview,substrate_preview\\n"',
+        '"offscreen_readback_only_on_capture=true\\n"',
         '"offscreen_readback_targets=genome_preview,substrate_preview,live_frame\\n"',
         '"offscreen_readback_only_on_capture=false\\n"',
         "OffscreenRenderTarget::LiveFrame",

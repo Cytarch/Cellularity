@@ -5296,13 +5296,16 @@ struct VulkanClearFrameSession::Impl final {
         stream << "render_pass=production_microscope_scene_with_overlays\n";
         stream << "offscreen_color_format=VK_FORMAT_R8G8B8A8_UNORM\n";
         stream << "offscreen_output_row_order=top_left\n";
-        // A saved document's picture is still the only readback the interactive
-        // window path performs. A host that draws the live frame itself reads
-        // one back per frame as well, into a buffer it owns, which is a
-        // different transaction on a different target -- so the honest statement
-        // is which targets read back, not which occasions do.
+        // Android presents through its swapchain, so saved-document pictures stay
+        // its only readback. A desktop host that draws the live frame itself reads
+        // one back per frame as well, into a buffer it owns, on its own target.
+#if defined(__ANDROID__)
+        stream << "offscreen_readback_targets=genome_preview,substrate_preview\n";
+        stream << "offscreen_readback_only_on_capture=true\n";
+#else
         stream << "offscreen_readback_targets=genome_preview,substrate_preview,live_frame\n";
         stream << "offscreen_readback_only_on_capture=false\n";
+#endif
         stream << "offscreen_capture_active="
                << (activeOffscreenTarget.has_value() ? "true" : "false")
                << '\n';

@@ -174,6 +174,17 @@ std::optional<std::uint32_t> VulkanDeviceContext::findMemoryType(
                 preferredType.has_value()) {
             return preferredType;
         }
+        // Degrade one preference at a time, lowest bit first, so a device without
+        // the full combination still gets the most important single preference
+        // (HOST_COHERENT before HOST_CACHED) rather than an arbitrary type.
+        for (VkMemoryPropertyFlags bit = 1; bit != 0 && bit <= preferred; bit <<= 1U) {
+            if ((preferred & bit) == 0) {
+                continue;
+            }
+            if (const auto partialType = find(required | bit); partialType.has_value()) {
+                return partialType;
+            }
+        }
     }
     return find(required);
 }
