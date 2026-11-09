@@ -115,7 +115,7 @@ cmake --build build/desktop-cmake --target cellularity_desktop_jni
 ./gradlew :desktop:test :shared:jvmTest
 ```
 
-Packages are built with `./gradlew :desktop:packageDeb`, `:desktop:packageRpm` or `:desktop:packageAppImage` (deb needs `dpkg-deb` and `fakeroot`, rpm needs `rpmbuild`) and are written under `desktop/build/compose/binaries/main`. The renderer draws off-screen; it needs an X display, which Wayland sessions provide through XWayland, the same as the desktop toolkit itself.
+Packages are built with `./gradlew :desktop:packageDeb`, `:desktop:packageRpm` or `:desktop:packageAppImage` (deb needs `dpkg-deb` and `fakeroot`, rpm needs `rpmbuild`) and are written under `desktop/build/compose/binaries/main`. `:desktop:packageAppImage` writes an application directory; `scripts/package-linux-appimage.sh` turns it into a single `Cellularity-<version>-x86_64.AppImage` (needs `appimagetool`, which downloads the AppImage runtime on its first use). The renderer draws off-screen; it needs an X display, which Wayland sessions provide through XWayland, the same as the desktop toolkit itself.
 
 ## Data compatibility and limits
 
