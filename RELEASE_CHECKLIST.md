@@ -1,6 +1,6 @@
 # Android GitHub Release Checklist
 
-This checklist applies to public Android prereleases from `main` through GitHub Releases. Windows MSI artifacts built on `windows-vulkan-port` are development packages; use the build and verification commands in the root README rather than this Android publication procedure.
+This checklist applies to public Android prereleases from `main` through GitHub Releases. Windows MSI artifacts are development packages; use the build and verification commands in the root README rather than this Android publication procedure.
 
 Physical Android hardware is never a release gate. Host/JVM tests, sanitizers,
 static APK verification, and cross-builds for every supported ABI are the

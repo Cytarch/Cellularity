@@ -2,7 +2,7 @@
 
 Cellularity is an open-source cellular simulation for Android and Windows. The simulation core and renderer are implemented in C++; the application UI uses Kotlin and Compose Multiplatform shared code.
 
-The current public release line is **0.1.0-alpha.1** (`versionCode 1`) for Android. The `windows-vulkan-port` branch also contains the Windows desktop application and its Vulkan renderer. Windows MSI packages are development artifacts, not a separate published release line.
+The current public release line is **0.1.0-alpha.1** (`versionCode 1`) for Android. The repository also contains the Windows desktop application and its Vulkan renderer. Windows MSI packages are development artifacts, not a separate published release line.
 
 ## Requirements
 

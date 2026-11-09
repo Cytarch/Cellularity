@@ -46,8 +46,8 @@ for forbidden_path in \
     fi
 done
 
-if [[ "$(rg '^include ' settings.gradle)" != "include ':app', ':shared'" ]]; then
-    echo "settings.gradle must expose only :app and :shared" >&2
+if [[ "$(rg '^include ' settings.gradle)" != "include ':app', ':shared', ':desktop'" ]]; then
+    echo "settings.gradle must expose only :app, :shared and :desktop" >&2
     failed=1
 fi
 
@@ -57,6 +57,7 @@ build_configuration_files=(
     settings.gradle
     app/build.gradle
     shared/build.gradle
+    desktop/build.gradle
     gradle.properties
 )
 
@@ -67,7 +68,7 @@ else
     for required_catalog_key in \
         agp kotlin composeMultiplatform jdk jvmTarget \
         compileSdk minSdk targetSdk ndk cmake \
-        appVersionCode appVersionName; do
+        appVersionCode appVersionName desktopPackageVersion; do
         if ! grep -Eq "^${required_catalog_key} = \"[^\"]+\"$" "${version_catalog}"; then
             echo "Missing catalogued build version: ${required_catalog_key}" >&2
             failed=1

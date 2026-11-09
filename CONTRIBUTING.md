@@ -24,7 +24,7 @@ Windows desktop changes additionally require the native `cellularity_desktop_jni
 .\gradlew.bat :desktop:test :desktop:packageMsi
 ```
 
-`scripts/check-public-release.sh` is part of the Android public-release gate on `main`; it intentionally rejects the additional desktop module in `windows-vulkan-port` and is not a check for this branch.
+`scripts/check-public-release.sh` checks the whole public tree, including the `desktop` module, and must pass for every change. Changes to Windows-only native code must also be built and tested on Windows, because the Linux host gate does not compile it.
 
 ## Change guidelines
 

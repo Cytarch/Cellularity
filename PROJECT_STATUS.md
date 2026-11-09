@@ -4,7 +4,7 @@ Last reviewed: 2026-10-31
 
 ## Overall state
 
-Cellularity has a public Android prerelease line and an active Windows desktop port. The current Android release candidate remains `0.1.0-alpha.1` (`versionCode 1`). The `windows-vulkan-port` branch adds a Compose Desktop application, Windows storage and settings, desktop JNI, Vulkan rendering, and MSI packaging; Windows installers are development artifacts rather than a published release line.
+Cellularity has a public Android prerelease line and a Windows desktop application. The current Android release candidate remains `0.1.0-alpha.1` (`versionCode 1`). The `desktop` module adds a Compose Desktop application, Windows storage and settings, desktop JNI, Vulkan rendering, and MSI packaging; Windows installers are development artifacts rather than a published release line.
 
 The public Android package namespace and application ID are consistently `com.cytarch.cellularity`. Android native packaging produces `libcellularity.so`; the desktop JNI build produces `cellularity_desktop.dll`. GitHub Releases remains the planned binary distribution channel for the Android prerelease.
 
@@ -23,7 +23,7 @@ No signing keys, local SDK paths, generated APKs, build outputs, crash logs, or 
 
 ## Repository and publication boundary
 
-This directory is a standalone Git repository with an intentional public history. The Android publication line is maintained on `main`; `windows-vulkan-port` carries the desktop port and shares the Android application and native sources. Private-repository metadata and migration archives are outside the public source tree.
+This directory is a standalone Git repository with an intentional public history. Both the Android application and the Windows desktop application are maintained on `main` and share the `shared` module and the native sources. Private-repository metadata and migration archives are outside the public source tree.
 
 Generated Gradle, Kotlin, CMake, native, lint, test, APK, and MSI outputs are ignored. Signing files, local SDK configuration, credentials, and local IDE state must remain untracked.
 
@@ -35,7 +35,7 @@ The public tree does not contain:
 - the old standalone Java substrate-conversion project; legacy decoding required by the applications remains in the active codecs;
 - private-repository metadata, migration archives, internal work plans, signing material, or generated artifacts.
 
-The `desktop` module is present and active on this branch. It owns the Compose Desktop entry point, Windows platform adapters, and desktop JNI integration; the native tree owns the Vulkan implementation and Win32 host. The `shared` module remains platform-neutral and has no window, JNI, or renderer implementation. Host-native parity tests, performance tools, and the genome development CLI are development tooling, not packaged desktop application entry points.
+The `desktop` module is part of the project. It owns the Compose Desktop entry point, Windows platform adapters, and desktop JNI integration; the native tree owns the Vulkan implementation and Win32 host. The `shared` module remains platform-neutral and has no window, JNI, or renderer implementation. Host-native parity tests, performance tools, and the genome development CLI are development tooling, not packaged desktop application entry points.
 
 ## Naming and privacy audit
 
@@ -97,7 +97,7 @@ Play uses one immutable shared store and one retained Android session owner. Lau
 
 ### Android public-release baseline
 
-The Android release gate on `main` covers:
+The Android release gate covers:
 
 - host-JVM compilation and tests for the complete shared common source set;
 - JVM unit tests for native contracts, genome editing, pending environment changes, and substrate file handling;
@@ -139,7 +139,9 @@ cmake --build build/win-cmake --target cellularity_desktop_jni
 .\gradlew.bat :desktop:test :shared:jvmTest :desktop:packageMsi
 ```
 
-The packaged app image and installed MSI should also be smoke-tested for a cold Start Menu launch, native Vulkan rendering, genome editing, and substrate import/save/reopen flows. The Android public-tree gate is not applicable to this branch because it intentionally requires only `:app` and `:shared` in `settings.gradle`.
+The packaged app image and installed MSI should also be smoke-tested for a cold Start Menu launch, native Vulkan rendering, genome editing, and substrate import/save/reopen flows.
+
+The Windows-only native sources (`native/host/win32`, desktop JNI, Win32 Vulkan tests) cannot be compiled by the Linux host gate and must be built and tested on Windows before a desktop change is merged. `scripts/check-public-release.sh` covers the whole tree, including the `desktop` module.
 
 ## Known maintenance work
 
@@ -152,7 +154,7 @@ The packaged app image and installed MSI should also be smoke-tested for a cold 
 
 ## Android release readiness criteria
 
-An Android revision on `main` is ready to publish when all of the following pass:
+An Android revision is ready to publish when all of the following pass:
 
 ```bash
 scripts/check-public-release.sh
