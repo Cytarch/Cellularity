@@ -29,7 +29,13 @@ static_assert(!std::is_copy_constructible_v<FrameGuard>);
 static_assert(std::is_nothrow_move_constructible_v<FrameGuard>);
 static_assert(!std::is_copy_constructible_v<ControllerRebindTicket>);
 static_assert(std::is_nothrow_move_constructible_v<ControllerRebindTicket>);
-static_assert(!std::is_move_assignable_v<ControllerRebindTicket>);
+// A ticket is move-assignable, not copy-assignable. Move assignment must stay
+// available because std::promise<T>::set_value requires T to be move-assignable,
+// and MSVC enforces that requirement where libstdc++ happens not to.
+// Single-use semantics are asserted behaviourally below, by committing a moved
+// -from ticket and requiring rejection, rather than by deleting the operator.
+static_assert(std::is_nothrow_move_assignable_v<ControllerRebindTicket>);
+static_assert(!std::is_copy_assignable_v<ControllerRebindTicket>);
 static_assert(!std::is_copy_constructible_v<RebindWakeRegistration>);
 static_assert(std::is_nothrow_move_constructible_v<RebindWakeRegistration>);
 

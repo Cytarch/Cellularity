@@ -44,6 +44,11 @@ public:
     render::OffscreenRenderTarget lastOffscreenTarget =
             render::OffscreenRenderTarget::GenomePreview;
     render::RenderPresentationState lastPresentation{};
+    // What the last off-screen microscope pass was told about the performance HUD, so a test can
+    // establish that a host which draws the world itself is told the same thing as one that lets
+    // a window present it.
+    const cellularity::microscope::MicroscopeDebugHudTelemetry*
+            lastOffscreenDebugHudTelemetry = nullptr;
     render::RenderViewportState lastClearViewport{};
     render::EnvironmentFieldPreviewCommand lastEnvironmentPreview{};
     std::array<float, 4> lastClearColor{};
@@ -105,7 +110,10 @@ public:
 
     render::RenderPassStatus drawMicroscopeOffscreenPass(
             const render::RenderPresentationState& presentation,
-            const render::PreparedRenderFrame& frame) override {
+            const render::PreparedRenderFrame& frame,
+            const cellularity::microscope::MicroscopeDebugHudTelemetry*
+                    debugHudTelemetry = nullptr) override {
+        lastOffscreenDebugHudTelemetry = debugHudTelemetry;
         ++presentCount;
         lastPresentation = presentation;
         lastPresentedFrame = &frame;

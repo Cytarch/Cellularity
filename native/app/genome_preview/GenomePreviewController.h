@@ -10,6 +10,7 @@
 #include "render/backend/RenderFrameResult.h"
 #include "render/frame/PreparedRenderFrame.h"
 
+class NativeViewport;
 class GenomePreviewCellsSelection;
 class GenomePreviewGhostController;
 class GenomePreviewRenderer;
@@ -22,6 +23,20 @@ class RenderSurfaceSession;
 
 class GenomePreviewController {
 public:
+    /**
+     * Where the preview's camera stands, when the caller has one.
+     *
+     * The file preview frames the organism itself, which is what a saved genome wants: the picture
+     * that travels with a genome should show the whole creature. A preview somebody is looking at
+     * and moving is the other case -- they have panned and zoomed, and the picture has to be taken
+     * from where they put the camera rather than from where the renderer would have chosen.
+     */
+    struct Camera {
+        double centerX = 0.0;
+        double centerY = 0.0;
+        float zoom = 1.0f;
+    };
+
     explicit GenomePreviewController(int maxCellCount);
     ~GenomePreviewController();
 
@@ -42,7 +57,28 @@ public:
     [[nodiscard]] std::vector<std::uint8_t> captureFilePreviewRgba(
             const cellularity::GenomeData& genome,
             double maximumSimulationTime,
-            cellularity::render::RenderSurfaceSession& backend);
+            cellularity::render::RenderSurfaceSession& backend,
+            const Camera* camera = nullptr);
+    /**
+     * Draws the world the session is actually holding into memory the caller owns.
+     *
+     * The file preview above grows its own world and frames it itself, which is right for a picture
+     * that travels with a genome. This one draws the world the published content built and the
+     * published view is looking at, so a camera somebody moved is the camera the picture comes
+     * from. It is the same renderer and the same offscreen pass; only the world differs.
+     *
+     * Returns how many bytes were written, and reports through `wrote` whether a frame was
+     * produced at all, so a caller can tell "nothing to draw yet" from "drawing failed".
+     */
+    [[nodiscard]] std::size_t drawIntoRgba(
+            SimulationWorld& world,
+            NativeViewport& viewport,
+            cellularity::render::RenderSurfaceSession& backend,
+            std::uint8_t* destination,
+            std::size_t destinationSize,
+            std::size_t rowStride,
+            bool& wrote);
+
     int selectGeneAt(const SimulationWorld& world, double worldX, double worldY);
     int treeNodeCount() const;
 

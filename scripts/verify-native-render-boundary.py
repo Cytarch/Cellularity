@@ -16,6 +16,9 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 CMAKE_PATH = REPO_ROOT / "native/CMakeLists.txt"
+# The Vulkan backend sources shared by the Android DSO and the Windows host. Kept
+# in one file so a platform cannot compile a different backend than the other.
+SHARED_BACKEND_SOURCES_PATH = REPO_ROOT / "native/cmake/VulkanBackendSources.cmake"
 APP_BUILD_PATH = REPO_ROOT / "app/build.gradle"
 BASELINE_PATH = REPO_ROOT / "native/rendering/NATIVE_RENDER_BOUNDARY_BASELINE.md"
 MAIN_BRIDGE_PATH = (
@@ -406,13 +409,25 @@ def verify_source_ownership(errors: list[str]) -> None:
         "cellularity_android must own CELLULARITY_JNI_SOURCES",
         errors,
     )
+    # The backend sources are defined once, in a file both the Android DSO and the
+    # Windows host include, so the two platforms cannot drift. The Android target
+    # therefore pulls the ABI export in through that shared list rather than naming
+    # it itself, and what has to hold is that the export is defined exactly once and
+    # reaches every target that builds a backend.
+    shared_sources = cmake_shared_backend_sources()
     require(
-        "render/backend/vulkan/VulkanBackendAbiExports.cpp" in vulkan_sources,
-        "cellularity_vulkan must own the backend ABI export implementation",
+        "render/backend/vulkan/VulkanBackendAbiExports.cpp" in shared_sources,
+        "the shared backend source list must define the ABI export implementation",
         errors,
     )
     require(
-        cmake.count("render/backend/vulkan/VulkanBackendAbiExports.cpp") == 1,
+        "${CELLULARITY_VULKAN_BACKEND_SOURCES}" in vulkan_sources,
+        "cellularity_vulkan must compile the shared backend sources",
+        errors,
+    )
+    require(
+        shared_sources.count("render/backend/vulkan/VulkanBackendAbiExports.cpp") == 1
+        and "render/backend/vulkan/VulkanBackendAbiExports.cpp" not in cmake,
         "VulkanBackendAbiExports.cpp must have one CMake owner",
         errors,
     )
@@ -434,10 +449,15 @@ def verify_source_ownership(errors: list[str]) -> None:
     )
     require(
         "cellularity_render_frame_result" in cmake
-        and "cellularity_render_frame_result" in vulkan_links,
+        and "cellularity_link_vulkan_backend_contracts(cellularity_vulkan)" in cmake,
         "both Android render DSOs must consume the shared frame-result contract",
         errors,
     )
+
+
+def cmake_shared_backend_sources() -> str:
+    """The backend source list shared by the Android DSO and the Windows host."""
+    return read(SHARED_BACKEND_SOURCES_PATH)
 
 
 def verify_profiling_gate(errors: list[str]) -> None:
@@ -457,11 +477,25 @@ def verify_profiling_gate(errors: list[str]) -> None:
         "V-19 must not introduce a second native profiling flag",
         errors,
     )
+    # One definition, applied to every target that builds a backend, so a frame
+    # profiled on one platform reports what the other does. The worker keeps its
+    # own occurrence in native/CMakeLists.txt; the backend's lives in the shared
+    # file and reaches both the Android DSO and the Windows host through one call.
+    profiling_define = (
+        "CELLULARITY_ENABLE_VULKAN_PROFILING="
+        "$<BOOL:${CELLULARITY_ENABLE_VULKAN_PROFILING}>"
+    )
+    shared_backend = cmake_shared_backend_sources()
     require(
-        cmake.count(
-            "CELLULARITY_ENABLE_VULKAN_PROFILING="
-            "$<BOOL:${CELLULARITY_ENABLE_VULKAN_PROFILING}>"
-        ) == 2,
+        shared_backend.count(profiling_define) == 1,
+        "the profiling compile definition must be defined once for the backend",
+        errors,
+    )
+    require(
+        cmake.count(profiling_define) == 1
+        and cmake.count("cellularity_configure_vulkan_backend(cellularity_vulkan)") == 1
+        and cmake.count("cellularity_configure_vulkan_backend(cellularity_vulkan_host)")
+        == 1,
         "the native worker and Vulkan DSO must share the profiling compile definition",
         errors,
     )
@@ -2468,7 +2502,7 @@ def verify_v30c_genome_preview_reveal(errors: list[str]) -> None:
     )
     vulkan_session = read(
         REPO_ROOT
-        / "native/render/backend/vulkan/AndroidVulkanClearFrameSession.cpp"
+        / "native/render/backend/vulkan/VulkanClearFrameSession.cpp"
     )
     genome_frame_source = read(
         REPO_ROOT
@@ -2478,6 +2512,15 @@ def verify_v30c_genome_preview_reveal(errors: list[str]) -> None:
         REPO_ROOT
         / "app/src/main/java/com/cytarch/cellularity/ui/play_menu/screens/"
         "genome_editor/GenomeEditorScreen.kt"
+    )
+    # The surface geometry moved to the shared module so that both platforms use one
+    # contract rather than each growing its own. The rule follows it: the declaration and
+    # its arithmetic are checked where they now live, and the handoff that consumes them is
+    # still checked in the screen.
+    genome_geometry = read(
+        REPO_ROOT
+        / "shared/src/commonMain/kotlin/com/cytarch/cellularity/shared/ui/play/"
+        "genome_editor/sections/GenomeEditorLayoutGeometry.kt"
     )
     play_content = read(
         REPO_ROOT
@@ -2614,8 +2657,15 @@ def verify_v30c_genome_preview_reveal(errors: list[str]) -> None:
             errors,
         )
     for snippet in (
-        "internal data class GenomePreviewSurfaceGeometry(",
-        "internal fun genomePreviewSurfaceGeometry(",
+        "data class GenomePreviewSurfaceGeometry(",
+        "fun genomePreviewSurfaceGeometry(",
+    ):
+        require(
+            snippet in genome_geometry,
+            f"V-30C editor surface geometry is missing {snippet}",
+            errors,
+        )
+    for snippet in (
         "viewportWidth = previewSurfaceGeometry.viewportWidth",
         "viewportHeight = previewSurfaceGeometry.viewportHeight",
         "backingSurfaceWidth = previewSurfaceGeometry.backingWidth",
@@ -2634,9 +2684,9 @@ def verify_v30c_genome_preview_reveal(errors: list[str]) -> None:
         )
         == 2
         and "viewportWidth = visibleWidthPx.roundToInt().coerceAtLeast(1)"
-        in genome_screen
+        in genome_geometry
         and "backingWidth = parentWidthPx.roundToInt().coerceAtLeast(1)"
-        in genome_screen,
+        in genome_geometry,
         "V-30C portrait and landscape layouts must share one non-zero stable "
         "backing geometry contract",
         errors,

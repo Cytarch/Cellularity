@@ -1,5 +1,11 @@
 #include "render/backend/abi/VulkanBackendSession.h"
 
+// VulkanBackendSession only forwards an opaque asset-manager handle into the
+// create-info structure when that source is selected, so it never dereferences
+// the type. This forward declaration keeps the translation unit free of both
+// jni.h and android/asset_manager.h.
+struct AAssetManager;
+
 #include <algorithm>
 #include <cassert>
 #include <cstdio>
@@ -98,7 +104,7 @@ bool isKnownVulkanDiagnosticsStatus(
 
 std::shared_ptr<VulkanBackendSession> VulkanBackendSession::create(
         const CellularityVulkanSurfaceApiV1* api,
-        AAssetManager* assetManager) {
+        const VulkanBackendAssetSource& assets) {
     if (api == nullptr) {
         throw std::invalid_argument("Vulkan backend API address is null");
     }
@@ -108,12 +114,26 @@ std::shared_ptr<VulkanBackendSession> VulkanBackendSession::create(
             || api->api_context == nullptr || !hasRequiredCallbacks(*api)) {
         throw std::invalid_argument("Vulkan backend API V1 is incompatible");
     }
-    if (assetManager == nullptr) {
-        throw std::invalid_argument("Vulkan backend requires Android assets");
+    if (assets.source == CELLULARITY_VULKAN_ASSET_SOURCE_ANDROID_MANAGER_V1) {
+        if (assets.androidAssetManager == nullptr) {
+            throw std::invalid_argument(
+                    "Vulkan backend requires a non-null Android asset manager");
+        }
+    } else if (assets.filesystemRoot.empty()) {
+        throw std::invalid_argument(
+                "Vulkan backend requires a non-empty asset root");
     }
 
     CellularityVulkanSurfaceApiV1 copied{};
-    std::memcpy(&copied, api, sizeof(copied));
+    // Only the bytes the backend actually offers are read. The table grows by
+    // appending, so a backend built before the newest entry point publishes a
+    // shorter struct_size, and copying the caller's full structure would read
+    // past the end of its static table.
+    const auto providedBytes = static_cast<std::size_t>(api->struct_size)
+            < sizeof(copied)
+            ? static_cast<std::size_t>(api->struct_size)
+            : sizeof(copied);
+    std::memcpy(&copied, api, providedBytes);
     CellularityVulkanSessionHandle session = nullptr;
     bool retained = false;
     try {
@@ -123,8 +143,19 @@ std::shared_ptr<VulkanBackendSession> VulkanBackendSession::create(
         CellularityVulkanSessionCreateInfoV1 info{};
         info.abi_version = CELLULARITY_VULKAN_ABI_VERSION_V1;
         info.struct_size =
-                CELLULARITY_VULKAN_SESSION_CREATE_INFO_V1_REQUIRED_SIZE;
-        info.asset_manager = assetManager;
+                CELLULARITY_VULKAN_SESSION_CREATE_INFO_V1_FULL_SIZE;
+        info.asset_source = assets.source;
+        if (assets.source
+                == CELLULARITY_VULKAN_ASSET_SOURCE_ANDROID_MANAGER_V1) {
+            info.asset_manager =
+                    static_cast<AAssetManager*>(assets.androidAssetManager);
+        } else {
+            info.asset_manager = nullptr;
+            info.asset_root = assets.filesystemRoot.c_str();
+            info.asset_root_secondary = assets.filesystemRootSecondary.empty()
+                    ? nullptr
+                    : assets.filesystemRootSecondary.c_str();
+        }
 
         CellularityVulkanErrorV1 error{};
         error.abi_version = CELLULARITY_VULKAN_ABI_VERSION_V1;
@@ -276,7 +307,7 @@ CellularityVulkanOperationStatusV1 VulkanBackendSession::hasAttachedSurface(
 }
 
 CellularityVulkanOperationStatusV1 VulkanBackendSession::attachWindow(
-        ANativeWindow* window, std::int32_t width,
+        CellularityVulkanNativeWindowHandleV1 window, std::int32_t width,
         std::int32_t height) noexcept {
     Call call(*this);
     if (!call)
@@ -402,6 +433,28 @@ CellularityVulkanPassStatusV1
                         UINT32_MAX, &presentation, &frame)
         }
 
+// The HUD-aware form exists only where the table is large enough to carry it, which is what the
+// struct_size check is for: a host built against the older table keeps working and simply gets a
+// frame without the HUD rather than a call through a pointer that is not there.
+CellularityVulkanPassStatusV1
+        VulkanBackendSession::drawMicroscopeOffscreenPass(
+                const CellularityVulkanPresentationStateV1& presentation,
+                const CellularityPreparedRenderFrameViewV1& frame,
+                const CellularityVulkanDebugHudViewV1* hud) noexcept {
+    Call call(*this);
+    if (!call || mApi.struct_size
+            < CELLULARITY_VULKAN_SURFACE_API_V1_FULL_SIZE
+            || mApi.draw_microscope_offscreen_pass_with_hud == nullptr) {
+        return drawMicroscopeOffscreenPass(presentation, frame);
+    }
+    try {
+        return mApi.draw_microscope_offscreen_pass_with_hud(call.session(),
+                &presentation, &frame, hud);
+    } catch (...) {
+        return UINT32_MAX;
+    }
+}
+
 CellularityVulkanPassStatusV1
         VulkanBackendSession::endGenomeOffscreenPass() noexcept {
     Call call(*this);
@@ -427,6 +480,26 @@ CellularityVulkanOperationStatusV1 VulkanBackendSession::cancelOffscreenRgba(
         CellularityVulkanOffscreenTargetV1 target) noexcept {
         CELLULARITY_VULKAN_INVOKE_STATUS(cancel_offscreen_rgba,
                 CELLULARITY_VULKAN_OPERATION_FAILED_V1, target)
+}
+
+bool VulkanBackendSession::supportsFinishOffscreenRgbaInto() const noexcept {
+    return mApi.finish_offscreen_rgba_into != nullptr;
+}
+
+CellularityVulkanPassStatusV1 VulkanBackendSession::finishOffscreenRgbaInto(
+        CellularityVulkanOffscreenTargetV1 target, std::int32_t width,
+        std::int32_t height, std::uint8_t* destination,
+        std::uint64_t destinationSize, std::uint64_t rowStride,
+        std::uint64_t& bytesWritten) noexcept {
+    bytesWritten = 0;
+    if (mApi.finish_offscreen_rgba_into == nullptr) {
+        // A backend that predates the direct readback entry point. The caller
+        // falls back to the finishing call that assembles an image first.
+        return CELLULARITY_VULKAN_PASS_FAILED_V1;
+    }
+    CELLULARITY_VULKAN_INVOKE_STATUS(finish_offscreen_rgba_into, UINT32_MAX,
+            target, width, height, destination, destinationSize, rowStride,
+            &bytesWritten)
 }
 
 CellularityVulkanOperationStatusV1 VulkanBackendSession::setProfilingEnabled(

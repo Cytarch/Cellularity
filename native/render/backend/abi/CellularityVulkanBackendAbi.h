@@ -19,6 +19,15 @@ extern "C" {
 
 struct AAssetManager;
 struct ANativeWindow;
+
+// The window a surface is attached to, as an opaque platform handle.
+//
+// It is deliberately not ANativeWindow*: the same ABI serves Android, where the
+// handle is an ANativeWindow*, and Windows, where it is an HWND. The caller owns
+// the handle, and the handle must stay valid until detach_surface or
+// destroy_session completes. On Android the caller transfers one ANativeWindow
+// reference, which the backend releases.
+typedef void* CellularityVulkanNativeWindowHandleV1;
 struct CellularityVulkanSessionOpaque;
 
 typedef struct CellularityVulkanSessionOpaque*
@@ -70,18 +79,50 @@ typedef uint32_t CellularityVulkanErrorCodeV1;
 typedef uint32_t CellularityVulkanOffscreenTargetV1;
 #define CELLULARITY_VULKAN_OFFSCREEN_GENOME_PREVIEW_V1 UINT32_C(0)
 #define CELLULARITY_VULKAN_OFFSCREEN_SUBSTRATE_PREVIEW_V1 UINT32_C(1)
+// A frame of the live microscope scene for a host that composites it itself.
+// Same scene as the substrate preview, different lifetime: this one belongs to
+// a running session, not to a document being saved.
+#define CELLULARITY_VULKAN_OFFSCREEN_LIVE_FRAME_V1 UINT32_C(2)
+
+// Where the session reads its shaders and textures from. Android serves them
+// from the packaged asset manager; a desktop host reads them from disk.
+typedef uint32_t CellularityVulkanAssetSourceV1;
+#define CELLULARITY_VULKAN_ASSET_SOURCE_ANDROID_MANAGER_V1 UINT32_C(0)
+#define CELLULARITY_VULKAN_ASSET_SOURCE_FILESYSTEM_V1 UINT32_C(1)
 
 typedef struct CellularityVulkanSessionCreateInfoV1 {
     uint32_t abi_version;
     uint32_t struct_size;
     struct AAssetManager* asset_manager;
-    uint32_t flags;
+    CellularityVulkanAssetSourceV1 asset_source;
     uint32_t reserved_zero;
+    // Asset roots used when asset_source is CELLULARITY_VULKAN_ASSET_SOURCE_
+    // FILESYSTEM_V1. asset_root is required; asset_root_secondary is optional and
+    // is searched second, which lets a build point at the generated SPIR-V
+    // directory and the source asset directory at once. Paths are UTF-8, may be
+    // relative to the process working directory, and are joined with the asset's
+    // own relative path.
+    const char* asset_root;
+    const char* asset_root_secondary;
 } CellularityVulkanSessionCreateInfoV1;
 
+// The fields every caller must supply, and the value older callers set
+// struct_size to. asset_root and asset_root_secondary are optional and are
+// checked for presence against struct_size before being read, so a caller that
+// predates them is still accepted.
 #define CELLULARITY_VULKAN_SESSION_CREATE_INFO_V1_REQUIRED_SIZE    \
     (offsetof(CellularityVulkanSessionCreateInfoV1, reserved_zero) \
             + sizeof(uint32_t))
+
+// The size that includes the optional asset roots. A caller that sets
+// struct_size to this value may supply them.
+#define CELLULARITY_VULKAN_SESSION_CREATE_INFO_V1_FULL_SIZE \
+    (sizeof(CellularityVulkanSessionCreateInfoV1))
+
+// The offset at which asset_root becomes readable.
+#define CELLULARITY_VULKAN_SESSION_CREATE_INFO_V1_ASSET_ROOT_OFFSET \
+    (offsetof(CellularityVulkanSessionCreateInfoV1, asset_root)      \
+            + sizeof(const char*))
 
 typedef struct CellularityVulkanErrorV1 {
     uint32_t abi_version;
@@ -341,7 +382,7 @@ typedef CellularityVulkanOperationStatusV1 (*CellularityVulkanHasAttachedSurface
         uint32_t* out_attached);
 typedef CellularityVulkanOperationStatusV1 (*CellularityVulkanAttachWindowFnV1)(
         CellularityVulkanSessionHandle session,
-        struct ANativeWindow* window,
+        CellularityVulkanNativeWindowHandleV1 window,
         int32_t width,
         int32_t height);
 typedef CellularityVulkanOperationStatusV1 (*CellularityVulkanResizeSurfaceFnV1)(
@@ -395,6 +436,18 @@ typedef CellularityVulkanPassStatusV1 (*CellularityVulkanDrawMicroscopeOffscreen
         CellularityVulkanSessionHandle session,
         const CellularityVulkanPresentationStateV1* presentation,
         const CellularityPreparedRenderFrameViewV1* frame);
+// The same off-screen microscope pass, told what the performance HUD should say.
+//
+// The HUD is drawn by the renderer, into the very image it describes: it counts the frames that
+// session presented, so a host that drew its own version of it would be counting something else.
+// The surface path has always been able to pass this telemetry through present_microscope; this
+// is the same telemetry for the path where the frame is read back into a host's own scene, which
+// is the path a host that composites the world itself uses.
+typedef CellularityVulkanPassStatusV1 (*CellularityVulkanDrawMicroscopeOffscreenPassWithHudFnV1)(
+        CellularityVulkanSessionHandle session,
+        const CellularityVulkanPresentationStateV1* presentation,
+        const CellularityPreparedRenderFrameViewV1* frame,
+        const CellularityVulkanDebugHudViewV1* hud);
 typedef CellularityVulkanPassStatusV1 (*CellularityVulkanEndGenomeOffscreenPassFnV1)(
         CellularityVulkanSessionHandle session);
 typedef CellularityVulkanPassStatusV1 (*CellularityVulkanFinishOffscreenRgbaFnV1)(
@@ -402,6 +455,21 @@ typedef CellularityVulkanPassStatusV1 (*CellularityVulkanFinishOffscreenRgbaFnV1
         CellularityVulkanOffscreenTargetV1 target,
         uint8_t* destination,
         uint64_t destination_size,
+        uint64_t* out_bytes_written);
+// The same readback written straight into caller storage at the caller's own
+// row stride. A host that composites every frame owns one buffer for the life of
+// the session, and this is the entry point that lets the pixels land in it once
+// instead of being assembled into an intermediate image first. row_stride must
+// be at least width * 4, and destination_size must hold height * row_stride
+// bytes. Writes the packed byte count through out_bytes_written.
+typedef CellularityVulkanPassStatusV1 (*CellularityVulkanFinishOffscreenRgbaIntoFnV1)(
+        CellularityVulkanSessionHandle session,
+        CellularityVulkanOffscreenTargetV1 target,
+        int32_t width,
+        int32_t height,
+        uint8_t* destination,
+        uint64_t destination_size,
+        uint64_t row_stride,
         uint64_t* out_bytes_written);
 typedef CellularityVulkanOperationStatusV1 (*CellularityVulkanCancelOffscreenRgbaFnV1)(
         CellularityVulkanSessionHandle session,
@@ -457,11 +525,32 @@ typedef struct CellularityVulkanSurfaceApiV1 {
     CellularityVulkanReadDiagnosticsChunkFnV1 read_diagnostics_chunk;
     CellularityVulkanReleaseDiagnosticsSnapshotFnV1
             release_diagnostics_snapshot;
+    // Appended after the diagnostics entries. Every field above keeps its
+    // offset, so a caller built against the older size still reads the older
+    // table, and a caller that sees the larger size may use this one.
+    CellularityVulkanFinishOffscreenRgbaIntoFnV1 finish_offscreen_rgba_into;
+    // Appended after finish_offscreen_rgba_into, on the same terms: every field above keeps its
+    // offset, and a caller that finds this size may use it.
+    CellularityVulkanDrawMicroscopeOffscreenPassWithHudFnV1
+            draw_microscope_offscreen_pass_with_hud;
 } CellularityVulkanSurfaceApiV1;
 
 #define CELLULARITY_VULKAN_SURFACE_API_V1_REQUIRED_SIZE                    \
     (offsetof(CellularityVulkanSurfaceApiV1, release_diagnostics_snapshot) \
             + sizeof(CellularityVulkanReleaseDiagnosticsSnapshotFnV1))
+
+// The size that also covers finish_offscreen_rgba_into. A caller that reads the
+// table's struct_size and finds at least this value may call it.
+#define CELLULARITY_VULKAN_SURFACE_API_V1_WITH_RGBA_INTO_SIZE \
+    (offsetof(CellularityVulkanSurfaceApiV1,                               \
+             draw_microscope_offscreen_pass_with_hud)                      \
+            + sizeof(CellularityVulkanFinishOffscreenRgbaIntoFnV1))
+
+// The size that also covers draw_microscope_offscreen_pass_with_hud. A caller that
+// reads the table's struct_size and finds at least this value may pass HUD
+// telemetry to an off-screen microscope pass instead of only to a presented one.
+#define CELLULARITY_VULKAN_SURFACE_API_V1_FULL_SIZE \
+    (sizeof(CellularityVulkanSurfaceApiV1))
 
 typedef const CellularityVulkanSurfaceApiV1* (*CellularityVulkanGetSurfaceApiV1Fn)(void);
 

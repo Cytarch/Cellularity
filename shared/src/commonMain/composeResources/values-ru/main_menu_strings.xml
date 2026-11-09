@@ -9,4 +9,6 @@
 
     <string name="main_menu_tab_about">О приложении</string>
 
+    <string name="main_menu_import_action">Импортировать файл</string>
+
 </resources>

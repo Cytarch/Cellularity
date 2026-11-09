@@ -3,8 +3,10 @@ package com.cytarch.cellularity.ui.main_menu
 import android.content.Intent
 import android.os.Bundle
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -75,12 +77,26 @@ class MainMenuActivity : RecoverableAppCompatActivity() {
                 CellularityApplication.setApplicationLanguage(settings.language)
             }
 
+            // The platform's own chooser, which is what a phone has where a window has a file
+            // dialog: the document it returns is handed to the same import the view intent goes
+            // through, so a file picked here and a file opened from a file manager arrive by one
+            // road. Any MIME type is asked for because the kind is decided by the extension, and a
+            // plate saved by this application is not registered with the system as anything.
+            val importLauncher = rememberLauncherForActivityResult(
+                ActivityResultContracts.OpenDocument()
+            ) { uri ->
+                if (uri != null) {
+                    viewModel.importPickedFile(uri)
+                }
+            }
+
             CellularityApp(
                 mainMenuState = mainMenuState,
                 onMainMenuAction = viewModel::dispatch,
                 avoidCameraCutout = displaySettings.avoidCameraCutout,
                 themeColors = settings.theme,
-                themeComponents = settings.themeComponents
+                themeComponents = settings.themeComponents,
+                onImportRequest = { importLauncher.launch(arrayOf("*/*")) }
             ) { page, collectionRevision ->
                 when (page) {
                     MainMenuPage.EXPERIMENTS -> FreezerScreen(

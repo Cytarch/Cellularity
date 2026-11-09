@@ -1,5 +1,9 @@
 #pragma once
 
+// The preview camera is part of this interface, so its type has to be complete here rather
+// than forward-declared: a nested type cannot be named without its enclosing class.
+#include "app/genome_preview/GenomePreviewController.h"
+
 #include <array>
 #include <atomic>
 #include <cstdint>
@@ -117,9 +121,65 @@ public:
     void captureGenomePreviewGhost();
     void clearGenomePreviewGhost();
     [[nodiscard]] cellularity::render::RenderFrameResult drawGenomePreview();
+    /**
+     * Hands the preview the genome it should be showing.
+     *
+     * The phone publishes content and view state separately and then asks the preview to draw,
+     * which is what makes an interactive preview interactive: the world keeps its camera between
+     * frames, and a person's pan or zoom is an update to the view rather than a new picture. The
+     * desktop preview used to take a single still of the organism instead, which is why it had no
+     * camera to move. This is the same publication, on the same endpoint, so the two platforms
+     * share the mechanism rather than resembling each other.
+     *
+     * Returns the status the endpoint reported, encoded the way the phone encodes it.
+     */
+    /**
+     * Tells the preview where its view stands: which gene is selected, whether the grid and the
+     * tree are on, and how large the viewport is. Published separately from the content because it
+     * is what changes while somebody is looking -- a pan, a zoom, a selection -- while the genome
+     * itself stays put.
+     */
+    [[nodiscard]] std::uint32_t publishGenomePreviewViewState(
+            int selectedGeneIndex,
+            bool gridEnabled,
+            bool treeEnabled,
+            int viewportWidth,
+            int viewportHeight);
+
+    /**
+     * Hands the preview one thing the person did: move, zoom, select a gene, take a ghost.
+     *
+     * The kinds are numbered exactly as the phone numbers them, so the two platforms agree on what
+     * a message means rather than on what it happens to be called.
+     */
+    [[nodiscard]] std::uint32_t enqueueGenomePreviewInteraction(
+            int kind, float first, float second, float third);
+
+    [[nodiscard]] std::uint32_t publishGenomePreviewContent(
+            const std::uint8_t* genomeDraftBytes,
+            std::size_t genomeDraftByteCount,
+            double simulationTimeHours);
+
+    /**
+     * Where the preview stands: how many Cells it grew, which gene a tap chose, and where the
+     * camera is.
+     *
+     * One call rather than five, because these are one snapshot: a Cell count from before a
+     * selection, read beside the selection itself, would describe two different previews. The
+     * camera travels as the bit patterns of its three floats for the same reason the plate's food
+     * mass does -- an integer vector cannot hold a fraction, and a rounded camera is a camera
+     * nobody set.
+     *
+     * Nine numbers, in this order: the Cell count, the content revision it was counted at, the
+     * preview's Cell allocation, the selection token, the selected gene index, the viewport
+     * revision, then the camera's centre X, centre Y and zoom.
+     */
+    [[nodiscard]] std::array<std::int64_t, 9> genomePreviewStatus() const;
+
     [[nodiscard]] std::vector<std::uint8_t> captureGenomeFilePreviewRgba(
             const cellularity::GenomeData& genome,
-            double maximumSimulationTime);
+            double maximumSimulationTime,
+            const GenomePreviewController::Camera* camera = nullptr);
     [[nodiscard]] cellularity::render::RenderFrameResult
     drawEnvironmentFieldPreview();
     [[nodiscard]] std::shared_ptr<
@@ -176,7 +236,10 @@ public:
     void queueMicroscopeTouchDown(int pointerId, float screenX, float screenY);
     void queueMicroscopeTouchMove(int pointerId, float screenX, float screenY);
     void queueMicroscopeTouchUp(int pointerId);
-    void
+    // Returns whether the gesture was taken into the queue: a refusal is an ordinary answer --
+    // the queue may be closed, or the viewport may have been replaced under the caller -- and a
+    // host that cannot tell it from a placement has no way to say so on screen.
+    bool
     queueMicroscopeTap(float screenX, float screenY,
             const cellularity::GenomeData* genome);
     bool queueMicroscopePan(float dx, float dy);
@@ -198,6 +261,22 @@ public:
     [[nodiscard]] cellularity::render::RenderFrameResult
     clearMicroscopeNoRender();
     [[nodiscard]] cellularity::render::RenderFrameResult drawMicroscope();
+    // Draws the same frame into memory the caller owns, as tightly packed top-left RGBA8 at
+    // the caller's row stride, and reports how many bytes it wrote.
+    //
+    // This is the entry point a host uses when it draws the world itself instead of letting a
+    // window present it: the frame becomes one layer of that host's own scene, which is the only
+    // way the world can sit *below* the rest of the interface rather than in front of it. A
+    // window cannot do that, because a window is a sibling of the interface's surface and not a
+    // layer inside it.
+    // The preview's frame into caller memory, for the same reason the world has one: a preview that
+    // is a layer of the host's scene cannot be presented by a window of its own.
+    [[nodiscard]] std::size_t drawGenomePreviewIntoRgba(std::uint8_t* destination,
+            std::size_t destinationSize, std::size_t rowStride, bool& wrote);
+    [[nodiscard]] cellularity::render::RenderFrameResult
+    drawMicroscopeIntoRgba(std::uint8_t* destination,
+            std::size_t destinationSize, std::size_t rowStride,
+            std::size_t& written);
     [[nodiscard]] cellularity::render::RenderFrameResult
     drawMicroscopeForCurrentMode();
     void markMicroscopeFramePresented();
@@ -206,6 +285,14 @@ public:
     microscopeInputTimelineSnapshot() const;
 
 private:
+    // Which of the two places a drawn frame goes: the surface a window presents, or a buffer
+    // the host will draw itself. One function serves both so the two paths cannot drift apart
+    // in what they draw -- only in where the pixels end up.
+    enum class FrameDestination { Surface, RgbaBuffer };
+    [[nodiscard]] cellularity::render::RenderFrameResult
+    drawMicroscopeInto(FrameDestination destination, std::uint8_t* bytes,
+            std::size_t byteCount, std::size_t rowStride, std::size_t& written);
+
     const bool mPreviewMode;
     // Declared before render-facing owners so render preparation is stopped and
     // joined before the owned world is destroyed.
@@ -216,6 +303,8 @@ private:
             mEnvironmentFieldPreviewEndpoint;
     std::shared_ptr<cellularity::app::genome_preview::GenomePreviewEndpoint>
             mGenomePreviewEndpoint;
+    // Publication order is monotonic per controller, so a late update can be recognised as late.
+    std::uint64_t mGenomePreviewProducerSequence = 0;
     std::shared_ptr<cellularity::app::microscope::SubstratePreviewCaptureEndpoint>
             mSubstratePreviewCaptureEndpoint;
     cellularity::microscope::PresentationViewportSnapshot

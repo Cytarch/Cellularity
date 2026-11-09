@@ -1,8 +1,10 @@
 #pragma once
 
 #include <memory>
+#include <optional>
 
 #include "app/render/NativeRenderFrameSource.h"
+#include "render/frame/RenderFrameTypes.h"
 
 namespace cellularity::microscope {
 struct MicroscopeDebugHudTelemetry;
@@ -24,6 +26,18 @@ public:
     ~VulkanDemoFrameProducer() override;
 
     void setPerformanceHudEnabled(bool enabled) noexcept override;
+
+    // Replaces the fixed demo camera with one the caller supplies.
+    //
+    // The demo presentation exists so the fixture renders the same way everywhere
+    // and is deliberately not interactive. A host that lets the user move the
+    // camera needs to supply the viewport instead, and doing it here rather than in
+    // the host keeps this producer the single owner of the frame and the surface
+    // session, so the interactive path and the fixture path differ only in where
+    // the presentation comes from.
+    void setPresentationOverride(
+            const cellularity::render::RenderPresentationState& presentation)
+            noexcept;
 
     [[nodiscard]] SourceSurfaceResult bindBackend(
             std::shared_ptr<cellularity::render::abi::VulkanBackendSession>
@@ -49,6 +63,8 @@ private:
     int mHeight = 0;
     bool mSurfaceAttached = false;
     bool mPerformanceHudEnabled = false;
+    std::optional<cellularity::render::RenderPresentationState>
+            mPresentationOverride;
 };
 
 } // namespace cellularity::app::render_worker::sources

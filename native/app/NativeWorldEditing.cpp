@@ -27,15 +27,22 @@ void resetGenomePreviewWorld(SimulationWorld& world) {
 bool addUserCellToWorld(SimulationWorld& world,
         double worldX,
         double worldY,
-        const cellularity::GenomeData& genome) {
+        const cellularity::GenomeData* genome) {
     if (world.mEnvironment.geometry().isOutsideOrOnBoundary(worldX, worldY)) {
         return false;
     }
-    const auto genomeMetadata =
-            cellularity::extractGenomeMetadataFromCompatibilityFlags(
-                    genome.data(), genome.size());
-    if (!genomeMetadata.has_value()) {
-        return false;
+    // A cell may be asked for without naming the genome it should carry, and then it comes from
+    // the plate's own default genome: the one every seeded cell starts from, which CellData
+    // installs as part of allocating a cell. That is what lets the synthesizer tool place a cell
+    // on a host that has no genome to hand it -- the phone always has one, because its genome
+    // editor publishes it, and a host without an editor does not.
+    std::optional<cellularity::GenomeMetadata> genomeMetadata;
+    if (genome != nullptr) {
+        genomeMetadata = cellularity::extractGenomeMetadataFromCompatibilityFlags(
+                genome->data(), genome->size());
+        if (!genomeMetadata.has_value()) {
+            return false;
+        }
     }
 
     CellData& cellData = world.mCellData;
@@ -66,8 +73,9 @@ bool addUserCellToWorld(SimulationWorld& world,
     cellData.mTelomeresCount[newCellIndex] = -1;
     cellData.mIsMirrored[newCellIndex] = false;
 
-    if (!cellData.replaceGenome(
-                newCellIndex, genome, genomeMetadata->initialGeneIndex)) {
+    if (genome != nullptr
+            && !cellData.replaceGenome(
+                    newCellIndex, *genome, genomeMetadata->initialGeneIndex)) {
         cellData.releaseLastCellSlot();
         return false;
     }

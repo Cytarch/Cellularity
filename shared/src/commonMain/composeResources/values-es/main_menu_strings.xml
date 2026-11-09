@@ -9,4 +9,6 @@
 
     <string name="main_menu_tab_about">Acerca de</string>
 
+    <string name="main_menu_import_action">Importar archivo</string>
+
 </resources>

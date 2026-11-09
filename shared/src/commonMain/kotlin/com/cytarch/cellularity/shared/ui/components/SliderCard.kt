@@ -170,6 +170,11 @@ fun SliderCard(
         }
         val parsedValue = inputText.replace(',', '.').toDoubleOrNull()
         val isValid = parsedValue != null && parsedValue.isFinite() && parsedValue in min..max
+        fun confirmInput() {
+            if (!isValid) return
+            onValueChange(parsedValue ?: return)
+            showDialog = false
+        }
 
         CellularityAlertDialog(
             onDismissRequest = { showDialog = false },
@@ -185,7 +190,9 @@ fun SliderCard(
                         isError = !isValid,
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                         placeholder = { Text(text = "0.0") },
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .confirmOnEnter(onConfirm = ::confirmInput),
                         colors = cellularityOutlinedTextFieldColors()
                     )
                     if (!isValid) {
@@ -200,11 +207,7 @@ fun SliderCard(
             },
             confirmButton = {
                 TextButton(
-                    onClick = {
-                        if (!isValid) return@TextButton
-                        onValueChange(parsedValue ?: return@TextButton)
-                        showDialog = false
-                    },
+                    onClick = ::confirmInput,
                     enabled = isValid
                 ) {
                     Text(strings.confirm)

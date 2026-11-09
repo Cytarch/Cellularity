@@ -11,6 +11,38 @@
 
 namespace cellularity::render::abi {
 
+// Describes where the backend DSO should read its shaders and textures from.
+//
+// Two sources are supported, mirroring CellularityVulkanAssetSourceV1: Android's
+// packaged asset manager and a pair of filesystem roots used by a desktop host.
+// The asset manager is carried as an opaque handle so this header and its
+// translation unit stay free of both android/asset_manager.h and jni.h - the
+// client only forwards the value into the create-info structure.
+struct VulkanBackendAssetSource final {
+    CellularityVulkanAssetSourceV1 source =
+            CELLULARITY_VULKAN_ASSET_SOURCE_FILESYSTEM_V1;
+    void* androidAssetManager = nullptr;
+    std::string filesystemRoot;
+    std::string filesystemRootSecondary;
+
+    [[nodiscard]] static VulkanBackendAssetSource fromFilesystem(
+            std::string root, std::string secondary = {}) {
+        VulkanBackendAssetSource value;
+        value.source = CELLULARITY_VULKAN_ASSET_SOURCE_FILESYSTEM_V1;
+        value.filesystemRoot = std::move(root);
+        value.filesystemRootSecondary = std::move(secondary);
+        return value;
+    }
+
+    [[nodiscard]] static VulkanBackendAssetSource fromAndroidAssetManager(
+            void* assetManager) {
+        VulkanBackendAssetSource value;
+        value.source = CELLULARITY_VULKAN_ASSET_SOURCE_ANDROID_MANAGER_V1;
+        value.androidAssetManager = assetManager;
+        return value;
+    }
+};
+
 class VulkanBackendSession final {
 public:
     enum class Phase : std::uint8_t {
@@ -22,7 +54,7 @@ public:
 
     [[nodiscard]] static std::shared_ptr<VulkanBackendSession> create(
             const CellularityVulkanSurfaceApiV1* api,
-            AAssetManager* assetManager);
+            const VulkanBackendAssetSource& assets);
 
     VulkanBackendSession(const VulkanBackendSession&) = delete;
     VulkanBackendSession& operator=(const VulkanBackendSession&) = delete;
@@ -35,7 +67,7 @@ public:
     [[nodiscard]] CellularityVulkanOperationStatusV1 hasAttachedSurface(
             std::uint32_t& attached) noexcept;
     [[nodiscard]] CellularityVulkanOperationStatusV1 attachWindow(
-            ANativeWindow* window, std::int32_t width,
+            CellularityVulkanNativeWindowHandleV1 window, std::int32_t width,
             std::int32_t height) noexcept;
     [[nodiscard]] CellularityVulkanOperationStatusV1 resizeSurface(
             std::int32_t width, std::int32_t height) noexcept;
@@ -77,12 +109,32 @@ public:
     drawMicroscopeOffscreenPass(
             const CellularityVulkanPresentationStateV1& presentation,
             const CellularityPreparedRenderFrameViewV1& frame) noexcept;
+    // The same pass with the performance HUD telemetry, for a backend whose table is large
+    // enough to serve it. Falls back to the call above when it is not.
+    [[nodiscard]] CellularityVulkanPassStatusV1
+    drawMicroscopeOffscreenPass(
+            const CellularityVulkanPresentationStateV1& presentation,
+            const CellularityPreparedRenderFrameViewV1& frame,
+            const CellularityVulkanDebugHudViewV1* hud) noexcept;
     [[nodiscard]] CellularityVulkanPassStatusV1
     endGenomeOffscreenPass() noexcept;
     [[nodiscard]] CellularityVulkanPassStatusV1 finishOffscreenRgba(
             CellularityVulkanOffscreenTargetV1 target,
             std::uint8_t* destination,
             std::uint64_t destinationSize,
+            std::uint64_t& bytesWritten) noexcept;
+    // The backend's direct readback, which writes into the caller's storage at
+    // the caller's row stride. supportsFinishOffscreenRgbaInto() is false for a
+    // backend that was built before this entry point existed, and this call then
+    // fails instead of reading through a null pointer.
+    [[nodiscard]] bool supportsFinishOffscreenRgbaInto() const noexcept;
+    [[nodiscard]] CellularityVulkanPassStatusV1 finishOffscreenRgbaInto(
+            CellularityVulkanOffscreenTargetV1 target,
+            std::int32_t width,
+            std::int32_t height,
+            std::uint8_t* destination,
+            std::uint64_t destinationSize,
+            std::uint64_t rowStride,
             std::uint64_t& bytesWritten) noexcept;
     [[nodiscard]] CellularityVulkanOperationStatusV1 cancelOffscreenRgba(
             CellularityVulkanOffscreenTargetV1 target) noexcept;

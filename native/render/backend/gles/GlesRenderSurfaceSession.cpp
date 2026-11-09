@@ -155,10 +155,15 @@ RenderFrameResult GlesRenderSurfaceSession::presentMicroscope(
 
 RenderPassStatus GlesRenderSurfaceSession::drawMicroscopeOffscreenPass(
         const RenderPresentationState& presentation,
-        const PreparedRenderFrame& frame) {
+        const PreparedRenderFrame& frame,
+        const cellularity::microscope::MicroscopeDebugHudTelemetry*
+                debugHudTelemetry) {
+    // The performance HUD is drawn through the same pixel-text path here as on the surface,
+    // because an off-screen frame of the live plate is the same picture: a host that draws the
+    // world itself still needs to be able to see what the renderer is doing.
     return mImpl->microscopeRenderer.drawPreparedFrame(presentation, frame,
                    mImpl->microscopeGpuRenderer, mImpl->render, mImpl->gl,
-                   nullptr)
+                   debugHudTelemetry)
             ? RenderPassStatus::Completed
             : RenderPassStatus::Failed;
 }

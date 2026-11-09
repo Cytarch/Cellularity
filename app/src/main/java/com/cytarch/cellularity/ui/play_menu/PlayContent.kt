@@ -22,10 +22,10 @@ import com.cytarch.cellularity.shared.ui.play.PlayState
 import com.cytarch.cellularity.shared.ui.play.microscope.MicroscopeAction
 import com.cytarch.cellularity.shared.ui.play.microscope.MicroscopeTemperature
 import com.cytarch.cellularity.shared.ui.play.substrate_info.SubstrateInfoState
+import com.cytarch.cellularity.shared.ui.play.genome_editor.GenomeProvider
 import com.cytarch.cellularity.ui.play_menu.screens.genome_editor.GenomeEditorCoordinator
 import com.cytarch.cellularity.ui.play_menu.screens.genome_editor.GenomeEditorScreen
 import com.cytarch.cellularity.ui.play_menu.screens.genome_editor.GenomeEditorViewModel
-import com.cytarch.cellularity.ui.play_menu.screens.genome_editor.GenomeProvider
 import com.cytarch.cellularity.ui.play_menu.screens.microscope.MicroscopeScreen
 import com.cytarch.cellularity.ui.play_menu.screens.substrate_info.SubstrateInfoScreen
 import com.cytarch.cellularity.shared.ui.play.PlayScreen as SharedPlayScreen

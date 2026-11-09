@@ -40,13 +40,16 @@ MicroscopeTapResult applyMicroscopeTapAtWorld(SimulationWorld& world,
                 cellData.deselectAll();
                 changed = true;
             } else {
-                if (genome == nullptr) {
-                    if (requireGenomeForCell) {
-                        throw std::runtime_error("Microscope CELL tap requires genome bytes");
-                    }
-                } else {
-                    changed = addUserCellToWorld(world, worldX, worldY, *genome) || changed;
+                if (genome == nullptr && requireGenomeForCell) {
+                    // A caller that insists on naming the genome is told so, rather than
+                    // quietly given a cell it did not ask for.
+                    throw std::runtime_error("Microscope CELL tap requires genome bytes");
                 }
+                // Without a genome the cell is made from the plate's default one, which is what
+                // the synthesizer tool is expected to do: a tap on empty medium places a cell.
+                // The phone always has the genome its editor published; a host with no editor
+                // has none to publish, and a tool that does nothing is not a tool.
+                changed = addUserCellToWorld(world, worldX, worldY, genome) || changed;
             }
         }
 

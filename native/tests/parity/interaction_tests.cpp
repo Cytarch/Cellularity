@@ -12,6 +12,7 @@
 #include "app/microscope/interaction/MicroscopeDragController.h"
 #include "app/microscope/interaction/MicroscopeSelectionController.h"
 #include "app/microscope/interaction/MicroscopeTapController.h"
+#include "app/microscope/interaction/MicroscopeInteraction.h"
 #include "core/CellData.h"
 #include "core/CellSweepBroadphase.h"
 #include "core/CellTopology.h"
@@ -837,6 +838,36 @@ void testNativeCellularityControllerCountsCompletedUpdates() {
             "controller update");
 }
 
+
+// The synthesizer places a cell on empty medium without being handed a genome.
+//
+// This is the one tool whose meaning depends on a genome the caller may not have: the phone
+// publishes the one the user built, and a host with no genome editor publishes nothing. Before
+// this, a tap with the synthesizer on such a host did nothing at all -- no cell, no message, no
+// change -- which is exactly the report "I cannot place a cell by clicking".
+void testSynthesizerTapWithoutGenomePlacesCell() {
+    Environment environment = Environment::constructDefaultEnvironment(4, 2, 1.0);
+    SimulationWorld world(false, environment);
+    CellData& cellData = world.mCellData;
+    assertTrue(cellData.mCellCount == 0, "Synthesizer fixture starts empty");
+
+    const auto result = MicroscopeInteraction::applyMicroscopeTapAtWorld(
+            world, 0.0, 0.0, 0, false, nullptr, false);
+
+    assertTrue(result.changed, "Synthesizer tap on empty medium reports a change");
+    assertTrue(cellData.mCellCount == 1,
+            "Synthesizer tap without a genome places one cell");
+    assertTrue(cellData.mOriginTag[0] == SimulationWorld::USER_CELL_ORIGIN,
+            "Synthesizer tap marks the placed cell as the user's");
+
+    // A second tap is a second cell, not a no-op: the tool places cells, and a host that can
+    // place one but not two has not been fixed.
+    const auto second = MicroscopeInteraction::applyMicroscopeTapAtWorld(
+            world, 0.25, 0.25, 0, false, nullptr, false);
+    assertTrue(second.changed, "A second synthesizer tap reports a change");
+    assertTrue(cellData.mCellCount == 2,
+            "A second synthesizer tap places another cell");
+}
 } // namespace
 
 int main() {
@@ -847,6 +878,7 @@ int main() {
     testUserAddedCellsStartWithZeroAge();
     testWorldEditingAcceptsDynamicGenomeRecords();
     testCellTapOwnsDynamicGenomeUntilApplied();
+    testSynthesizerTapWithoutGenomePlacesCell();
     testAddUserCellAtCapacityKeepsTopologyValid();
     testNativeCellularityControllerFreezeRedrawDoesNotAdvanceSimulation();
     testNativeCellularityControllerMicroscopeStepCountsCompletedUpdate();

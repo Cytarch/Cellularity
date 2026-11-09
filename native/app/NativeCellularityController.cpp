@@ -2,6 +2,7 @@
 
 #include <chrono>
 #include <cmath>
+#include <cstring>
 #include <exception>
 #include <limits>
 #include <memory>
@@ -38,6 +39,17 @@ float initialViewportZoom(bool previewMode, double dishRadius) {
     return previewMode
             ? kPreviewInitialZoom
             : 1.0F / static_cast<float>(dishRadius);
+}
+
+// The bit pattern of a float, which is how the preview's camera travels through a vector of
+// integers: a camera carries a fraction, an integer cannot hold one, and rounding it would move
+// the view somebody set. The copy is defined behaviour, where reading a float through a pointer to
+// an integer is not.
+[[nodiscard]] std::int64_t floatBits(float value) noexcept {
+    std::uint32_t bits = 0;
+    static_assert(sizeof(bits) == sizeof(value), "a float is the size of its bit pattern");
+    std::memcpy(&bits, &value, sizeof(bits));
+    return static_cast<std::int64_t>(bits);
 }
 
 void validateRuntimeStartConfiguration(
@@ -380,12 +392,130 @@ NativeCellularityController::drawGenomePreview() {
     return mGenomePreviewEndpoint->draw(*this);
 }
 
+std::size_t NativeCellularityController::drawGenomePreviewIntoRgba(
+        std::uint8_t* destination,
+        std::size_t destinationSize,
+        std::size_t rowStride,
+        bool& wrote) {
+    wrote = false;
+    if (mGenomePreviewEndpoint == nullptr) {
+        return 0;
+    }
+    return mGenomePreviewEndpoint->drawIntoRgba(
+            *this, destination, destinationSize, rowStride, wrote);
+}
+
+std::uint32_t NativeCellularityController::publishGenomePreviewViewState(
+        int selectedGeneIndex,
+        bool gridEnabled,
+        bool treeEnabled,
+        int viewportWidth,
+        int viewportHeight) {
+    if (mGenomePreviewEndpoint == nullptr) {
+        return static_cast<std::uint32_t>(
+                cellularity::app::genome_preview::GenomePreviewStatePublishStatus::InvalidArgument);
+    }
+    using namespace cellularity::app::genome_preview;
+    const GenomePreviewViewUpdate update{
+            static_cast<std::int32_t>(selectedGeneIndex),
+            gridEnabled,
+            treeEnabled,
+            static_cast<std::int32_t>(viewportWidth),
+            static_cast<std::int32_t>(viewportHeight)
+    };
+    const auto result = mGenomePreviewEndpoint->publishViewState(
+            update,
+            ++mGenomePreviewProducerSequence,
+            mGenomePreviewEndpoint->generation());
+    return static_cast<std::uint32_t>(result.status);
+}
+
+std::uint32_t NativeCellularityController::enqueueGenomePreviewInteraction(
+        int kind, float first, float second, float third) {
+    if (mGenomePreviewEndpoint == nullptr) {
+        return static_cast<std::uint32_t>(
+                cellularity::app::genome_preview::GenomePreviewInteractionEnqueueStatus::InvalidArgument);
+    }
+    using namespace cellularity::app::genome_preview;
+    GenomePreviewInteractionValue value;
+    switch (kind) {
+        case 0:
+            value = GenomePreviewRestoreViewport{first, second, third};
+            break;
+        case 1:
+            value = GenomePreviewMoveViewport{first, second};
+            break;
+        case 2:
+            value = GenomePreviewZoomViewport{first, second, third};
+            break;
+        case 3:
+            value = GenomePreviewSelectGene{first, second};
+            break;
+        case 4:
+            value = GenomePreviewCaptureGhost{};
+            break;
+        case 5:
+            value = GenomePreviewClearGhost{};
+            break;
+        default:
+            return static_cast<std::uint32_t>(
+                    GenomePreviewInteractionEnqueueStatus::InvalidArgument);
+    }
+    const auto generation = mGenomePreviewEndpoint->generation();
+    const GenomePreviewInteractionInput input{
+            static_cast<std::uint64_t>(mGenomePreviewProducerSequence + 1),
+            generation,
+            mGenomePreviewEndpoint->activeAttachmentGeneration(),
+            std::move(value)
+    };
+    const auto result = mGenomePreviewEndpoint->enqueueInteraction(input, generation);
+    if (result.status == GenomePreviewInteractionEnqueueStatus::Accepted) {
+        ++mGenomePreviewProducerSequence;
+    }
+    return static_cast<std::uint32_t>(result.status);
+}
+
+std::uint32_t NativeCellularityController::publishGenomePreviewContent(
+        const std::uint8_t* genomeDraftBytes,
+        std::size_t genomeDraftByteCount,
+        double simulationTimeHours) {
+    if (mGenomePreviewEndpoint == nullptr || genomeDraftBytes == nullptr
+            || genomeDraftByteCount == 0) {
+        return static_cast<std::uint32_t>(
+                cellularity::app::genome_preview::GenomePreviewStatePublishStatus::InvalidArgument);
+    }
+    const auto result = mGenomePreviewEndpoint->publishContent(
+            genomeDraftBytes,
+            genomeDraftByteCount,
+            simulationTimeHours,
+            ++mGenomePreviewProducerSequence,
+            mGenomePreviewEndpoint->generation());
+    return static_cast<std::uint32_t>(result.status);
+}
+
+std::array<std::int64_t, 9> NativeCellularityController::genomePreviewStatus() const {
+    const auto acknowledgment = mGenomePreviewEndpoint->readAcknowledgment();
+    return {
+            static_cast<std::int64_t>(acknowledgment.previewCellCount),
+            static_cast<std::int64_t>(acknowledgment.cellCountContentRevision),
+            static_cast<std::int64_t>(mGenomePreviewEndpoint->maximumCellCount()),
+            static_cast<std::int64_t>(acknowledgment.selectionToken),
+            static_cast<std::int64_t>(acknowledgment.selectedGeneIndex),
+            static_cast<std::int64_t>(acknowledgment.viewportRevision),
+            floatBits(acknowledgment.viewport[0]),
+            floatBits(acknowledgment.viewport[1]),
+            floatBits(acknowledgment.viewport[2]),
+    };
+}
+
 std::vector<std::uint8_t>
 NativeCellularityController::captureGenomeFilePreviewRgba(
         const cellularity::GenomeData& genome,
-        double maximumSimulationTime) {
+        double maximumSimulationTime,
+        const GenomePreviewController::Camera* camera) {
     return mGenomePreviewEndpoint->mFacade->captureFilePreviewRgba(
-            genome, maximumSimulationTime, mRenderSession->surfaceSession());
+            genome, maximumSimulationTime, mRenderSession->surfaceSession(),
+            camera);
 }
 
 cellularity::render::RenderFrameResult
@@ -822,7 +952,7 @@ void NativeCellularityController::queueMicroscopeTouchUp(int pointerId) {
     mInteraction->queueTouchUp(pointerId);
 }
 
-void NativeCellularityController::queueMicroscopeTap(
+bool NativeCellularityController::queueMicroscopeTap(
         float screenX, float screenY,
         const cellularity::GenomeData* genome) {
     if (mMicroscopeRuntime != nullptr) {
@@ -833,11 +963,11 @@ void NativeCellularityController::queueMicroscopeTap(
                     std::make_shared<const cellularity::microscope::MicroscopeCommandGenome>(
                             *genome);
         }
-        (void)mInteraction->enqueueOwnerTap(screenX, screenY,
-                std::move(commandGenome));
-        return;
+        return mInteraction->enqueueOwnerTap(screenX, screenY,
+                std::move(commandGenome)).accepted();
     }
     mInteraction->queueTap(screenX, screenY, genome);
+    return true;
 }
 
 bool NativeCellularityController::queueMicroscopePan(float dx, float dy) {
@@ -900,6 +1030,24 @@ void NativeCellularityController::closeMicroscopeInputAdmission() noexcept {
 
 cellularity::render::RenderFrameResult
 NativeCellularityController::drawMicroscope() {
+    std::size_t written = 0;
+    return drawMicroscopeInto(
+            FrameDestination::Surface, nullptr, 0, 0, written);
+}
+
+cellularity::render::RenderFrameResult
+NativeCellularityController::drawMicroscopeIntoRgba(std::uint8_t* destination,
+        std::size_t destinationSize, std::size_t rowStride,
+        std::size_t& written) {
+    return drawMicroscopeInto(FrameDestination::RgbaBuffer, destination,
+            destinationSize, rowStride, written);
+}
+
+cellularity::render::RenderFrameResult
+NativeCellularityController::drawMicroscopeInto(FrameDestination destination,
+        std::uint8_t* bytes, std::size_t byteCount, std::size_t rowStride,
+        std::size_t& written) {
+    written = 0;
     mSubstratePreviewCaptureEndpoint->applyPendingOnRenderOwner(*this);
     if (mMicroscopeRuntime != nullptr) {
         cellularity::microscope::PresentationViewportSnapshot newest;
@@ -914,6 +1062,47 @@ NativeCellularityController::drawMicroscope() {
         cellularity::render::RenderPresentationState presentation;
         presentation.viewport = mPresentedViewportSnapshot.viewport;
         presentation.backgroundColor = mInteraction->nextBackgroundColor();
+        if (destination == FrameDestination::RgbaBuffer) {
+            // Nothing to draw yet is not a fault: the caller's scene keeps the frame it
+            // already has, the same way a window keeps the image its swapchain last
+            // presented.
+            //
+            // The performance HUD, when it is switched on, is part of this image rather than of
+            // the interface over it: it describes the renderer -- frames it presented, stages of
+            // the world it stepped -- and a host that drew its own copy would be describing
+            // something else. Everything else the interface draws stays over these pixels.
+#ifdef CELLULARITY_PERFORMANCE_HUD
+            if (mPerformanceHudEnabled.load(std::memory_order_relaxed)) {
+                const auto runtimeSnapshot = mMicroscopeRuntime->snapshot();
+                const cellularity::microscope::MicroscopeDebugHudTelemetry
+                        debugTelemetry{
+                                runtimeSnapshot.rateTelemetry
+                                        .actualRateSampleSequence,
+                                runtimeSnapshot.rateTelemetry.actualRateValid,
+                                runtimeSnapshot.rateTelemetry.actualCompletedUps,
+                                runtimeSnapshot.stageTimings
+                        };
+                if (!mRenderSession->drawMicroscopeIntoRgba(presentation, bytes,
+                            byteCount, rowStride, written, &debugTelemetry)) {
+                    return cellularity::render::makeRenderFrameResult(
+                            cellularity::render::RenderFrameOutcome::SkippedNotReady);
+                }
+                markMicroscopeFramePresented();
+                return cellularity::render::makeRenderFrameResult(
+                        cellularity::render::RenderFrameOutcome::Presented,
+                        cellularity::render::kPrimaryContentPresented);
+            }
+#endif
+            if (!mRenderSession->drawMicroscopeIntoRgba(presentation, bytes,
+                        byteCount, rowStride, written)) {
+                return cellularity::render::makeRenderFrameResult(
+                        cellularity::render::RenderFrameOutcome::SkippedNotReady);
+            }
+            markMicroscopeFramePresented();
+            return cellularity::render::makeRenderFrameResult(
+                    cellularity::render::RenderFrameOutcome::Presented,
+                    cellularity::render::kPrimaryContentPresented);
+        }
 #ifdef CELLULARITY_PERFORMANCE_HUD
         cellularity::render::RenderFrameResult result;
         if (mPerformanceHudEnabled.load(std::memory_order_relaxed)) {
@@ -943,6 +1132,28 @@ NativeCellularityController::drawMicroscope() {
     // so ordinary worker preparation overlaps it instead of missing a complete
     // display interval. It is not a wait on the worker.
     mInteraction->paceBeforeDraw();
+    if (destination == FrameDestination::RgbaBuffer) {
+        const NativeViewport& viewport = mInteraction->viewport();
+        if (!viewport.isReady() || viewport.viewWidth() == 0.0f
+                || viewport.viewHeight() == 0.0f) {
+            return cellularity::render::makeRenderFrameResult(
+                    cellularity::render::RenderFrameOutcome::SkippedNotReady);
+        }
+        const std::array<float, 16> matrix =
+                viewport.worldMatrix(cellularity::app::identityMatrix());
+        const cellularity::render::RenderPresentationState presentation =
+                cellularity::app::snapshotPresentation(viewport, matrix,
+                        mInteraction->nextBackgroundColor());
+        if (!mRenderSession->drawMicroscopeIntoRgba(presentation, bytes,
+                    byteCount, rowStride, written)) {
+            return cellularity::render::makeRenderFrameResult(
+                    cellularity::render::RenderFrameOutcome::SkippedNotReady);
+        }
+        mInteraction->markDrawFrameConsumed();
+        return cellularity::render::makeRenderFrameResult(
+                cellularity::render::RenderFrameOutcome::Presented,
+                cellularity::render::kPrimaryContentPresented);
+    }
     const cellularity::render::RenderFrameResult result =
             mRenderSession->drawMicroscope(
                     mInteraction->viewport(),

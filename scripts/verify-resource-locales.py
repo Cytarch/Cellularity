@@ -182,6 +182,15 @@ UI_LITERAL_ALLOWLIST = {
         "compose-text",
         "0.0",
     ): (1, "locale-neutral editable-number example"),
+    (
+        "app/src/main/java/com/cytarch/cellularity/ui/main_menu/screens/StoredFilePreview.kt",
+        "ui-text-parameter",
+        "stored-file-preview",
+    ): (
+        1,
+        "animateFloatAsState debug label: read by the animation inspector, never "
+        "rendered, so there is nothing to translate",
+    ),
 }
 
 HTML_TAG = re.compile(r"</?[A-Za-z][^>]*>")
@@ -612,7 +621,15 @@ def verify_shared_resource_references(
 
     imported_names: set[str] = set()
     referenced_names: set[str] = set()
-    for source_root in (REPO_ROOT / "shared/src", REPO_ROOT / "app/src/main"):
+    # Every module that draws the shared interface counts as a consumer. The desktop port was
+    # missing from this list, and the check then reported keys as unconsumed when the only place
+    # they are used is the desktop gene editor -- a gate that names the wrong problem is worse
+    # than one that stays quiet, because it invites a fix in the wrong file.
+    for source_root in (
+        REPO_ROOT / "shared/src",
+        REPO_ROOT / "app/src/main",
+        REPO_ROOT / "desktop/src/main",
+    ):
         for source_path in source_root.rglob("*.kt"):
             source = source_path.read_text(encoding="utf-8")
             imported_names.update(SHARED_RESOURCE_IMPORT.findall(source))

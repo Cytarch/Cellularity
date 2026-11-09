@@ -171,13 +171,26 @@ private val CustomDarkColorScheme = darkColorScheme(
     background = BackgroundColor
 )
 
+// `surface` is taken from the background the user chose, and it is set explicitly in all four
+// schemes. It is the one colour that must not be left to a default, because leaving it out is
+// what produced a white rectangle on a dark theme: `background` was set from the settings,
+// `surface` fell back to the library's own near-white, and every panel and card that paints
+// itself on a surface came out bright on a dark background. The settings on this machine ask for
+// #505050 and the panels were drawn in #FFFBFE.
+//
+// The schemes also have to agree with the darkness of the colours they are given. The default
+// theme colours are dark -- a #505050 background and a #303030 container -- and `darkTheme`
+// defaults to false, so they were being placed in a light scheme. Setting `surface` from the
+// background fixes the visible half of that; the two schemes exist so a caller can say which one
+// the colours belong to.
 private fun CellularityThemeColors.toLightColorScheme() = lightColorScheme(
     primary = parseThemeColor(primary, PrimaryColor),
     secondary = parseThemeColor(secondary, SecondaryColor),
     primaryContainer = parseThemeColor(primaryContainer, PrimaryContainer),
     surfaceVariant = parseThemeColor(surfaceVariant, SurfaceVariant),
     onSurfaceVariant = parseThemeColor(onSurfaceVariant, OnSurfaceVariant),
-    background = parseThemeColor(background, BackgroundColor)
+    background = parseThemeColor(background, BackgroundColor),
+    surface = parseThemeColor(background, BackgroundColor)
 )
 
 private fun CellularityThemeColors.toDarkColorScheme() = darkColorScheme(
@@ -186,7 +199,8 @@ private fun CellularityThemeColors.toDarkColorScheme() = darkColorScheme(
     primaryContainer = parseThemeColor(primaryContainer, PrimaryContainer),
     surfaceVariant = parseThemeColor(surfaceVariant, SurfaceVariant),
     onSurfaceVariant = parseThemeColor(onSurfaceVariant, OnSurfaceVariant),
-    background = parseThemeColor(background, BackgroundColor)
+    background = parseThemeColor(background, BackgroundColor),
+    surface = parseThemeColor(background, BackgroundColor)
 )
 
 private fun parseThemeColor(value: String, fallback: Color): Color {

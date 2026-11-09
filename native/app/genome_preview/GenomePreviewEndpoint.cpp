@@ -49,9 +49,12 @@ cellularity::render::RenderFrameCaptureMetadata makePreviewCaptureMetadata(const
 } // namespace
 
 GenomePreviewEndpoint::GenomePreviewEndpoint(std::uint64_t generation, int maximumCellCount)
-        : mGeneration(generation), mFacade(std::make_unique<NativeGenomePreviewFacade>(maximumCellCount)) {
+        : mGeneration(generation), mMaximumCellCount(maximumCellCount), mFacade(std::make_unique<NativeGenomePreviewFacade>(maximumCellCount)) {
     if (generation == 0) {
         throw std::invalid_argument("Genome Preview endpoint generation is zero");
+    }
+    if (maximumCellCount <= 0) {
+        throw std::invalid_argument("Genome Preview endpoint Cell limit is not positive");
     }
     mAcknowledgment.endpointGeneration = generation;
 }
@@ -62,6 +65,10 @@ GenomePreviewEndpoint::~GenomePreviewEndpoint() {
 
 std::uint64_t GenomePreviewEndpoint::generation() const noexcept {
     return mGeneration;
+}
+
+int GenomePreviewEndpoint::maximumCellCount() const noexcept {
+    return mMaximumCellCount;
 }
 
 std::uint64_t GenomePreviewEndpoint::surfaceCreated() noexcept {
@@ -263,6 +270,42 @@ void GenomePreviewEndpoint::applyContentOnRenderOwner(NativeCellularityControlle
     mAcknowledgment.appliedContentRevision = content->revision;
     mAcknowledgment.cellCountContentRevision = content->revision;
     mAcknowledgment.previewCellCount = world.mCellData.mCellCount;
+}
+
+std::size_t GenomePreviewEndpoint::drawIntoRgba(
+        NativeCellularityController& controller,
+        std::uint8_t* destination,
+        std::size_t destinationSize,
+        std::size_t rowStride,
+        bool& wrote) {
+    wrote = false;
+    if (mFacade == nullptr || controller.mRenderSession == nullptr) {
+        return 0;
+    }
+    // The same step every presented frame begins with, and for the same reason: the genome, the
+    // view and the person's gestures wait in the ingress until the render owner takes them, and a
+    // frame drawn without taking them is a frame of whatever the world held before -- an empty
+    // dish, a camera nobody moved. Asked for here rather than by the caller because the caller is
+    // a host that knows nothing about ingress, and a second place that applied pending state
+    // would be a second place for it to be applied differently.
+    applyPendingOnRenderOwner(controller);
+    std::size_t bytes = 0;
+    {
+        auto access = controller.writeWorld();
+        NativeWorldContext context{access.world(), controller.mInteraction->viewport()};
+        bytes = mFacade->drawIntoRgba(context,
+                controller.mRenderSession->surfaceSession(),
+                destination,
+                destinationSize,
+                rowStride,
+                wrote);
+    }
+    if (wrote) {
+        // The camera the picture was taken through is published with it, so a caller that wants
+        // to remember where somebody left the view remembers the view that this frame shows.
+        publishViewportAcknowledgment(controller);
+    }
+    return bytes;
 }
 
 void GenomePreviewEndpoint::applyViewOnRenderOwner(NativeCellularityController& controller, const std::shared_ptr<const GenomePreviewViewSnapshot>& view) {

@@ -34,7 +34,16 @@ namespace {
 constexpr std::uint64_t kEstimateHeadroomNumerator = 5;
 constexpr std::uint64_t kEstimateHeadroomDenominator = 4;
 constexpr std::uint64_t kMinimumEstimateHeadroomBytes = 8ULL * 1024ULL * 1024ULL;
-constexpr std::uint64_t kPhysicalMemoryBudgetDivisor = 4;
+#if defined(_WIN32)
+constexpr std::uint64_t kPhysicalMemoryBudgetNumerator = 3;
+constexpr std::uint64_t kPhysicalMemoryBudgetDenominator = 4;
+#elif defined(__ANDROID__)
+constexpr std::uint64_t kPhysicalMemoryBudgetNumerator = 1;
+constexpr std::uint64_t kPhysicalMemoryBudgetDenominator = 2;
+#else
+constexpr std::uint64_t kPhysicalMemoryBudgetNumerator = 1;
+constexpr std::uint64_t kPhysicalMemoryBudgetDenominator = 4;
+#endif
 constexpr std::uint64_t k64BitMaximumWorldAllocationBudgetBytes =
         1024ULL * 1024ULL * 1024ULL;
 constexpr std::uint64_t k32BitMaximumWorldAllocationBudgetBytes =
@@ -267,10 +276,18 @@ RuntimeLimits runtimeLimitsForDevice(
         unsigned int addressBits,
         std::uint64_t physicalMemoryBytes) {
     RuntimeLimits limits = runtimeLimitsForAddressBits(addressBits);
-    if (physicalMemoryBytes >= kPhysicalMemoryBudgetDivisor) {
+    if (physicalMemoryBytes >= kPhysicalMemoryBudgetDenominator) {
+        const std::uint64_t sharedBudget = physicalMemoryBytes
+                / kPhysicalMemoryBudgetDenominator * kPhysicalMemoryBudgetNumerator;
+#if defined(_WIN32) || defined(__ANDROID__)
+        // Android and Windows use their explicit RAM shares directly. The ABI constants remain
+        // only as a fallback when physical memory cannot be queried, and for explicit-ABI estimates.
+        limits.worldAllocationBudgetBytes = sharedBudget;
+#else
         limits.worldAllocationBudgetBytes = std::min(
                 limits.worldAllocationBudgetBytes,
-                physicalMemoryBytes / kPhysicalMemoryBudgetDivisor);
+                sharedBudget);
+#endif
     }
     return limits;
 }

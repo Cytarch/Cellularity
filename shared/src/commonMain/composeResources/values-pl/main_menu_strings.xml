@@ -9,4 +9,6 @@
 
     <string name="main_menu_tab_about">O aplikacji</string>
 
+    <string name="main_menu_import_action">Importuj plik</string>
+
 </resources>

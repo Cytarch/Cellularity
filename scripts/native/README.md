@@ -2,6 +2,36 @@
 
 The host build uses Clang, Ninja, lld, CMake, and zlib. Renderer shader validation uses `glslangValidator`. If ccache is installed, the scripts use it automatically.
 
+## Windows host toolchain
+
+The scripts in this directory are bash and target Linux. On Windows, use an x64 MSVC developer shell with CMake, Ninja, JDK 21, and vcpkg. Install the host dependencies through vcpkg:
+
+```powershell
+vcpkg install zlib:x64-windows vulkan-headers:x64-windows vulkan-loader:x64-windows shaderc:x64-windows 'spirv-tools[tools]:x64-windows'
+```
+
+CMake resolves zlib through `find_package(ZLIB REQUIRED)` and links `ZLIB::ZLIB`. Vulkan shaders require `glslc` and `spirv-val`; vcpkg's `shaderc` and `spirv-tools[tools]` provide them, and the LunarG Vulkan SDK is an alternative.
+
+Configure and build the host targets:
+
+```powershell
+cmake -S native -B build/native-win -G Ninja `
+  -DCMAKE_BUILD_TYPE=Release `
+  -DVCPKG_TARGET_TRIPLET=x64-windows `
+  -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake"
+cmake --build build/native-win
+```
+
+Build and run the semantic contract alone:
+
+```powershell
+cmake --build build/native-win --target cellularity_semantic_contract_tests
+$env:PATH = "$env:VCPKG_ROOT\installed\x64-windows\bin;$env:PATH"
+ctest --test-dir build/native-win -R cellularity_semantic_contract_tests --output-on-failure
+```
+
+Use `ctest --test-dir build/native-win --output-on-failure` for the complete configured host suite. The vcpkg `bin` directory must remain on `PATH` while tests load the shared zlib runtime.
+
 Validate the canonical renderer asset inventory and compile/link every shader pair:
 
 ```bash
@@ -34,12 +64,7 @@ steady-allocation executable is the sole omitted native test because it
 intentionally replaces global `new/delete`, which conflicts with TSan's own
 allocation interceptors; ordinary and ASan/UBSan suites continue to run it.
 
-Project-owned targets compile with `-Wall -Wextra -Wpedantic`. Sanitizer
-configurations additionally use `-Werror`; bundled dependencies keep their own
-warning policy. The compiler and associated LLVM tools can be pinned through
-the `CELLULARITY_NATIVE_*` environment variables. IPO/LTO is enabled only for
-supported optimized builds and is disabled in sanitizer and decoder robustness
-configurations.
+Project-owned Clang/GCC targets compile with `-Wall -Wextra -Wpedantic`; MSVC targets use `/W4`. Sanitizer configurations additionally use `-Werror`, and `CELLULARITY_WARNINGS_AS_ERRORS` maps to `-Werror` or `/WX` by compiler. Bundled dependencies keep their own warning policy. The compiler and associated LLVM tools can be pinned through the `CELLULARITY_NATIVE_*` environment variables. IPO/LTO is enabled only for supported optimized builds and is disabled in sanitizer and decoder robustness configurations.
 
 This also verifies the bounded native diagnostics writer independently: one
 owner-only fixed report, expected metadata, and the 4 KiB native size limit.

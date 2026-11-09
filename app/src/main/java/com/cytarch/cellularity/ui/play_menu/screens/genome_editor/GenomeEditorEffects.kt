@@ -2,27 +2,22 @@ package com.cytarch.cellularity.ui.play_menu.screens.genome_editor
 
 import com.cytarch.cellularity.platform.files.AndroidCellularityFileRepository
 import com.cytarch.cellularity.platform.render.preview.GenomePreviewCaptureCoordinator
-import com.cytarch.cellularity.shared.files.StorageError
-import com.cytarch.cellularity.shared.files.StorageErrorCode
 import com.cytarch.cellularity.shared.files.StorageResult
 import com.cytarch.cellularity.shared.model.GenomeDraft
-import com.cytarch.cellularity.shared.ui.play.genome_editor.GenomeEditorAction
 import com.cytarch.cellularity.shared.ui.play.genome_editor.GenomeEditorConfig
-import com.cytarch.cellularity.shared.ui.play.genome_editor.GenomeEditorEffect
-import com.cytarch.cellularity.shared.ui.play.genome_editor.GenomeFileFailureReason
-import com.cytarch.cellularity.shared.ui.play.genome_editor.GenomeLoadChoice
-import com.cytarch.cellularity.shared.ui.play.genome_editor.GenomeLoadOrigin
+import com.cytarch.cellularity.shared.ui.play.genome_editor.GenomeEditorEffectHandler
+import com.cytarch.cellularity.shared.ui.play.genome_editor.GenomeEditorFileGateway
+import com.cytarch.cellularity.shared.ui.play.genome_editor.GenomeEditorLayoutMemory
+import com.cytarch.cellularity.shared.ui.play.genome_editor.GenomeProvider
 
-interface GenomeProvider {
-    val genome: GenomeDraft?
-}
-
-internal interface GenomeEditorFileGateway {
-    suspend fun listGenomeNames(): StorageResult<List<String>>
-    suspend fun readGenomeDraft(name: String): StorageResult<GenomeDraft>
-    suspend fun writeGenomeDraft(name: String, genome: GenomeDraft): StorageResult<Unit>
-}
-
+/**
+ * The phone's answer to the editor's three file operations.
+ *
+ * The editor itself is shared, so what stays here is only what is Android about storing a
+ * genome: the repository that writes into the app's own storage, and the preview capture
+ * that a saved genome carries with it. Saving on the phone is therefore a write plus a
+ * render, which is why this is not simply a pass-through to the repository.
+ */
 private class AndroidGenomeEditorFileGateway(
     private val repository: AndroidCellularityFileRepository,
     private val previewCapture: GenomePreviewCaptureCoordinator
@@ -44,109 +39,6 @@ private class AndroidGenomeEditorFileGateway(
     )
 }
 
-/** Executes Android storage/runtime effects without exposing them to reducer or section UI. */
-class GenomeEditorEffectHandler internal constructor(
-    private val fileGateway: GenomeEditorFileGateway,
-    private val genomeProvider: GenomeProvider,
-    private val defaultGenomeFactory: () -> GenomeDraft =
-        GenomeEditorViewModel::createRandomizedEditorGenome
-) {
-    internal constructor(
-        fileRepository: AndroidCellularityFileRepository,
-        genomeProvider: GenomeProvider,
-        previewCapture: GenomePreviewCaptureCoordinator,
-        defaultGenomeFactory: () -> GenomeDraft =
-            GenomeEditorViewModel::createRandomizedEditorGenome
-    ) : this(
-        AndroidGenomeEditorFileGateway(fileRepository, previewCapture),
-        genomeProvider,
-        defaultGenomeFactory
-    )
-
-    suspend fun handle(effect: GenomeEditorEffect): GenomeEditorAction = when (effect) {
-        GenomeEditorEffect.ListStoredGenomes -> listStoredGenomes()
-        is GenomeEditorEffect.LoadGenome -> loadGenome(effect.choice)
-        is GenomeEditorEffect.SaveGenome -> saveGenome(effect)
-    }
-
-    private suspend fun listStoredGenomes(): GenomeEditorAction =
-        when (val result = fileGateway.listGenomeNames()) {
-            is StorageResult.Success -> GenomeEditorAction.LoadChoicesReady(result.value)
-            is StorageResult.Failure -> GenomeEditorAction.LoadFailed(
-                GenomeFileFailureReason.READ_FAILED,
-                result.error.detail
-            )
-        }
-
-    private suspend fun loadGenome(choice: GenomeLoadChoice): GenomeEditorAction =
-        when (choice) {
-            GenomeLoadChoice.Microscope -> loadMicroscopeGenome()
-            GenomeLoadChoice.DefaultGenome -> GenomeEditorAction.LoadSucceeded(
-                genome = defaultGenomeFactory(),
-                origin = GenomeLoadOrigin.DEFAULT_GENOME
-            )
-            is GenomeLoadChoice.Stored -> when (val result = fileGateway.readGenomeDraft(choice.name)) {
-                is StorageResult.Success -> GenomeEditorAction.LoadSucceeded(
-                    genome = result.value,
-                    origin = GenomeLoadOrigin.STORED_FILE,
-                    name = choice.name
-                )
-                is StorageResult.Failure -> GenomeEditorAction.LoadFailed(
-                    result.error.toGenomeReadFailure(),
-                    result.error.detail
-                )
-            }
-        }
-
-    private fun loadMicroscopeGenome(): GenomeEditorAction {
-        val genome = genomeProvider.genome
-            ?: return GenomeEditorAction.LoadFailed(
-                GenomeFileFailureReason.NO_MICROSCOPE_CELL
-            )
-        return GenomeEditorAction.LoadSucceeded(
-            genome = genome,
-            origin = GenomeLoadOrigin.MICROSCOPE
-        )
-    }
-
-    private suspend fun saveGenome(
-        effect: GenomeEditorEffect.SaveGenome
-    ): GenomeEditorAction = when (val result = fileGateway.writeGenomeDraft(
-        effect.name,
-        effect.snapshot
-    )) {
-        is StorageResult.Success -> GenomeEditorAction.SaveSucceeded(effect.name)
-        is StorageResult.Failure -> GenomeEditorAction.SaveFailed(
-            result.error.toGenomeWriteFailure(),
-            result.error.detail
-        )
-    }
-}
-
-private fun StorageError.toGenomeReadFailure(): GenomeFileFailureReason = when (code) {
-    StorageErrorCode.BAD_NAME -> GenomeFileFailureReason.BAD_NAME
-    StorageErrorCode.NOT_FOUND -> GenomeFileFailureReason.NOT_FOUND
-    StorageErrorCode.NEWER_VERSION -> GenomeFileFailureReason.NEWER_VERSION
-    StorageErrorCode.TOO_LARGE -> GenomeFileFailureReason.TOO_LARGE
-    StorageErrorCode.UNSUPPORTED_FORMAT,
-    StorageErrorCode.CORRUPTED -> GenomeFileFailureReason.INVALID_GENOME
-    StorageErrorCode.NAME_EXISTS,
-    StorageErrorCode.PERMISSION_REVOKED,
-    StorageErrorCode.IO_FAILURE -> GenomeFileFailureReason.READ_FAILED
-}
-
-private fun StorageError.toGenomeWriteFailure(): GenomeFileFailureReason = when (code) {
-    StorageErrorCode.BAD_NAME -> GenomeFileFailureReason.BAD_NAME
-    StorageErrorCode.TOO_LARGE -> GenomeFileFailureReason.TOO_LARGE
-    StorageErrorCode.UNSUPPORTED_FORMAT,
-    StorageErrorCode.CORRUPTED,
-    StorageErrorCode.NEWER_VERSION -> GenomeFileFailureReason.INVALID_GENOME
-    StorageErrorCode.NOT_FOUND,
-    StorageErrorCode.NAME_EXISTS,
-    StorageErrorCode.PERMISSION_REVOKED,
-    StorageErrorCode.IO_FAILURE -> GenomeFileFailureReason.WRITE_FAILED
-}
-
 /** Retains Android preview resources and transient layout; editor data lives in [GenomeEditorViewModel]. */
 class GenomeEditorCoordinator(
     fileRepository: AndroidCellularityFileRepository,
@@ -154,10 +46,19 @@ class GenomeEditorCoordinator(
 ) {
     private val previewCapture = GenomePreviewCaptureCoordinator()
     val effectHandler = GenomeEditorEffectHandler(
-        fileRepository,
-        genomeProvider,
-        previewCapture
+        fileGateway = AndroidGenomeEditorFileGateway(fileRepository, previewCapture),
+        genomeProvider = genomeProvider,
+        defaultGenomeFactory = com.cytarch.cellularity.ui.play_menu.screens.genome_editor.GenomeEditorViewModel::createRandomizedEditorGenome
     )
+
+    /**
+     * Where the person left the preview: its size, and the camera inside it.
+     *
+     * Kept here rather than in the screen because the screen is shared now, and a preview that
+     * forgets the size it was dragged to is the sort of small betrayal that makes an editor feel
+     * like a form. The memory itself lives in the shared module, because both platforms want it.
+     */
+    val layout = GenomeEditorLayoutMemory()
 
     private var viewportState: FloatArray? = null
     private var previewHeightDp: Float? = null

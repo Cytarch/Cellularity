@@ -1,0 +1,111 @@
+#pragma once
+
+#include <array>
+#include <cstdint>
+#include <memory>
+#include <string>
+#include <vector>
+
+#include "app/microscope/render/MicroscopeDebugHud.h"
+#include "render/backend/RenderSurfaceSession.h"
+#include "render/backend/vulkan/NativeVulkanWindow.h"
+#include "render/backend/vulkan/VulkanBasicCellRenderer.h"
+#include "render/frame/PreparedRenderFrameView.h"
+
+namespace cellularity::render::vulkan {
+
+using ClearFrameResult = RenderFrameOutcome;
+
+/**
+ * Thread-confined Vulkan 1.0 microscope-world session.
+ *
+ * attachWindow always consumes the window reference it is given, including on
+ * failure. The window type is platform-neutral, so this session serves Android
+ * (ANativeWindow) and Windows (HWND) through the same code.
+ * Instance/device resources survive detachSurface. Completed off-screen capture
+ * targets also survive; the native surface, swapchain and swapchain-depth
+ * resources do not.
+ */
+class VulkanClearFrameSession final {
+public:
+    VulkanClearFrameSession(
+            std::vector<std::uint32_t> backgroundVertexSpirv,
+            std::vector<std::uint32_t> backgroundFragmentSpirv,
+            std::vector<std::uint32_t> densityFieldVertexSpirv,
+            std::vector<std::uint32_t> densityFieldFragmentSpirv,
+            std::array<VulkanCellShaderSpirv,
+                    kVulkanBasicCellProgramCount>
+                    cellShaderSpirv,
+            std::array<VulkanCellShaderSpirv, kVulkanWorldProgramCount>
+                    worldShaderSpirv,
+            NativeRenderTexturePayload dotTexture,
+            NativeRenderTexturePayload besselTexture);
+    ~VulkanClearFrameSession();
+
+    VulkanClearFrameSession(
+            const VulkanClearFrameSession&) = delete;
+    VulkanClearFrameSession& operator=(
+            const VulkanClearFrameSession&) = delete;
+
+    [[nodiscard]] bool attachWindow(
+            NativeVulkanWindowReference window, int width, int height);
+    void resizeSurface(int width, int height);
+    void detachSurface();
+    void setPerformanceProfilingEnabled(bool enabled);
+    [[nodiscard]] RenderFrameResult renderFrame();
+    [[nodiscard]] RenderFrameResult renderFrame(bool performanceHudEnabled);
+    [[nodiscard]] RenderFrameResult renderFrame(
+            const PreparedRenderFrameView& frame,
+            const RenderPresentationState& presentation);
+    [[nodiscard]] RenderFrameResult renderFrame(
+            const PreparedRenderFrameView& frame,
+            const RenderPresentationState& presentation,
+            const cellularity::microscope::MicroscopeDebugHudTelemetry*
+                    debugHudTelemetry);
+    [[nodiscard]] RenderPassStatus drawMicroscopeOffscreenPass(
+            const PreparedRenderFrameView& frame,
+            const RenderPresentationState& presentation,
+            const cellularity::microscope::MicroscopeDebugHudTelemetry*
+                    debugHudTelemetry = nullptr);
+    [[nodiscard]] RenderFrameResult renderClear(
+            const RenderViewportState& viewport,
+            const std::array<float, 4>& color);
+    [[nodiscard]] RenderFrameResult renderEnvironmentFieldPreview(
+            const EnvironmentFieldPreviewCommand& command);
+    void beginOffscreenRgba(
+            OffscreenRenderTarget target, int width, int height);
+    [[nodiscard]] std::vector<std::uint8_t> finishOffscreenRgba(
+            OffscreenRenderTarget target);
+    // Writes the finished image straight into caller storage at the caller's
+    // row stride, so a per-frame consumer never builds the intermediate image.
+    // Returns the number of bytes written.
+    [[nodiscard]] std::size_t finishOffscreenRgbaInto(
+            OffscreenRenderTarget target, int width, int height,
+            std::uint8_t* destination, std::size_t destinationSize,
+            std::size_t rowStride);
+    void cancelOffscreenRgba(OffscreenRenderTarget target) noexcept;
+    void beginGenomePreviewFrame(
+            int width, int height, bool fullyTransparentClear);
+    void drawGenomePreviewGrid(const GenomePreviewGridCommand& command);
+    void drawGenomePreviewTree(
+            const RenderPresentationState& presentation,
+            const PreparedRenderFrameView& frame,
+            const std::array<float, 16>& matrix,
+            PreparedFrameSpan<float> lineVertices,
+            const GenomePreviewDrawOptions& options);
+    void drawGenomePreview(const RenderPresentationState& presentation,
+            const PreparedRenderFrameView& frame,
+            const GenomePreviewDrawOptions& options);
+    [[nodiscard]] RenderFrameResult endGenomePreviewFrame();
+    [[nodiscard]] RenderPassStatus endGenomePreviewOffscreenPass();
+    void cancelGenomePreviewFrame() noexcept;
+    [[nodiscard]] bool hasAttachedSurface() const noexcept;
+
+    [[nodiscard]] std::string diagnostics() const;
+
+private:
+    struct Impl;
+    std::unique_ptr<Impl> mImpl;
+};
+
+} // namespace cellularity::render::vulkan

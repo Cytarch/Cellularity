@@ -12,6 +12,7 @@ import com.cytarch.cellularity.shared.model.CellularityError
 import com.cytarch.cellularity.shared.model.CellularityErrorCode
 import com.cytarch.cellularity.shared.model.EnvironmentSnapshot
 import com.cytarch.cellularity.shared.model.SimulationStats
+import com.cytarch.cellularity.shared.simulation.EnvironmentBatchCodec
 import com.cytarch.cellularity.shared.simulation.ApplyResult
 import com.cytarch.cellularity.shared.simulation.CellId
 import com.cytarch.cellularity.shared.simulation.EnvironmentPatch

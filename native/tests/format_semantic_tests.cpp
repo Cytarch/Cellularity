@@ -11,6 +11,7 @@
 #include <sstream>
 #include <stdexcept>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "core/CanonicalGene.h"
@@ -1699,6 +1700,80 @@ void testReleaseSaveLoadRoundTripsAndWriterPolicy() {
             "release inspection dish radius");
 }
 
+void testReopenStoredSubstratePreservesSavedWorld() {
+    // Opening a stored plate is the launcher's "continue this world" path: the file, not
+    // the caller's own guess at the plate's allocation, decides what comes back. The
+    // creation time is the sharpest probe for that, because a world that quietly restarts
+    // would be stamped with the current clock instead of the day the plate was made.
+    constexpr std::int64_t savedCreatedAtUnixMillis = 1712345678901LL;
+    Environment savedEnvironment =
+            Environment::constructDefaultEnvironment(12, 9, 2.5);
+    savedEnvironment.mIsPreviewMode = false;
+
+    std::unique_ptr<SimulationWorld> source =
+            std::make_unique<SimulationWorld>(false, savedEnvironment);
+    source->mCreatedAtUnixMillis = savedCreatedAtUnixMillis;
+    source->mTime = 37.5;
+    CellData& cells = source->mCellData;
+    cells.replaceActiveCellCount(1);
+    const OrganismId organismId = cells.assignNewOrganism(0);
+    cells.mOrganismIds[0] = organismId;
+    cells.mPositionX[0] = 0.375;
+    cells.mPositionY[0] = -0.625;
+    cells.mPositionZ[0] = 0.008;
+    cells.mRadius[0] = 0.05;
+    cells.refreshRadiusSq(0);
+    cells.mMass[0] = CellData::MASS_PER_AREA * cells.mRadius[0] * cells.mRadius[0];
+    cells.mAge[0] = 3.25;
+    cells.mNitrates[0] = 0.4;
+    cellularity::FixedGenome genome{};
+    for (int gene = 0; gene < CellData::MAX_GENES_COUNT; gene++) {
+        genome[gene] = richGene(0, gene);
+    }
+    assertTrue(cells.replaceGenome(0, genome, GeneIndex(0)),
+            "saved plate fixture imports its Cell Genome");
+    cells.refreshActiveCellType(0);
+
+    ScopedTemporaryFile substrateFile("-reopen.substrate");
+    writeSubstratePath(substrateFile.path.string(), *source);
+
+    // Deliberately unlike the saved plate: a much smaller dish with fewer slots. If the
+    // loader preferred this fallback, every allocation assertion below would report the
+    // fallback's numbers, so the two have to disagree for the test to mean anything.
+    Environment fallback = Environment::constructDefaultEnvironment(2, 3, 0.5);
+    assertTrue(fallback.maxCellCount != savedEnvironment.maxCellCount
+                    && fallback.maxFoodCount != savedEnvironment.maxFoodCount
+                    && fallback.mRadius != savedEnvironment.mRadius,
+            "reopen fallback must differ from the saved plate to be a real check");
+
+    NativeSubstrateLoadResult loaded = loadNativeSubstrateFromPath(
+            substrateFile.path.string(), /*previewMode=*/false, fallback);
+    assertTrue(loaded.world != nullptr,
+            "reopening a saved plate returned no world");
+    // Only the file carries this value, so it can neither be re-dated by the clock nor
+    // taken from the fallback: a mismatch means the saved history was restarted.
+    assertEqual(loaded.world->mCreatedAtUnixMillis, savedCreatedAtUnixMillis,
+            "reopening a saved plate keeps when the plate was created");
+    assertEqual(loaded.world->mEnvironment.maxCellCount,
+            savedEnvironment.maxCellCount,
+            "reopened plate keeps the Cell allocation it was saved with");
+    assertEqual(loaded.world->mEnvironment.maxFoodCount,
+            savedEnvironment.maxFoodCount,
+            "reopened plate keeps the Food allocation it was saved with");
+    assertNear(loaded.world->mEnvironment.mRadius,
+            savedEnvironment.mRadius,
+            DOUBLE_TOLERANCE,
+            "reopened plate keeps the dish radius it was saved with");
+    assertEqual(loaded.world->mCellData.mCellCount, cells.mCellCount,
+            "reopening a saved plate restores its Cells");
+    assertNear(loaded.world->mCellData.mPositionX[0], cells.mPositionX[0],
+            DOUBLE_TOLERANCE,
+            "reopened plate keeps the Cell's X position");
+    assertNear(loaded.world->mCellData.mPositionY[0], cells.mPositionY[0],
+            DOUBLE_TOLERANCE,
+            "reopened plate keeps the Cell's Y position");
+}
+
 void testJavaObjectStreamCorpus() {
     int tested = 0;
     for (const auto& spec : cellularity::test_fixtures::formatFixtureSpecs()) {
@@ -1800,15 +1875,46 @@ int main(int argc, char** argv) {
             printLegacyEffectiveStateDigests();
             return 0;
         }
-        testLegacySubstrateCorpusAndMigration();
-        testLegacyEffectiveStateOracle();
-        testAcceptedLegacyGenesEnterCanonicalBoundary();
-        testSemanticOracleRejectsChangedExpectedField();
-        testLegacyGenomeCorpus();
-        testDynamicGenomeBoundaryRoundTrips();
-        testReleaseSaveLoadRoundTripsAndWriterPolicy();
-        testJavaObjectStreamCorpus();
-        testNewerVersionTypedErrors();
+        if (argc > 2) {
+            std::cerr << "usage: format_semantic_tests [test name]\n";
+            return 2;
+        }
+        // Naming one test runs only that test, which keeps a single contract checkable
+        // without the whole corpus sweep; an unnamed run still covers everything.
+        const std::string requestedTest =
+                argc == 2 ? std::string(argv[1]) : std::string();
+        const std::vector<std::pair<std::string, void (*)()>> tests{
+                {"testLegacySubstrateCorpusAndMigration",
+                        testLegacySubstrateCorpusAndMigration},
+                {"testLegacyEffectiveStateOracle",
+                        testLegacyEffectiveStateOracle},
+                {"testAcceptedLegacyGenesEnterCanonicalBoundary",
+                        testAcceptedLegacyGenesEnterCanonicalBoundary},
+                {"testSemanticOracleRejectsChangedExpectedField",
+                        testSemanticOracleRejectsChangedExpectedField},
+                {"testLegacyGenomeCorpus", testLegacyGenomeCorpus},
+                {"testDynamicGenomeBoundaryRoundTrips",
+                        testDynamicGenomeBoundaryRoundTrips},
+                {"testReleaseSaveLoadRoundTripsAndWriterPolicy",
+                        testReleaseSaveLoadRoundTripsAndWriterPolicy},
+                {"testReopenStoredSubstratePreservesSavedWorld",
+                        testReopenStoredSubstratePreservesSavedWorld},
+                {"testJavaObjectStreamCorpus", testJavaObjectStreamCorpus},
+                {"testNewerVersionTypedErrors", testNewerVersionTypedErrors}
+        };
+        int executed = 0;
+        for (const auto& test : tests) {
+            if (!requestedTest.empty() && requestedTest != test.first) {
+                continue;
+            }
+            test.second();
+            executed++;
+        }
+        if (executed == 0) {
+            std::cerr << "format semantic tests: no test named "
+                      << requestedTest << '\n';
+            return 2;
+        }
         std::cout << "format semantic tests passed\n";
         return 0;
     } catch (const std::exception& error) {

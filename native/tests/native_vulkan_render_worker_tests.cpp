@@ -60,6 +60,7 @@ using cellularity::app::render_worker::SurfaceDetachReason;
 using cellularity::app::render_worker::WorkerCommandAdmission;
 using cellularity::app::render_worker::WorkerContentKind;
 using cellularity::render::RenderFrameOutcome;
+using cellularity::render::abi::VulkanBackendAssetSource;
 using cellularity::render::abi::VulkanBackendSession;
 using cellularity::render::abi::VulkanBackendSessionCreateResult;
 using cellularity::render::abi::VulkanBackendSessionFactory;
@@ -299,7 +300,7 @@ CellularityVulkanOperationStatusV1 hasAttachedSurface(
 }
 
 CellularityVulkanOperationStatusV1 attachWindow(
-        CellularityVulkanSessionHandle session, ANativeWindow*,
+        CellularityVulkanSessionHandle session, CellularityVulkanNativeWindowHandleV1,
         std::int32_t, std::int32_t) {
     auto& fake = backend(session);
     fake.lastOperationThread = std::this_thread::get_id();
@@ -562,10 +563,12 @@ public:
         }
         try {
             gCreatingBackend.store(&mBackend, std::memory_order_release);
+            // The session takes a described asset source rather than an Android
+            // asset manager, so this fixture needs no Android type.
             result.session = VulkanBackendSession::create(
                     &mApi,
-                    reinterpret_cast<AAssetManager*>(
-                            static_cast<std::uintptr_t>(0x1000)));
+                    VulkanBackendAssetSource::fromFilesystem(
+                            "unused-test-asset-root"));
         } catch (...) {
             result.error.code =
                     CELLULARITY_VULKAN_ERROR_BACKEND_INITIALIZATION_FAILED_V1;
@@ -764,13 +767,13 @@ public:
 
 std::atomic<int> gReleasedWindows{0};
 
-void releaseWindow(ANativeWindow*) noexcept {
+void releaseWindow(CellularityVulkanNativeWindowHandleV1) noexcept {
     ++gReleasedWindows;
 }
 
 NativeVulkanSurfaceLease surface(std::uintptr_t identity) {
     return NativeVulkanSurfaceLease(
-            reinterpret_cast<ANativeWindow*>(identity), releaseWindow);
+            reinterpret_cast<CellularityVulkanNativeWindowHandleV1>(identity), releaseWindow);
 }
 
 template <typename Predicate>
@@ -1044,7 +1047,7 @@ void testSurfaceLeaseOwnership() {
     {
         auto consumed = surface(2);
         assertTrue(consumed.takeForBackend()
-                        == reinterpret_cast<ANativeWindow*>(2),
+                        == reinterpret_cast<CellularityVulkanNativeWindowHandleV1>(2),
                 "Backend handoff must return the acquired window");
     }
     assertTrue(gReleasedWindows == 1,

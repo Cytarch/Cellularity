@@ -22,43 +22,20 @@
 
 #include "core/SimulationMemoryPolicy.h"
 #include "formats/SnapshotCodecSupport.h"
+#include "formats/SnapshotTemporaryPath.h"
 
 namespace cellularity::snapshot_codec {
 
 TemporarySnapshotFile::TemporarySnapshotFile(const std::string& adjacentPath) {
-#if defined(_WIN32)
-    char temporaryName[L_tmpnam_s] = {};
-    if (tmpnam_s(temporaryName, sizeof(temporaryName)) != 0) {
-        failDecode(DecodeErrorCode::IoFailure,
-                "Could not create a temporary substrate path");
-    }
-    mPath = temporaryName;
-    std::ofstream create(mPath, std::ios::binary | std::ios::trunc);
-    if (!create) {
+    // The temporary file is created beside its target so that placing it is a
+    // same-filesystem rename. A system temp directory would make the placement
+    // non-atomic and, on Windows, would land the file outside the directory whose
+    // permissions the caller expects.
+    mPath = makeUniqueAdjacentPath(adjacentPath, ".cellularity-load-");
+    if (mPath.empty()) {
         failDecode(DecodeErrorCode::IoFailure,
                 "Could not create a temporary substrate file");
     }
-#else
-    std::filesystem::path parent = std::filesystem::path(adjacentPath).parent_path();
-    if (parent.empty()) {
-        parent = ".";
-    }
-    std::string pattern = (parent / ".cellularity-load-XXXXXX").string();
-    std::vector<char> writablePattern(pattern.begin(), pattern.end());
-    writablePattern.push_back('\0');
-    const int descriptor = mkstemp(writablePattern.data());
-    if (descriptor < 0) {
-        failDecode(DecodeErrorCode::IoFailure,
-                "Could not create a temporary substrate file");
-    }
-    mPath = writablePattern.data();
-    if (close(descriptor) != 0) {
-        std::remove(mPath.c_str());
-        mPath.clear();
-        failDecode(DecodeErrorCode::IoFailure,
-                "Could not close a temporary substrate file");
-    }
-#endif
 }
 
 TemporarySnapshotFile::~TemporarySnapshotFile() {

@@ -364,6 +364,14 @@ ControllerRebindTicket::ControllerRebindTicket(
 }
 
 ControllerRebindTicket::~ControllerRebindTicket() {
+    releaseOwnedTransaction();
+    consume();
+}
+
+// Releases the transaction this ticket currently owns, if it still owns it.
+// Extracted verbatim from the destructor so move assignment cannot silently drop
+// the rollback that the destructor guarantees.
+void ControllerRebindTicket::releaseOwnedTransaction() noexcept {
     auto owner = mOwner.lock();
     std::shared_ptr<RebindWakeControl> wake;
     if (owner != nullptr && mTransaction != 0
@@ -386,7 +394,24 @@ ControllerRebindTicket::~ControllerRebindTicket() {
             wake->notifyRebindReady();
         }
     }
+}
+
+ControllerRebindTicket& ControllerRebindTicket::operator=(
+        ControllerRebindTicket&& other) noexcept {
+    if (this == &other) {
+        return *this;
+    }
+    // Release what this ticket still owned before taking the other's state, so a
+    // replaced ticket keeps the destructor's rollback guarantee, then consume the
+    // source so the ticket it came from can no longer commit.
+    releaseOwnedTransaction();
     consume();
+
+    mOwner = std::move(other.mOwner);
+    mTransaction = other.mTransaction;
+    mExpectedControllerGeneration = other.mExpectedControllerGeneration;
+    other.consume();
+    return *this;
 }
 
 bool ControllerRebindTicket::valid() const noexcept {

@@ -87,11 +87,13 @@ import com.cytarch.cellularity.shared.generated.resources.file_collection_rename
 import com.cytarch.cellularity.shared.generated.resources.file_collection_share_action
 import com.cytarch.cellularity.shared.generated.resources.file_collection_sort_ascending
 import com.cytarch.cellularity.shared.generated.resources.file_collection_sort_descending
+import com.cytarch.cellularity.shared.generated.resources.file_collection_sort_field_with_direction
 import com.cytarch.cellularity.shared.generated.resources.file_collection_switch_to_grid_view_content_description
 import com.cytarch.cellularity.shared.generated.resources.file_collection_switch_to_list_view_content_description
 import com.cytarch.cellularity.shared.settings.CollectionLayoutMode
 import com.cytarch.cellularity.shared.settings.CollectionSortDirection
 import com.cytarch.cellularity.shared.ui.components.CellularityAlertDialog
+import com.cytarch.cellularity.shared.ui.components.confirmOnEnter
 import com.cytarch.cellularity.shared.ui.theme.CellularityDimensions
 import com.cytarch.cellularity.shared.ui.theme.cellularityOutlinedTextFieldColors
 import org.jetbrains.compose.resources.stringResource
@@ -167,7 +169,13 @@ internal fun <SortField> FileCollectionToolbar(
                     )
                     Spacer(Modifier.width(dimensions.small))
                     Text(
-                        text = "$fieldLabel ${sortDirection.arrow}",
+                        // The label and the arrow are one phrase, so the language gets to
+                        // put the arrow where it belongs rather than having it appended.
+                        text = stringResource(
+                            Res.string.file_collection_sort_field_with_direction,
+                            fieldLabel,
+                            sortDirection.arrow
+                        ),
                         modifier = Modifier.widthIn(max = 112.dp),
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         style = MaterialTheme.typography.labelLarge,
@@ -653,6 +661,9 @@ internal fun FileCollectionRenameDialog(
     onConfirm: (String) -> Unit
 ) {
     var text by remember(initialName) { mutableStateOf(initialName) }
+    fun confirmName() {
+        if (text.isNotBlank()) onConfirm(text.trim())
+    }
     CellularityAlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(title) },
@@ -661,12 +672,14 @@ internal fun FileCollectionRenameDialog(
                 value = text,
                 onValueChange = { text = it },
                 singleLine = true,
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .confirmOnEnter(onConfirm = ::confirmName),
                 colors = cellularityOutlinedTextFieldColors()
             )
         },
         confirmButton = {
-            TextButton(onClick = { if (text.isNotBlank()) onConfirm(text.trim()) }) {
+            TextButton(onClick = ::confirmName) {
                 Text(stringResource(Res.string.common_ok_action))
             }
         },

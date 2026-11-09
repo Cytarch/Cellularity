@@ -35,6 +35,7 @@ import com.cytarch.cellularity.shared.generated.resources.main_menu_tab_about
 import com.cytarch.cellularity.shared.generated.resources.main_menu_tab_experiments
 import com.cytarch.cellularity.shared.generated.resources.main_menu_tab_gene_bank
 import com.cytarch.cellularity.shared.generated.resources.main_menu_tab_settings
+import com.cytarch.cellularity.shared.generated.resources.main_menu_import_action
 import com.cytarch.cellularity.shared.ui.theme.CellularityDimensions
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
@@ -46,6 +47,19 @@ fun MainMenuScreen(
     onAction: (MainMenuAction) -> Unit,
     avoidCameraCutout: Boolean = false,
     modifier: Modifier = Modifier,
+    /**
+     * Asks the platform to let the person choose a file to bring in, or null where the platform has
+     * no such chooser.
+     *
+     * Importing has always been a platform's own business: on a phone a file arrives from a file
+     * manager or a share sheet as a view intent, and there is nothing in this screen to press. A
+     * window has no such outside -- a person sitting in front of it has a dialog and nothing else --
+     * so where a chooser exists the menu offers it, and where it does not the action is absent
+     * rather than present and inert. What happens to the chosen file is the same in both cases:
+     * the platform turns it into an import command and the store, which already knows how to
+     * report one, does the rest.
+     */
+    onImportRequest: (() -> Unit)? = null,
     pageContent: @Composable (page: MainMenuPage, collectionRevision: Long) -> Unit
 ) {
     val tabTitles = listOf(
@@ -88,7 +102,8 @@ fun MainMenuScreen(
                         coroutineScope.launch {
                             pagerState.scrollToPage(index)
                         }
-                    }
+                    },
+                    onImportRequest = onImportRequest
                 )
             }
         ) { paddingValues ->
@@ -130,7 +145,8 @@ private fun Modifier.cameraCutoutPadding(enabled: Boolean): Modifier =
 private fun MainMenuBottomBar(
     tabTitles: List<String>,
     selectedTab: Int,
-    onTabSelected: (Int) -> Unit
+    onTabSelected: (Int) -> Unit,
+    onImportRequest: (() -> Unit)?
 ) {
     Surface(
         color = MaterialTheme.colorScheme.primaryContainer,
@@ -178,6 +194,31 @@ private fun MainMenuBottomBar(
                             maxFontSize = MaterialTheme.typography.labelLarge.fontSize,
                             stepSize = 0.5.sp
                         )
+                    )
+                }
+            }
+
+            // The chooser sits after the tabs rather than among them: it is not a page, and a
+            // fifth tab that opened a dialog would be a tab that takes the person nowhere. It is
+            // drawn in the bar's own colours so it reads as the bar's action, and it is absent
+            // where there is nothing to ask -- which is what keeps the phone's menu the menu the
+            // phone has.
+            if (onImportRequest != null) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxHeight()
+                        .clip(RoundedCornerShape(CellularityDimensions.large))
+                        .background(MaterialTheme.colorScheme.primary)
+                        .clickable { onImportRequest() }
+                        .padding(horizontal = CellularityDimensions.medium),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = stringResource(Res.string.main_menu_import_action),
+                        color = MaterialTheme.colorScheme.background,
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1
                     )
                 }
             }

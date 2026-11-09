@@ -140,6 +140,15 @@
     <string name="genome_editor_signal_name_format">%1$s%2$d</string>
     <string name="genome_editor_signed_signal_name_format">%1$s%2$s%3$d</string>
     <string name="genome_editor_gene_with_type_format">%1$s%2$d %3$s</string>
+    <string name="genome_editor_gene_list_header_format">Genes (%1$d)</string>
+    <string name="genome_editor_genome_unchanged_message">This genome is unchanged since it was created or loaded.</string>
+    <string name="genome_editor_genome_unsaved_message">This genome has edits that have not been saved.</string>
+    <string name="genome_editor_reading_stored_genomes_message">Reading the stored genomes…</string>
+    <string name="genome_editor_choose_genome_message">Choose a genome to load.</string>
+    <string name="genome_editor_name_genome_message">Type a name for this genome.</string>
+    <string name="genome_editor_loading_message">Loading…</string>
+    <string name="genome_editor_saving_message">Saving…</string>
+    <string name="genome_editor_working_message">Working…</string>
 
     <!-- Mathematical operators are language-independent UI tokens. -->
 

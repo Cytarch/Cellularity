@@ -58,11 +58,6 @@ def verify_android_only_build_boundary() -> None:
         "add_library(cellularity_vulkan SHARED",
         "jni/AndroidJniVulkanCapabilityProbe.cpp",
         "platform/android/vulkan/AndroidVulkanCapabilityProbe.cpp",
-        "render/backend/vulkan/AndroidVulkanClearFrameSession.cpp",
-        "render/backend/vulkan/VulkanBackendAbiExports.cpp",
-        "render/backend/vulkan/VulkanBasicCellRenderer.cpp",
-        "render/backend/vulkan/VulkanResourceFoundation.cpp",
-        "render/backend/vulkan/VulkanResult.cpp",
         "${CELLULARITY_VULKAN_LIBRARY}",
     )
     for fragment in required_fragments:
@@ -75,6 +70,41 @@ def verify_android_only_build_boundary() -> None:
             fail(f"native/CMakeLists.txt is missing: {fragment}")
         if any(number not in android_lines for number in matching_lines):
             fail(f"Vulkan build fragment is not Android-only: {fragment}")
+
+    # The backend sources themselves are now shared with the Windows host rather
+    # than listed under the Android DSO: they are platform-neutral, and listing
+    # them twice is exactly how the two platforms would drift apart. What has to
+    # stay Android-only is the packaging - the shared library, the module that
+    # exports it, and the loader dependency - and those are checked above.
+    verify_shared_vulkan_backend_sources()
+
+
+def verify_shared_vulkan_backend_sources() -> None:
+    shared = read("native/cmake/VulkanBackendSources.cmake")
+    for fragment in (
+        "render/backend/vulkan/VulkanClearFrameSession.cpp",
+        "render/backend/vulkan/NativeVulkanSurface.cpp",
+        "render/backend/vulkan/VulkanBackendAbiExports.cpp",
+        "render/backend/vulkan/VulkanBasicCellRenderer.cpp",
+        "render/backend/vulkan/VulkanResourceFoundation.cpp",
+        "render/backend/vulkan/VulkanResult.cpp",
+    ):
+        if fragment not in shared:
+            fail(f"the shared Vulkan backend source list is missing: {fragment}")
+
+    cmake = read("native/CMakeLists.txt")
+    if cmake.count("${CELLULARITY_VULKAN_BACKEND_SOURCES}") < 2:
+        fail(
+            "the shared Vulkan backend source list must feed both the Android DSO "
+            "and the Windows host"
+        )
+    # A stale per-target copy of the platform-neutral session would reintroduce the
+    # duplication this list exists to remove.
+    if "render/backend/vulkan/VulkanClearFrameSession.cpp" in cmake:
+        fail(
+            "the platform-neutral Vulkan session must be named only in the shared "
+            "source list, not in native/CMakeLists.txt"
+        )
 
     main_target = re.search(
         r"add_library\(cellularity_android\s+SHARED(?P<body>.*?)"
@@ -100,7 +130,7 @@ def verify_android_only_build_boundary() -> None:
         flags=re.DOTALL | re.MULTILINE,
     )
     if "AndroidVulkanCapabilityProbe" in host_source_lists \
-            or "AndroidVulkanClearFrameSession" in host_source_lists \
+            or "VulkanClearFrameSession" in host_source_lists \
             or "VulkanBasicCellRenderer" in host_source_lists \
             or "VulkanResourceFoundation" in host_source_lists:
         fail("host CMake source lists include the Android Vulkan backend")
@@ -368,8 +398,8 @@ def verify_backend_c_abi() -> None:
 
 
 def verify_prepared_frame_session() -> None:
-    source = read("native/render/backend/vulkan/AndroidVulkanClearFrameSession.cpp")
-    header = read("native/render/backend/vulkan/AndroidVulkanClearFrameSession.h")
+    source = read("native/render/backend/vulkan/VulkanClearFrameSession.cpp")
+    header = read("native/render/backend/vulkan/VulkanClearFrameSession.h")
     cell_frame_header = read(
         "native/render/backend/vulkan/VulkanBasicCellFrame.h"
     )
@@ -411,7 +441,6 @@ def verify_prepared_frame_session() -> None:
         "VK_API_VERSION_1_0",
         "VK_PRESENT_MODE_FIFO_KHR",
         "kFramesInFlight = 2",
-        "vkCreateAndroidSurfaceKHR",
         "vkCreateDevice",
         "vkCreateSwapchainKHR",
         "vkCreateImageView",
@@ -455,6 +484,18 @@ def verify_prepared_frame_session() -> None:
         "destroySwapchain();",
     ):
         require(source, snippet, "native Vulkan prepared-frame session")
+
+    # Surface creation is no longer named in the session. The session asks the
+    # window abstraction for a frame, and the single platform call that turns a
+    # native window into a VkSurfaceKHR lives in NativeVulkanSurface.cpp - one
+    # call per platform instead of one session per platform. The Android branch
+    # must still be there, or the Android build would silently lose its surface.
+    surface_source = read("native/render/backend/vulkan/NativeVulkanSurface.cpp")
+    require(
+        surface_source,
+        "vkCreateAndroidSurfaceKHR",
+        "Android Vulkan surface creation",
+    )
 
     for snippet in (
         "VulkanPreparedFrameUploadIdentity",
@@ -642,14 +683,36 @@ def verify_prepared_frame_session() -> None:
     ):
         require(pixel_text_source, snippet, "shared pixel-text geometry")
 
-    require(header, "attachWindow always consumes one ANativeWindow reference", "window contract")
+    # Window ownership is expressed by the platform-neutral window abstraction now.
+    # The session consumes one reference through attachWindow, and the Android
+    # implementation is the only place that releases it, which is what keeps the
+    # Win32 path from having to know about ANativeWindow at all.
+    window_header = read("native/render/backend/vulkan/NativeVulkanWindow.h")
+    require(
+        window_header,
+        "createNativeVulkanWindow() returns an owned reference and the caller hands it",
+        "window contract",
+    )
+    require(window_header, "ANativeWindow_release", "Android window release")
     require(header, "Instance/device resources survive detachSurface", "resource ownership contract")
+    # The managed layer still acquires the Android window; the backend no longer
+    # names the type, so the acquisition and the release live on opposite sides of
+    # the abstraction on purpose.
     require(worker_jni, "ANativeWindow_fromSurface", "main JNI window acquisition")
-    require(backend_exports, "ANativeWindow_release", "Vulkan backend window release")
+    require(backend_exports, "createNativeVulkanWindow", "Vulkan backend window adoption")
     require(backend_exports, "destroySession", "Vulkan backend session destruction")
     require(backend_exports, "readSpirv", "Vulkan backend SPIR-V boundary")
     require(backend_exports, "readShaderSpirv", "Vulkan native shader asset boundary")
-    require(backend_exports, "AndroidRenderAssets assets(info->asset_manager)", "borrowed native AssetManager boundary")
+    require(
+        backend_exports,
+        "CELLULARITY_VULKAN_ASSET_SOURCE_ANDROID_MANAGER_V1",
+        "borrowed native AssetManager boundary",
+    )
+    require(
+        backend_exports,
+        "AndroidRenderAssets",
+        "Android asset manager implementation boundary",
+    )
     require(backend_exports, "AssetRenderTextureLoader", "Vulkan native texture boundary")
     for snippet in (
         "create_session",
@@ -763,7 +826,7 @@ def verify_profiling_boundary() -> None:
     cmake = read("native/CMakeLists.txt")
     app_build = read("app/build.gradle")
     session = read(
-        "native/render/backend/vulkan/AndroidVulkanClearFrameSession.cpp"
+        "native/render/backend/vulkan/VulkanClearFrameSession.cpp"
     )
     receiver = read(
         "app/src/diagnostic/java/com/cytarch/cellularity/debug/"
@@ -826,7 +889,7 @@ def verify_environment_field_preview_backend() -> None:
     vertex = read("native/rendering/vulkan/shaders/density_field.vert")
     fragment = read("native/rendering/vulkan/shaders/density_field.frag")
     session = read(
-        "native/render/backend/vulkan/AndroidVulkanClearFrameSession.cpp"
+        "native/render/backend/vulkan/VulkanClearFrameSession.cpp"
     )
     adapter = read(
         "native/render/backend/abi/VulkanRenderSurfaceSessionAdapter.cpp"
@@ -1031,10 +1094,10 @@ def verify_environment_field_preview_backend() -> None:
 def verify_saved_file_preview_backend() -> None:
     surface_contract = read("native/render/backend/RenderSurfaceSession.h")
     session = read(
-        "native/render/backend/vulkan/AndroidVulkanClearFrameSession.cpp"
+        "native/render/backend/vulkan/VulkanClearFrameSession.cpp"
     )
     session_header = read(
-        "native/render/backend/vulkan/AndroidVulkanClearFrameSession.h"
+        "native/render/backend/vulkan/VulkanClearFrameSession.h"
     )
     adapter = read(
         "native/render/backend/abi/VulkanRenderSurfaceSessionAdapter.cpp"
@@ -1127,11 +1190,20 @@ def verify_saved_file_preview_backend() -> None:
         "preRotationMatrix(renderPreTransform())",
         "VulkanPipelineTarget::Offscreen",
         '"offscreen_output_row_order=top_left\\n"',
-        '"offscreen_readback_only_on_capture=true\\n"',
+        # A host that draws the live frame itself reads one back per frame, on its
+        # own target, into a buffer it owns. The diagnostic states which targets
+        # read back instead of claiming that only captures do.
+        '"offscreen_readback_targets=genome_preview,substrate_preview,live_frame\\n"',
+        '"offscreen_readback_only_on_capture=false\\n"',
+        "OffscreenRenderTarget::LiveFrame",
+        "std::size_t finishOffscreenRgbaInto(",
     ):
-        require(session, snippet, "Vulkan saved-file preview implementation")
+        require(session, snippet, "Vulkan off-screen frame implementation")
     if session.count("vkCmdCopyImageToBuffer") != 2:
-        fail("Vulkan readback copies must exist only for substrate and genome capture")
+        fail(
+            "Vulkan readback copies must exist only for the shared substrate/live "
+            "frame pass and the genome preview pass"
+        )
 
     capture_body = session.split(
         "[[nodiscard]] std::vector<std::uint8_t> finishOffscreenRgba(", 1
@@ -1418,7 +1490,14 @@ def verify_isolated_surface_integration() -> None:
     forbid(worker_bridge, "readAsset", "managed Vulkan asset loading")
     forbid(worker_bridge, "AndroidRenderTextureLoader", "managed texture decoding")
     forbid(worker_jni, "AAssetManager_fromJava", "duplicate raw AssetManager bridge")
-    require(vulkan_exports, "AndroidRenderAssets assets(info->asset_manager)", "native Vulkan asset loading")
+    # The asset manager is now one of two selectable asset sources, so the native
+    # side names the Android implementation and forwards the borrowed manager to
+    # it rather than constructing it inline.
+    require(
+        vulkan_exports,
+        "std::make_unique<AndroidRenderAssets>(info->asset_manager)",
+        "native Vulkan asset loading",
+    )
     require(
         vulkan_exports,
         '"vulkan/shaders/background.vert.spv"',

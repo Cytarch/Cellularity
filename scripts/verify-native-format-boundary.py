@@ -189,11 +189,30 @@ def main() -> None:
             "PRIVATE",
             "cellularity_simulation",
             "zstd_vendor",
-            "z",
         }:
             errors.append(
-                "cellularity_formats must link only simulation, vendored zstd, and zlib: "
-                f"actual={sorted(link_tokens)}"
+                "cellularity_formats must link only simulation and vendored zstd "
+                f"privately, with zlib exposed separately: actual={sorted(link_tokens)}"
+            )
+
+        # zlib is a second declaration because it is public: headers of this layer
+        # reach <zlib.h>, so consumers need its include path, while simulation and
+        # zstd stay private to this library. The rule is that nothing else is linked
+        # either way, so the other declarations for this target are checked to make
+        # sure the only additional dependency is zlib.
+        other_calls = re.findall(
+            r"target_link_libraries\(\s*cellularity_formats\s+(?!PRIVATE)(?P<body>.*?)\)",
+            cmake,
+            re.DOTALL,
+        )
+        public_tokens: set[str] = set()
+        for body in other_calls:
+            for token in re.findall(r"[A-Za-z0-9_:+.-]+", body):
+                public_tokens.add(token)
+        if public_tokens != {"PUBLIC", "ZLIB::ZLIB"}:
+            errors.append(
+                "cellularity_formats must expose only zlib through its other link "
+                f"declarations: actual={sorted(public_tokens)}"
             )
 
     for test_target in (

@@ -66,6 +66,7 @@ import com.cytarch.cellularity.shared.generated.resources.play_reload_plate_acti
 import com.cytarch.cellularity.shared.generated.resources.play_sterilize_plate_action
 import com.cytarch.cellularity.shared.generated.resources.substrate_icon
 import com.cytarch.cellularity.shared.ui.components.CellularityAlertDialog
+import com.cytarch.cellularity.shared.ui.components.confirmOnEnter
 import com.cytarch.cellularity.shared.ui.theme.CellularityDimensions
 import com.cytarch.cellularity.shared.ui.theme.cellularityOutlinedTextFieldColors
 import org.jetbrains.compose.resources.painterResource
@@ -179,8 +180,16 @@ fun PlayScreen(
                 state.selectedTab,
                 genomeContentReady
             )
+            // The viewport is given the area above the navigation bar, like every other tab.
+            // Without this it takes the whole window and the renderer's surface -- a native
+            // child window on the desktop, and a platform surface on the phone -- covers the
+            // bar, because neither is clipped by what Compose draws. On a desktop that is
+            // the difference between a screen with tabs and a way back, and a window showing
+            // a running world with no controls at all.
             Box(
-                modifier = Modifier.fillMaxSize()
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(bottom = paddingValues.calculateBottomPadding())
             ) {
                 microscopeContent(contentVisibility.microscope) {
                     onAction(PlayAction.RequestPlateActions)
@@ -410,7 +419,9 @@ private fun SavePlateDialog(
                 value = name,
                 onValueChange = onNameChanged,
                 singleLine = true,
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .confirmOnEnter(enabled = !saving, onConfirm = onConfirm),
                 colors = cellularityOutlinedTextFieldColors()
             )
         },

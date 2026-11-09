@@ -14,6 +14,37 @@ project("cellularity")
 
 find_package(Threads REQUIRED)
 
+# One definition of the Vulkan backend sources, shared by the Android DSO and the
+# Windows host, so the two platforms compile the same list.
+include(cmake/VulkanBackendSources.cmake)
+# Resolved at the top level rather than inside either platform branch: the list is
+# needed by whichever backend this build produces, and a platform branch that never
+# ran would leave it empty.
+cellularity_vulkan_backend_sources(CELLULARITY_VULKAN_BACKEND_SOURCES)
+
+# Symbol inspection for the archive isolation tests. GNU toolchains provide nm
+# through CMAKE_NM; MSVC has no nm, so dumpbin is located from the compiler path.
+# tests/cmake/ArchiveSymbols.cmake understands both.
+set(CELLULARITY_SYMBOL_TOOL "${CMAKE_NM}")
+if(MSVC AND (NOT CELLULARITY_SYMBOL_TOOL OR CELLULARITY_SYMBOL_TOOL STREQUAL "CELLULARITY_SYMBOL_TOOL-NOTFOUND"))
+    get_filename_component(_cellularity_compiler_dir "${CMAKE_CXX_COMPILER}" DIRECTORY)
+    find_program(CELLULARITY_DUMPBIN
+            NAMES dumpbin
+            HINTS "${_cellularity_compiler_dir}"
+            NO_DEFAULT_PATH)
+    if(CELLULARITY_DUMPBIN)
+        set(CELLULARITY_SYMBOL_TOOL "${CELLULARITY_DUMPBIN}")
+    endif()
+    unset(_cellularity_compiler_dir)
+endif()
+
+# zlib backs the gzip streams of legacy substrate decoding and the save
+# container codec. A bare `z` resolves against the system zlib on Linux, but
+# there is no such library name on Windows, and a vcpkg-provided zlib is not on
+# the include path unless it is found as a package. Resolve it explicitly and
+# link ZLIB::ZLIB everywhere; this keeps Linux behaviour identical.
+find_package(ZLIB REQUIRED)
+
 option(CELLULARITY_ENABLE_NATIVE_PROFILE "Enable native profiling counters in non-Android host builds" ON)
 option(CELLULARITY_ENABLE_RENDER_TIMELINE "Enable local input-to-presentation timeline collection" OFF)
 option(CELLULARITY_ENABLE_PERFORMANCE_HUD "Build the native microscope performance HUD" OFF)
@@ -560,8 +591,13 @@ cellularity_optimize_target(cellularity_formats)
 target_link_libraries(cellularity_formats PRIVATE
         cellularity_simulation
         zstd_vendor
-        z
 )
+# zlib is a PUBLIC dependency on purpose. Public headers of this layer reach
+# <zlib.h> through tests/support/FormatTestData.h, so every consumer needs the
+# include path, not just this library's own translation units. With PRIVATE,
+# cellularity_formats_parity_tests and cellularity_format_malformed_tests fail
+# with "Cannot open include file: 'zlib.h'" on Windows.
+target_link_libraries(cellularity_formats PUBLIC ZLIB::ZLIB)
 
 add_library(cellularity_interaction STATIC ${CELLULARITY_INTERACTION_SOURCES})
 cellularity_configure_source_target(cellularity_interaction)
@@ -675,8 +711,14 @@ set_target_properties(cellularity_render_overlay_contract PROPERTIES
 
 # Packaged image decoding is backend-neutral and independent from Android.
 # GLES and Vulkan both consume the same validated RGBA8 texture payloads.
+#
+# FileRenderAssets is the host's NativeRenderAssets implementation: Android serves
+# assets from its asset manager, a desktop host reads them from disk. It belongs
+# here rather than in the Vulkan target because the interface it implements is
+# backend-neutral, and the Vulkan backend refers to it through that interface.
 add_library(cellularity_render_assets STATIC
         render/AssetRenderTextureLoader.cpp
+        render/FileRenderAssets.cpp
 )
 cellularity_configure_source_target(cellularity_render_assets)
 cellularity_optimize_target(cellularity_render_assets)
@@ -753,15 +795,15 @@ if(ANDROID)
     # library. This focused backend library is loaded lazily from settings, so
     # a missing or broken Vulkan loader cannot prevent the GLES path from
     # loading.
+    # The backend sources, the profiling definition and the contract links are
+    # named once in cmake/VulkanBackendSources.cmake and used by both this target
+    # and the Windows host, so the two platforms cannot quietly diverge.
     add_library(cellularity_vulkan SHARED
             jni/AndroidJniVulkanCapabilityProbe.cpp
             platform/android/AndroidRenderAssets.cpp
             platform/android/vulkan/AndroidVulkanCapabilityProbe.cpp
-            render/backend/vulkan/AndroidVulkanClearFrameSession.cpp
-            render/backend/vulkan/VulkanBackendAbiExports.cpp
-            render/backend/vulkan/VulkanBasicCellRenderer.cpp
-            render/backend/vulkan/VulkanResourceFoundation.cpp
-            render/backend/vulkan/VulkanResult.cpp
+            render/backend/vulkan/VulkanBackendJniExports.cpp
+            ${CELLULARITY_VULKAN_BACKEND_SOURCES}
     )
     cellularity_configure_source_target(cellularity_vulkan)
     cellularity_optimize_target(cellularity_vulkan)
@@ -775,15 +817,9 @@ if(ANDROID)
     target_link_options(cellularity_vulkan PRIVATE
             "LINKER:--version-script=${CMAKE_CURRENT_SOURCE_DIR}/render/backend/vulkan/cellularity_vulkan.exports.map"
     )
-    target_compile_definitions(cellularity_vulkan PRIVATE
-            CELLULARITY_ENABLE_VULKAN_PROFILING=$<BOOL:${CELLULARITY_ENABLE_VULKAN_PROFILING}>
-            "$<$<CONFIG:Debug>:CELLULARITY_VULKAN_VALIDATION=1>"
-    )
+    cellularity_configure_vulkan_backend(cellularity_vulkan)
+    cellularity_link_vulkan_backend_contracts(cellularity_vulkan)
     target_link_libraries(cellularity_vulkan PRIVATE
-            cellularity_vulkan_frame_contract
-            cellularity_render_overlay_contract
-            cellularity_render_assets
-            cellularity_render_frame_result
             android
             log
             ${CELLULARITY_VULKAN_LIBRARY}
@@ -797,6 +833,237 @@ if(ANDROID)
     cellularity_configure_source_target(cellularity_diagnostics)
     cellularity_optimize_target(cellularity_diagnostics)
 
+endif()
+
+# The Vulkan backend on a desktop host. It is the same backend source as the
+# Android DSO above with the Android-only pieces replaced by their Win32
+# equivalents, so the two platforms exercise one implementation rather than two.
+#
+# The Windows build does not need the JNI capability probe: that probe exists to
+# answer a managed-side question about the packaged app, and the host has no
+# managed layer. Its place is taken by the host tests, which drive the session
+# directly.
+if(WIN32)
+    # vcpkg ships vulkan-headers and vulkan-loader; either that or the LunarG SDK
+    # provides the import library. Both spell the loader import library
+    # vulkan-1.lib, which is what CMake records here.
+    find_package(Vulkan QUIET)
+    if(Vulkan_FOUND)
+        set(CELLULARITY_HOST_VULKAN_LIBRARY Vulkan::Vulkan)
+    else()
+        find_library(CELLULARITY_HOST_VULKAN_LIBRARY NAMES vulkan-1 vulkan REQUIRED)
+    endif()
+    # vcpkg places the Vulkan headers outside the default include path, and a
+    # STATIC library does not forward its own include directories, so the test
+    # target needs them explicitly.
+    get_target_property(CELLULARITY_HOST_VULKAN_INCLUDE_DIRS
+            ${CELLULARITY_HOST_VULKAN_LIBRARY} INTERFACE_INCLUDE_DIRECTORIES)
+    if(NOT CELLULARITY_HOST_VULKAN_INCLUDE_DIRS)
+        set(CELLULARITY_HOST_VULKAN_INCLUDE_DIRS "")
+    endif()
+
+    # Vulkan shaders have to be compiled to SPIR-V before the session can create a
+    # pipeline, and until now only the Android build did that, through the NDK's
+    # glslc. The host build compiles the same sources against the same contract
+    # with a glslc from vcpkg's shaderc or the LunarG SDK, and validates every
+    # module with spirv-val, so the two builds cannot drift.
+    find_program(CELLULARITY_GLSLC
+            NAMES glslc
+            HINTS
+                    "${VCPKG_ROOT}/installed/${VCPKG_TARGET_TRIPLET}/tools/shaderc"
+                    "$ENV{VULKAN_SDK}/Bin"
+            DOC "glslc, used to compile the Vulkan shaders to SPIR-V")
+    find_program(CELLULARITY_SPIRV_VAL
+            NAMES spirv-val
+            HINTS
+                    "${VCPKG_ROOT}/installed/${VCPKG_TARGET_TRIPLET}/tools/spirv-tools"
+                    "$ENV{VULKAN_SDK}/Bin"
+            DOC "spirv-val, used to validate the compiled shader modules")
+    if(NOT CELLULARITY_GLSLC OR NOT CELLULARITY_SPIRV_VAL)
+        message(FATAL_ERROR
+                "The Windows Vulkan build needs glslc and spirv-val to compile "
+                "native/rendering/vulkan/shaders. Install them with "
+                "'vcpkg install shaderc spirv-tools[tools]' or install the LunarG "
+                "Vulkan SDK. Found glslc='${CELLULARITY_GLSLC}' "
+                "spirv-val='${CELLULARITY_SPIRV_VAL}'.")
+    endif()
+
+    set(CELLULARITY_HOST_SHADER_DIR
+            "${CMAKE_CURRENT_BINARY_DIR}/generated/vulkanShaders/host/assets")
+    # The shader sources are a build input, so the compile step has to depend on
+    # them. Without this the step only ran when the contract or this script
+    # changed, and an edited shader would silently keep its old module.
+    # CONFIGURE_DEPENDS makes a newly added source re-run the configure, which is
+    # what makes the inventory check below able to reject it.
+    file(GLOB_RECURSE CELLULARITY_HOST_SHADER_SOURCES CONFIGURE_DEPENDS
+            "${CMAKE_CURRENT_SOURCE_DIR}/rendering/vulkan/shaders/*.vert"
+            "${CMAKE_CURRENT_SOURCE_DIR}/rendering/vulkan/shaders/*.frag")
+    add_custom_command(
+            OUTPUT "${CELLULARITY_HOST_SHADER_DIR}/vulkan/shaders/.stamp"
+            COMMAND ${CMAKE_COMMAND}
+                    -DCELLULARITY_GLSL_SOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}/rendering/vulkan/shaders
+                    -DCELLULARITY_SHADER_CONTRACT=${CMAKE_CURRENT_SOURCE_DIR}/rendering/vulkan/vulkan-shader-contract.json
+                    -DCELLULARITY_SHADER_OUTPUT_DIR=${CELLULARITY_HOST_SHADER_DIR}
+                    -DCELLULARITY_GLSLC=${CELLULARITY_GLSLC}
+                    -DCELLULARITY_SPIRV_VAL=${CELLULARITY_SPIRV_VAL}
+                    -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/CompileVulkanShaders.cmake"
+            COMMAND ${CMAKE_COMMAND} -E touch
+                    "${CELLULARITY_HOST_SHADER_DIR}/vulkan/shaders/.stamp"
+            DEPENDS
+                    "${CMAKE_CURRENT_SOURCE_DIR}/cmake/CompileVulkanShaders.cmake"
+                    "${CMAKE_CURRENT_SOURCE_DIR}/rendering/vulkan/vulkan-shader-contract.json"
+                    ${CELLULARITY_HOST_SHADER_SOURCES}
+            COMMENT "Compiling and validating the Vulkan shader inventory")
+    add_custom_target(cellularity_vulkan_shaders
+            DEPENDS "${CELLULARITY_HOST_SHADER_DIR}/vulkan/shaders/.stamp")
+
+    # The interactive camera, as its own small library so the projection contract can be
+    # asserted by a test without dragging in a window, a session or a driver. It is a
+    # real seam rather than a test convenience: the projection is the part of this host
+    # that was wrong in a way that rendered without failing.
+    add_library(cellularity_win32_host_camera STATIC
+            host/win32/Win32HostCamera.cpp
+    )
+    cellularity_configure_source_target(cellularity_win32_host_camera)
+    cellularity_optimize_target(cellularity_win32_host_camera)
+    target_link_libraries(cellularity_win32_host_camera PRIVATE
+            cellularity_interaction
+    )
+
+    # The desktop host: a Win32 window that renders through the same backend and
+    # the same frame producer the Android worker uses. It is the piece that makes
+    # the port usable rather than merely testable, so it links the production
+    # rendering library rather than drawing anything itself.
+    #
+    # cellularity_interaction is named directly, not merely reached through
+    # cellularity_rendering. Its public compile definitions change the layout of
+    # types the host constructs by value -- the controller holds a simulation owner
+    # by value, and that owner's simulation state gains members under the scheduler
+    # option. Those definitions are PUBLIC but the intermediate libraries link
+    # PRIVATE, so without this line the host translation unit would be compiled
+    # against a smaller layout than the library that constructs and destroys it.
+    add_executable(cellularity_win32_host host/win32/Win32Host.cpp)
+    cellularity_configure_source_target(cellularity_win32_host)
+    cellularity_optimize_target(cellularity_win32_host)
+    add_dependencies(cellularity_win32_host cellularity_vulkan_shaders)
+    target_link_libraries(cellularity_win32_host PRIVATE
+            cellularity_win32_host_camera
+            cellularity_interaction
+            cellularity_rendering
+            cellularity_vulkan_host
+            cellularity_vulkan_frame_contract
+            cellularity_render_overlay_contract
+            cellularity_render_assets
+            cellularity_render_frame_result
+            ${CELLULARITY_HOST_VULKAN_LIBRARY}
+    )
+    target_include_directories(cellularity_win32_host PRIVATE
+            ${CELLULARITY_HOST_VULKAN_INCLUDE_DIRS}
+    )
+
+    # The same simulation behind a JNI front door. A managed desktop application
+    # already owns a window and an event loop, so it cannot use the standalone host's
+    # shape; what it needs is the renderer in a child window of its own and a handful
+    # of entry points its frame loop can call. That is exactly what this library is,
+    # which is why it links the same libraries the host links rather than a similar
+    # set: one renderer, two front doors.
+    #
+    # jni.h comes from a JDK rather than from the NDK, because this is a JVM library
+    # and not an Android one. The JDK that runs the application is preferred when the
+    # environment names it, then the usual Windows install locations, so a machine
+    # with more than one JDK does not silently compile against another one's headers.
+    set(CELLULARITY_DESKTOP_JNI_INCLUDE_DIRS)
+    set(CELLULARITY_DESKTOP_JNI_ROOT_CANDIDATES)
+    if(DEFINED ENV{JAVA_HOME})
+        file(TO_CMAKE_PATH "$ENV{JAVA_HOME}" CELLULARITY_DESKTOP_JAVA_HOME)
+        list(APPEND CELLULARITY_DESKTOP_JNI_ROOT_CANDIDATES
+                "${CELLULARITY_DESKTOP_JAVA_HOME}")
+    endif()
+    if(DEFINED ENV{JDK_HOME})
+        file(TO_CMAKE_PATH "$ENV{JDK_HOME}" CELLULARITY_DESKTOP_JDK_HOME)
+        list(APPEND CELLULARITY_DESKTOP_JNI_ROOT_CANDIDATES
+                "${CELLULARITY_DESKTOP_JDK_HOME}")
+    endif()
+    # The Android Studio-managed OpenJDK is listed before the system ones because it is
+    # the JVM the desktop module is run with (see build/desk1.cmd).
+    file(GLOB CELLULARITY_DESKTOP_JNI_GLOB_CANDIDATES
+            "C:/Program Files/Android/openjdk/*"
+            "C:/Program Files/Java/*"
+            "C:/Program Files/Eclipse Adoptium/*"
+            "C:/Program Files/Microsoft/*"
+            "C:/Program Files/Zulu/*")
+    list(APPEND CELLULARITY_DESKTOP_JNI_ROOT_CANDIDATES
+            ${CELLULARITY_DESKTOP_JNI_GLOB_CANDIDATES})
+    foreach(CELLULARITY_DESKTOP_JNI_ROOT IN LISTS CELLULARITY_DESKTOP_JNI_ROOT_CANDIDATES)
+        if(NOT CELLULARITY_DESKTOP_JNI_INCLUDE_DIRS
+                AND EXISTS "${CELLULARITY_DESKTOP_JNI_ROOT}/include/jni.h"
+                AND EXISTS "${CELLULARITY_DESKTOP_JNI_ROOT}/include/win32/jni_md.h")
+            set(CELLULARITY_DESKTOP_JNI_INCLUDE_DIRS
+                    "${CELLULARITY_DESKTOP_JNI_ROOT}/include"
+                    "${CELLULARITY_DESKTOP_JNI_ROOT}/include/win32")
+        endif()
+    endforeach()
+    if(NOT CELLULARITY_DESKTOP_JNI_INCLUDE_DIRS)
+        find_package(JNI QUIET)
+        if(JNI_FOUND)
+            set(CELLULARITY_DESKTOP_JNI_INCLUDE_DIRS ${JNI_INCLUDE_DIRS})
+        endif()
+    endif()
+    if(NOT CELLULARITY_DESKTOP_JNI_INCLUDE_DIRS)
+        message(FATAL_ERROR
+                "The desktop JNI bridge needs a JDK: jni.h and jni_md.h were not "
+                "found. Set JAVA_HOME to a JDK, or install one under "
+                "'C:/Program Files/Java'.")
+    endif()
+    message(STATUS
+            "Cellularity desktop JNI headers: ${CELLULARITY_DESKTOP_JNI_INCLUDE_DIRS}")
+
+    add_library(cellularity_desktop_jni SHARED host/win32/DesktopJniBridge.cpp)
+    # System.loadLibrary("cellularity_desktop") resolves a file name, not a CMake
+    # target, so the output name is part of the contract with the managed side and is
+    # fixed here rather than left to follow the target name.
+    set_target_properties(cellularity_desktop_jni PROPERTIES
+            OUTPUT_NAME cellularity_desktop
+    )
+    cellularity_configure_source_target(cellularity_desktop_jni)
+    cellularity_optimize_target(cellularity_desktop_jni)
+    add_dependencies(cellularity_desktop_jni cellularity_vulkan_shaders)
+    # A STATIC library does not forward its own include directories, so the Vulkan
+    # headers arrive here the same way they arrive at the host.
+    target_include_directories(cellularity_desktop_jni PRIVATE
+            ${CELLULARITY_HOST_VULKAN_INCLUDE_DIRS}
+    )
+    # jni.h is not this project's code and is not warning-clean at /W4.
+    target_include_directories(cellularity_desktop_jni SYSTEM PRIVATE
+            ${CELLULARITY_DESKTOP_JNI_INCLUDE_DIRS}
+    )
+    # cellularity_win32_host_camera is linked for parity with the executable rather
+    # than because the bridge calls it today; the linker pulls nothing in from a static
+    # library that is not referenced. cellularity_interaction is named directly for the
+    # reason given above the host target: the controller's layout depends on its public
+    # compile definitions.
+    target_link_libraries(cellularity_desktop_jni PRIVATE
+            cellularity_win32_host_camera
+            cellularity_interaction
+            cellularity_rendering
+            cellularity_vulkan_host
+            cellularity_vulkan_frame_contract
+            cellularity_render_overlay_contract
+            cellularity_render_assets
+            cellularity_render_frame_result
+            ${CELLULARITY_HOST_VULKAN_LIBRARY}
+    )
+
+    add_library(cellularity_vulkan_host STATIC
+            ${CELLULARITY_VULKAN_BACKEND_SOURCES}
+    )
+    cellularity_configure_source_target(cellularity_vulkan_host)
+    add_dependencies(cellularity_vulkan_host cellularity_vulkan_shaders)
+    cellularity_configure_vulkan_backend(cellularity_vulkan_host)
+    cellularity_link_vulkan_backend_contracts(cellularity_vulkan_host)
+    target_link_libraries(cellularity_vulkan_host PRIVATE
+            ${CELLULARITY_HOST_VULKAN_LIBRARY}
+    )
 endif()
 
 # Host builds always expose the probe for local policy calibration. Android app
@@ -994,7 +1261,7 @@ if(NOT ANDROID)
     target_link_libraries(cellularity_formats_semantic PRIVATE
             cellularity_simulation_semantic
             zstd_vendor
-            z
+            ZLIB::ZLIB
     )
 
     add_executable(cellularity_semantic_contract_tests
@@ -1024,7 +1291,7 @@ if(NOT ANDROID)
     add_test(
             NAME cellularity_semantic_trace_isolation
             COMMAND ${CMAKE_COMMAND}
-                    -DNM_TOOL=${CMAKE_NM}
+                    -DNM_TOOL=${CELLULARITY_SYMBOL_TOOL}
                     -DPUBLIC_ARCHIVE=$<TARGET_FILE:cellularity_simulation>
                     -DVERIFICATION_ARCHIVE=$<TARGET_FILE:cellularity_simulation_semantic>
                     -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/semantic/VerifySemanticTraceIsolation.cmake
@@ -1098,6 +1365,43 @@ if(NOT ANDROID)
             cellularity_vulkan_backend_client
             Threads::Threads
     )
+    # The Windows windowing seam: the window abstraction, the platform surface
+    # call, and presentation support on the live driver. The window is created but
+    # never shown, so this needs no interactive desktop session. Only a Windows
+    # build has the Win32 surface implementation to test.
+    if(WIN32)
+        cellularity_add_host_test(
+                cellularity_win32_vulkan_surface_tests
+                tests/win32_vulkan_surface_tests.cpp
+                vulkan_backend_abi
+                cellularity_vulkan_host
+                ${CELLULARITY_HOST_VULKAN_LIBRARY}
+        )
+        target_include_directories(cellularity_win32_vulkan_surface_tests PRIVATE
+                ${CELLULARITY_HOST_VULKAN_INCLUDE_DIRS}
+        )
+
+        # Stands the real session up on the live driver with the compiled shaders,
+        # so a module that failed to build or an asset path that resolves to
+        # nothing fails here instead of at the first frame.
+        cellularity_add_host_test(
+                cellularity_win32_vulkan_session_tests
+                tests/win32_vulkan_session_tests.cpp
+                vulkan_backend_abi
+                cellularity_vulkan_host
+                cellularity_win32_host_camera
+                ${CELLULARITY_HOST_VULKAN_LIBRARY}
+        )
+        target_include_directories(cellularity_win32_vulkan_session_tests PRIVATE
+                ${CELLULARITY_HOST_VULKAN_INCLUDE_DIRS}
+        )
+        add_dependencies(cellularity_win32_vulkan_session_tests
+                cellularity_vulkan_shaders)
+        set_tests_properties(cellularity_win32_vulkan_session_tests PROPERTIES
+                ENVIRONMENT
+                "CELLULARITY_VULKAN_TEST_ASSET_ROOT=${CELLULARITY_HOST_SHADER_DIR};CELLULARITY_VULKAN_TEST_SECONDARY_ROOT=${CMAKE_CURRENT_SOURCE_DIR}/rendering/assets"
+        )
+    endif()
     cellularity_add_host_test(
             cellularity_native_vulkan_render_worker_tests
             tests/native_vulkan_render_worker_tests.cpp
@@ -1109,7 +1413,7 @@ if(NOT ANDROID)
     add_test(
             NAME cellularity_vulkan_backend_client_isolation
             COMMAND ${CMAKE_COMMAND}
-                    -DNM_TOOL=${CMAKE_NM}
+                    -DNM_TOOL=${CELLULARITY_SYMBOL_TOOL}
                     -DCLIENT_ARCHIVE=$<TARGET_FILE:cellularity_vulkan_backend_client>
                     -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/VerifyVulkanBackendClientIsolation.cmake
     )
@@ -1492,6 +1796,12 @@ if(NOT ANDROID)
             diagnostics/NativeCrashReportWriter.cpp
     )
     cellularity_configure_source_target(cellularity_native_diagnostics_tests)
+    if(WIN32)
+        # The report writer creates its file with an owner-only security
+        # descriptor and the test verifies that descriptor, both through
+        # GetNamedSecurityInfoA, which only advapi32 exports.
+        target_link_libraries(cellularity_native_diagnostics_tests PRIVATE advapi32)
+    endif()
     add_test(
             NAME cellularity_native_diagnostics_tests
             COMMAND cellularity_native_diagnostics_tests
@@ -1524,7 +1834,10 @@ if(NOT ANDROID)
             tests/fixtures/FormatFixtureCorpus.cpp
     )
     cellularity_configure_source_target(cellularity_format_test_support)
-    target_link_libraries(cellularity_format_test_support PRIVATE cellularity_stable_digest z)
+    target_link_libraries(cellularity_format_test_support PRIVATE
+            cellularity_stable_digest
+            ZLIB::ZLIB
+    )
 
     add_executable(cellularity_format_fixture_tool
             tests/fixtures/format_fixture_tool.cpp

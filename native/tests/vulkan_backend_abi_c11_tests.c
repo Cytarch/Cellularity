@@ -31,9 +31,18 @@ _Static_assert(offsetof(CellularityVulkanErrorV1, message) == 24, "Message offse
 _Static_assert(offsetof(CellularityVulkanSessionCreateInfoV1, abi_version) == 0, "Create ABI offset changed");
 _Static_assert(offsetof(CellularityVulkanSessionCreateInfoV1, struct_size) == 4, "Create size offset changed");
 _Static_assert(offsetof(CellularityVulkanSessionCreateInfoV1, asset_manager) == 8, "Create asset offset changed");
-ASSERT_NEXT_FIELD(CellularityVulkanSessionCreateInfoV1, asset_manager, flags, uint32_t);
-ASSERT_NEXT_FIELD(CellularityVulkanSessionCreateInfoV1, flags, reserved_zero, uint32_t);
+/* The field after asset_manager was renamed from a reserved "flags" word to the
+   asset-source selector. Its offset, size and the required struct size are
+   deliberately unchanged, so this stays a layout assertion for both. */
+_Static_assert(offsetof(CellularityVulkanSessionCreateInfoV1, asset_source) == 16, "Create asset source offset changed");
+ASSERT_NEXT_FIELD(CellularityVulkanSessionCreateInfoV1, asset_manager, asset_source, CellularityVulkanAssetSourceV1);
+ASSERT_NEXT_FIELD(CellularityVulkanSessionCreateInfoV1, asset_source, reserved_zero, uint32_t);
 _Static_assert(CELLULARITY_VULKAN_SESSION_CREATE_INFO_V1_REQUIRED_SIZE == offsetof(CellularityVulkanSessionCreateInfoV1, reserved_zero) + sizeof(uint32_t), "Create required size changed");
+/* The optional asset roots extend the structure without moving any earlier field. */
+_Static_assert(sizeof(CellularityVulkanSessionCreateInfoV1) == CELLULARITY_VULKAN_SESSION_CREATE_INFO_V1_FULL_SIZE, "Create full size changed");
+_Static_assert(offsetof(CellularityVulkanSessionCreateInfoV1, asset_root) == 24, "Optional asset root offset changed");
+_Static_assert(offsetof(CellularityVulkanSessionCreateInfoV1, asset_root_secondary) == 32, "Optional asset root offset changed");
+_Static_assert(CELLULARITY_VULKAN_SESSION_CREATE_INFO_V1_ASSET_ROOT_OFFSET == 32, "Readable asset root offset changed");
 
 _Static_assert(offsetof(CellularityVulkanSurfaceApiV1, abi_version) == 0, "API ABI offset changed");
 _Static_assert(offsetof(CellularityVulkanSurfaceApiV1, struct_size) == 4, "API size offset changed");
@@ -91,9 +100,15 @@ ASSERT_CALLBACK_TYPE(set_profiling_enabled, CellularityVulkanSetProfilingEnabled
 ASSERT_CALLBACK_TYPE(get_diagnostics_size, CellularityVulkanGetDiagnosticsSizeFnV1);
 ASSERT_CALLBACK_TYPE(read_diagnostics_chunk, CellularityVulkanReadDiagnosticsChunkFnV1);
 ASSERT_CALLBACK_TYPE(release_diagnostics_snapshot, CellularityVulkanReleaseDiagnosticsSnapshotFnV1);
+ASSERT_CALLBACK_TYPE(finish_offscreen_rgba_into, CellularityVulkanFinishOffscreenRgbaIntoFnV1);
 
 _Static_assert(CELLULARITY_VULKAN_SURFACE_API_V1_REQUIRED_SIZE == offsetof(CellularityVulkanSurfaceApiV1, release_diagnostics_snapshot) + sizeof(CellularityVulkanReleaseDiagnosticsSnapshotFnV1), "API required size changed");
-_Static_assert(sizeof(CellularityVulkanSurfaceApiV1) == CELLULARITY_VULKAN_SURFACE_API_V1_REQUIRED_SIZE, "Unexpected API tail padding");
+/* The table grows by appending, so the entries a caller that predates the newest
+   one reads keep their offsets, and the required size still names the last entry
+   of the older prefix. */
+_Static_assert(offsetof(CellularityVulkanSurfaceApiV1, finish_offscreen_rgba_into) == CELLULARITY_VULKAN_SURFACE_API_V1_REQUIRED_SIZE, "Appended entry must follow the required prefix");
+_Static_assert(sizeof(CellularityVulkanSurfaceApiV1) == CELLULARITY_VULKAN_SURFACE_API_V1_FULL_SIZE, "Full API size must be the structure itself");
+_Static_assert(sizeof(CellularityVulkanSurfaceApiV1) >= CELLULARITY_VULKAN_SURFACE_API_V1_REQUIRED_SIZE, "Full API size must cover the required prefix");
 #if UINTPTR_MAX == UINT64_MAX
 _Static_assert(CELLULARITY_VULKAN_SURFACE_API_V1_REQUIRED_SIZE == 224, "64-bit API size changed");
 #elif UINTPTR_MAX == UINT32_MAX

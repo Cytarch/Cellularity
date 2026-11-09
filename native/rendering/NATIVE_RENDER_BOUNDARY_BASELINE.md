@@ -2,15 +2,19 @@
 
 This document fixes the measured Android managed/native render boundary and
 records the V-20 transaction collapse, V-21 publication split, V-22
-Environment Field Preview state endpoint, and V-25 retained Genome Preview
-endpoint with typed one-shot captures. Later stages may reduce the listed calls
-further, but must update this document and
-`scripts/verify-native-render-boundary.py` together.
+Environment Field Preview state endpoint, V-25 retained Genome Preview
+endpoint with typed one-shot captures, and the V-28 native Vulkan render
+worker. Later stages may reduce the listed calls further, but must update this
+document and `scripts/verify-native-render-boundary.py` together.
 
 ## Counting rules
 
 - A logical frame starts at `GLSurfaceView.Renderer.onDrawFrame` for GLES or at
-  consumption of `VulkanClearFrameRenderThread.Command.Render` for Vulkan.
+  `NativeVulkanRenderWorker::renderRequestedFrame` consuming a requested frame on
+  `CellularityVk` for Vulkan.
+- Vulkan managed frame requests use one `nativeRequestFrame` JNI call per
+  request. Adjacent requests can coalesce in the native desired-state flag;
+  native draw and present do not make a per-frame controller JNI call.
 - JNI calls used only for surface creation, resize, teardown, settings, or
   explicit diagnostics are not included in the steady logical-frame count.
 - A runtime-publication poll is counted as an independent status operation,
@@ -28,13 +32,13 @@ further, but must update this document and
 |---|---|---|---:|
 | GLES microscope | `AndroidGlRenderer` on the `GLSurfaceView` EGL thread | `nativeDrawMicroscope` | 1/frame |
 | GLES microscope, No Render | `AndroidGlRenderer` on the `GLSurfaceView` EGL thread | `nativeClearMicroscopeNoRender` | 1/frame |
-| Vulkan microscope | `VulkanClearFrameRenderThread` on `Cellularity-Vulkan-Render` | `nativeDrawMicroscope` | 1/frame |
-| Vulkan microscope, No Render | `VulkanClearFrameRenderThread` on `Cellularity-Vulkan-Render` | `nativeClearMicroscopeNoRender` | 1/frame |
+| Vulkan microscope | `VulkanClearFrameView` on the Android UI thread; `NativeVulkanRenderWorker` on `CellularityVk` | `NativeVulkanRenderWorkerJni.nativeRequestFrame`; native `MicroscopeRenderFrameSource::renderFrame` | 1/request; requests coalesce, 0 draw JNI/frame |
+| Vulkan microscope, No Render | `VulkanClearFrameView` on the Android UI thread; `NativeVulkanRenderWorker` on `CellularityVk` | `NativeVulkanRenderWorkerJni.nativeRequestFrame`; native `MicroscopeRenderFrameSource::renderFrame` | 1/request; requests coalesce, 0 draw JNI/frame |
 | Microscope runtime publication | Session-owned serial publication dispatcher, independent of a surface | `nativePollMicroscopeRuntimePublication` | 1/poll at 50 ms visible or 100 ms hidden/no-render |
 | GLES Genome Preview | GLES on-demand `GLSurfaceView` EGL thread | `nativeDrawGenomePreview` | 1/frame |
-| Vulkan Genome Preview | `VulkanClearFrameRenderThread` on `Cellularity-Vulkan-Render` | `nativeDrawGenomePreview` | 1/frame |
+| Vulkan Genome Preview | `VulkanClearFrameView` on the Android UI thread; `NativeVulkanRenderWorker` on `CellularityVk` | `NativeVulkanRenderWorkerJni.nativeRequestFrame`; native `GenomePreviewRenderFrameSource::renderFrame` | 1/request; requests coalesce, 0 draw JNI/frame |
 | GLES Environment Field Preview | GLES on-demand `GLSurfaceView` EGL thread | `nativeDrawEnvironmentFieldPreview` reading retained native state | 1/frame |
-| Vulkan Environment Field Preview | `VulkanClearFrameRenderThread` on `Cellularity-Vulkan-Render` | `nativeDrawEnvironmentFieldPreview` reading retained native state | 1/frame |
+| Vulkan Environment Field Preview | `VulkanClearFrameView` on the Android UI thread; `NativeVulkanRenderWorker` on `CellularityVk` | `NativeVulkanRenderWorkerJni.nativeRequestFrame`; native `EnvironmentFieldPreviewRenderFrameSource::renderFrame` reading retained state | 1/request; requests coalesce, 0 draw JNI/frame |
 | Environment Field Preview state change | Android UI thread through the controller lifetime guard | `nativePublishEnvironmentFieldPreviewState` | 1/changed state; duplicate UI state is suppressed before JNI |
 | Genome file capture | Storage worker admits and awaits; active GLES EGL or Vulkan render thread executes | `NativePreviewCaptureBridge.nativeEnqueueGenome`, `nativeAwait`, `nativeDestroy`; optional `nativeCancel` | 1 enqueue + 1 await + 1 destroy/capture |
 | Substrate file capture | Storage worker admits and awaits; active GLES EGL or Vulkan render thread executes | `NativePreviewCaptureBridge.nativeEnqueueSubstrate`, `nativeAwait`, `nativeDestroy`; optional `nativeCancel` | 1 enqueue + 1 await + 1 destroy/capture |
@@ -63,13 +67,18 @@ The callback is therefore the last observable app-owned boundary for GLES.
 ### Vulkan microscope
 
 ```text
-Android / Choreographer request
-  -> VulkanClearFrameRenderThread.Command.Render
-  -> VulkanMicroscopeSurfaceHost delegate
-  -> MicroscopeRenderer.onRenderFrame
-       -> nativeDrawMicroscope / nativeClearMicroscopeNoRender
-          -> borrowed Vulkan RenderSurfaceSession adapter
-  -> Kotlin retry/status state machine
+Android / Choreographer request                              [UI thread]
+  -> VulkanMicroscopeSurfaceHost / VulkanClearFrameView
+  -> NativeVulkanRenderWorkerBridge.requestFrame
+  -> NativeVulkanRenderWorkerJni.nativeRequestFrame
+  -> coalesced native desired-frame state
+
+NativeVulkanRenderWorker::renderRequestedFrame               [CellularityVk]
+  -> MicroscopeRenderFrameSource::renderFrame
+  -> NativeCellularityController::drawMicroscopeForCurrentMode
+  -> borrowed Vulkan RenderSurfaceSession adapter
+  -> acquire, submit and present
+  -> packed native RenderFrameResult; native retry/status state
 
 AndroidMicroscopeView status timer                         [main thread]
   -> session publication dispatcher
@@ -77,9 +86,10 @@ AndroidMicroscopeView status timer                         [main thread]
   -> generation-checked UI delivery                        [main thread]
 ```
 
-The controller draw JNI now returns the packed outcome of the same transaction.
-The Vulkan adapter performs acquire, submit and present before that call
-returns; no mutable last-result JNI side channel remains.
+The only steady managed-to-native frame request is `nativeRequestFrame`. The
+controller's native draw returns the packed outcome through `SourceFrameResult`;
+the Vulkan adapter performs acquire, submit and present before the native frame
+source returns. No mutable last-result JNI side channel remains.
 
 ### Genome Preview
 
@@ -90,7 +100,9 @@ GenomePreviewView
   -> native GenomePreviewEndpoint                           [retained latest + FIFO]
   -> backend frame callback
        GLES: nativeDrawGenomePreview
-       Vulkan: native GenomePreview render worker
+       Vulkan: NativeVulkanRenderWorker
+         -> GenomePreviewRenderFrameSource::renderFrame
+         -> GenomePreviewEndpoint::draw
          -> applyPendingOnRenderOwner
          -> draw retained native state
          -> publish GFA2 only after primary onscreen present
@@ -118,7 +130,10 @@ DensityFieldPreviewView.update
   -> atomic latest-only native retained pointer
 
 next render callback
-  -> nativeDrawEnvironmentFieldPreview
+  GLES: nativeDrawEnvironmentFieldPreview
+  Vulkan: nativeRequestFrame                         [UI thread]
+          -> NativeVulkanRenderWorker              [CellularityVk]
+          -> EnvironmentFieldPreviewRenderFrameSource::renderFrame
   -> retained state + current native viewport
   -> production EnvironmentFieldPreviewRenderer
 ```
@@ -158,19 +173,22 @@ work are not an onscreen frame. V-29 owns any later transport/codec change.
   `float[]`. Active-camera cadence also reads the same array every vsync.
 - One two-pointer MOVE commonly produces two touch moves, one pan, one zoom,
   four command JNI calls, and one viewport snapshot after accepted zoom.
-- The surface hosts retain a `queueRenderTask` compatibility method until V-26,
-  but no production preview producer submits a managed closure through it.
-- Vulkan lifecycle and every sixtieth presented frame publish only compact
-  health counters. Full diagnostics cross JNI through the tokenized
+- V-26B removed the surface-host `queueRenderTask` compatibility method and the
+  Vulkan arbitrary-task command. Production frame requests are typed; no managed
+  render closure crosses the boundary.
+- Ordinary Vulkan frame completion does not cross JNI. The native worker sends a
+  coalesced wakeup only for surface reattachment, recoverable failure or terminal
+  failure; managed code then reads compact status through
+  `nativeReadCompactStatus`. Explicit diagnostics use the tokenized
   `nativeRequestDiagnostics` / `nativeReadDiagnosticsChunk` /
-  `nativeReleaseDiagnostics` transaction for an explicit snapshot/export or
-  once on a failure path.
-- The standalone Vulkan diagnostic activity uses `nativeRenderDemoFrame`
-  directly through the main-side C-ABI client; production microscope and
-  preview delegates instead use the characterized direct controller frame
-  transaction.
+  `nativeReleaseDiagnostics` transaction. Failure snapshots are read as
+  revision-addressed diagnostics chunks.
+- The standalone Vulkan diagnostic activity uses the same native worker with
+  `VulkanDemoFrameProducer`; production microscope and preview delegates use
+  their typed native frame sources. None requires a per-frame managed demo draw
+  JNI call.
 
-## Native source ownership at V-27
+## Native source ownership at V-28
 
 | Source | CMake owner | Final DSO |
 |---|---|---|
@@ -180,6 +198,13 @@ work are not an onscreen frame. V-29 owns any later transport/codec change.
 | `jni/NativePreviewCaptureJni.cpp` | `CELLULARITY_JNI_SOURCES` | `cellularity.so` |
 | `jni/NativePreviewCaptureRequestHandle.cpp` | `CELLULARITY_JNI_SOURCES` | `cellularity.so` |
 | `jni/NativeControllerJni.cpp` | `CELLULARITY_JNI_SOURCES` | `cellularity.so` |
+| `jni/NativeRenderProfilingJni.cpp` | `CELLULARITY_JNI_SOURCES` | `cellularity.so` |
+| `jni/NativeVulkanRenderWorkerJni.cpp` | `CELLULARITY_JNI_SOURCES` | `cellularity.so` |
+| `app/render/NativeVulkanRenderWorker.cpp` | `cellularity_render_worker` | `cellularity.so` |
+| `app/render/sources/MicroscopeRenderFrameSource.cpp` | `CELLULARITY_RENDERING_SOURCES` | `cellularity.so` |
+| `app/render/sources/GenomePreviewRenderFrameSource.cpp` | `CELLULARITY_RENDERING_SOURCES` | `cellularity.so` |
+| `app/render/sources/EnvironmentFieldPreviewRenderFrameSource.cpp` | `CELLULARITY_RENDERING_SOURCES` | `cellularity.so` |
+| `app/render/sources/VulkanDemoFrameProducer.cpp` | `CELLULARITY_RENDERING_SOURCES` | `cellularity.so` |
 | `app/genome_preview/GenomePreviewEndpoint.cpp` | `CELLULARITY_RENDERING_SOURCES` | `cellularity.so` |
 | `app/microscope/SubstratePreviewCaptureEndpoint.cpp` | `CELLULARITY_RENDERING_SOURCES` | `cellularity.so` |
 | `app/render/preview/NativePreviewCaptureLayouts.cpp` | `CELLULARITY_RENDERING_SOURCES` | `cellularity.so` |
@@ -188,8 +213,7 @@ work are not an onscreen frame. V-29 owns any later transport/codec change.
 | `app/EnvironmentFieldPreviewState.cpp` | `CELLULARITY_RENDERING_SOURCES` | `cellularity.so` |
 | `app/NativeRenderSession.cpp` | `CELLULARITY_RENDERING_SOURCES` | `cellularity.so` |
 | `app/microscope/NativeMicroscopeRuntime.cpp` | `CELLULARITY_RENDERING_SOURCES` | `cellularity.so` |
-| `jni/NativeVulkanBackendSessionJni.cpp` | `CELLULARITY_JNI_SOURCES` | `cellularity.so` |
-| `render/backend/vulkan/VulkanBackendAbiExports.cpp` | direct `cellularity_vulkan` source | `cellularity_vulkan.so` |
+| `render/backend/vulkan/VulkanBackendAbiExports.cpp` | `CELLULARITY_VULKAN_BACKEND_SOURCES` in `native/cmake/VulkanBackendSources.cmake` | `cellularity_vulkan.so` |
 
 `cellularity.so` must not acquire a Vulkan loader dependency. The validator
 checks this source split and the existing profiling compile flag.
@@ -257,11 +281,3 @@ scripts/verify-native-render-boundary.py \
 
 The APK leg verifies that R8 removed the V-19 managed counter storage and
 report markers; diagnostic variants retain them intentionally.
-
-## Known migration defect, not an acceptance invariant
-
-The current Kotlin Vulkan worker can consume an attach/frame request before its
-resume or surface gate opens and then fail to replay it. Barrier-based tests pin
-that behavior only so V-28 can demonstrate the deliberate state-machine change.
-The ordinary View order `resume -> attach -> request` remains the V-19 accepted
-path.

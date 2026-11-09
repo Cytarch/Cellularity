@@ -36,7 +36,9 @@ public:
                     debugHudTelemetry = nullptr) override;
     [[nodiscard]] RenderPassStatus drawMicroscopeOffscreenPass(
             const RenderPresentationState& presentation,
-            const PreparedRenderFrame& frame) override;
+            const PreparedRenderFrame& frame,
+            const cellularity::microscope::MicroscopeDebugHudTelemetry*
+                    debugHudTelemetry = nullptr) override;
     [[nodiscard]] RenderFrameResult clearSurface(
             const RenderViewportState& viewport,
             const std::array<float, 4>& color) override;

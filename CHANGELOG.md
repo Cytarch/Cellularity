@@ -4,6 +4,10 @@ Notable user-visible changes are recorded in this file.
 
 ## Unreleased
 
+- Add the Windows Compose Desktop application with the shared UI, native Vulkan
+  rendering, local settings, genome editing, and substrate import/save flows.
+- Add Gradle MSI packaging with native runtime assets, an installation-directory
+  choice, and a Start Menu shortcut.
 - Store standalone genomes in the bounded `CLTY` release format with dynamic
   1–256-gene support, named columnar data, and per-column compression.
 - Keep original Java genome files as read-only imports while new saves use the
