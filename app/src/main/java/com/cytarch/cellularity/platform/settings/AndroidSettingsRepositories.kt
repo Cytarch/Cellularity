@@ -2,6 +2,8 @@ package com.cytarch.cellularity.platform.settings
 
 import com.cytarch.cellularity.platform.files.AndroidDurableFileOperations
 import com.cytarch.cellularity.shared.files.storage.AtomicFileStore
+import com.cytarch.cellularity.shared.settings.storage.AtomicJsonSettingsStore
+import com.cytarch.cellularity.shared.settings.storage.FileCellularitySettingsRepository
 import android.content.Context
 import com.cytarch.cellularity.shared.settings.AndroidDisplaySettings
 import com.cytarch.cellularity.shared.settings.AndroidDisplaySettingsJson
@@ -17,43 +19,22 @@ import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.StateFlow
 
+/** Android's settings document in the app's private files directory (shared implementation). */
 internal class AndroidCellularitySettingsRepository private constructor(
-    private val store: AtomicJsonSettingsStore<CellularitySettings>
-) : CellularitySettingsRepository {
+    private val repository: FileCellularitySettingsRepository
+) : CellularitySettingsRepository by repository {
     constructor(context: Context) : this(
-        settingsFile = File(context.applicationContext.filesDir, SETTINGS_FILE_NAME)
+        settingsFile = File(
+            context.applicationContext.filesDir,
+            FileCellularitySettingsRepository.SETTINGS_FILE_NAME
+        )
     )
 
     internal constructor(
         settingsFile: File,
         atomicFiles: AtomicFileStore = AtomicFileStore(AndroidDurableFileOperations),
         dispatcher: CoroutineDispatcher = Dispatchers.IO
-    ) : this(
-        AtomicJsonSettingsStore(
-            target = settingsFile,
-            defaultValue = CellularitySettings.Default,
-            normalize = CellularitySettings::normalized,
-            encode = CellularitySettingsJson::encode,
-            decode = CellularitySettingsJson::decode,
-            atomicFiles = atomicFiles,
-            dispatcher = dispatcher
-        )
-    )
-
-    override val settings: StateFlow<CellularitySettings> = store.state
-    override val recovery: StateFlow<SettingsRecoveryState?> = store.recovery
-
-    override suspend fun initialize(): SettingsResult<CellularitySettings> = store.initialize()
-
-    override suspend fun writeSettings(
-        settings: CellularitySettings
-    ): SettingsResult<CellularitySettings> = store.write(settings)
-
-    override suspend fun resetSettings(): SettingsResult<CellularitySettings> = store.reset()
-
-    private companion object {
-        const val SETTINGS_FILE_NAME = "settings.json"
-    }
+    ) : this(FileCellularitySettingsRepository(settingsFile, atomicFiles, dispatcher))
 }
 
 internal class AndroidDisplaySettingsRepository private constructor(

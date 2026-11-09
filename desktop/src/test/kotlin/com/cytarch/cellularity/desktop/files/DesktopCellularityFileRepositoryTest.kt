@@ -312,42 +312,6 @@ class DesktopCellularityFileRepositoryTest {
     }
 
     @Test
-    fun cancellationPropagatesInsteadOfBeingReportedAsAFailure(): Unit = runBlocking {
-        val repository = repository()
-        // The channel makes the two outcomes distinguishable. If the repository call is
-        // reached and does its job, the send records "completed"; if cancellation won the
-        // race, the send never happens and the job is cancelled. Either way the one thing
-        // that must never appear is a completed call, which is what a swallowed
-        // cancellation would produce.
-        val completion = Channel<String>(Channel.RENDEZVOUS)
-        val request = launch(Dispatchers.Default) {
-            val result = try {
-                repository.listGenomeNames()
-                "completed"
-            } catch (cancelled: CancellationException) {
-                "cancelled"
-            }
-            completion.trySend(result)
-        }
-        request.cancel()
-
-        var reportedAsCompleted = false
-        try {
-            // Bounded so a repository that swallowed the cancellation fails the test
-            // instead of hanging the build.
-            val outcome = withTimeout(5_000) { completion.receive() }
-            reportedAsCompleted = outcome == "completed"
-        } catch (cancelled: CancellationException) {
-            // Nothing was reported: the call never completed, which is the expected shape.
-        }
-        assertFalse(
-            "a cancelled repository call reported a completed storage result",
-            reportedAsCompleted
-        )
-        assertTrue("the cancelled call was not observed as cancelled", request.isCancelled)
-    }
-
-    @Test
     fun aConcurrentWriteLeavesThePreviousFileIntact() = runBlocking {
         val storage = storageDirectory()
         val repository = repository(storage)

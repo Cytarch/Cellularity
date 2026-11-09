@@ -1,6 +1,5 @@
-package com.cytarch.cellularity.platform.settings
+package com.cytarch.cellularity.shared.settings.storage
 
-import com.cytarch.cellularity.platform.files.AndroidDurableFileOperations
 import com.cytarch.cellularity.shared.files.storage.AtomicFileStore
 import com.cytarch.cellularity.shared.files.storage.FileSizeLimitExceededException
 import com.cytarch.cellularity.shared.files.storage.copyWithLimit
@@ -31,13 +30,13 @@ import kotlinx.coroutines.withContext
  * A decoded value is published only after a complete read or durable commit. An unreadable
  * current document is moved to a sibling recovery file before normal writes may replace it.
  */
-internal class AtomicJsonSettingsStore<T>(
+class AtomicJsonSettingsStore<T>(
     private val target: File,
     defaultValue: T,
     private val normalize: (T) -> T,
     private val encode: (T) -> String,
     private val decode: (String) -> SettingsResult<T>,
-    private val atomicFiles: AtomicFileStore = AtomicFileStore(AndroidDurableFileOperations),
+    private val atomicFiles: AtomicFileStore,
     private val dispatcher: CoroutineDispatcher = Dispatchers.IO,
     private val maximumBytes: Long = MAX_SETTINGS_BYTES
 ) {
