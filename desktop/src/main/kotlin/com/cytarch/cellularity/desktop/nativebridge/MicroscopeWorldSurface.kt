@@ -91,6 +91,8 @@ fun MicroscopeRenderSurface(
     maxCellCount: Int,
     maxFoodCount: Int,
     dishRadius: Double,
+    /** The dish's inner radius (a ring dish when positive), as Android takes it. */
+    dishInnerRadius: Double = 0.0,
     temperatureMode: Int,
     toolOrdinal: Int,
     substratePath: String?,
@@ -147,6 +149,7 @@ fun MicroscopeRenderSurface(
             maxCellCount = maxCellCount,
             maxFoodCount = maxFoodCount,
             dishRadius = dishRadius,
+            dishInnerRadius = dishInnerRadius,
             substratePath = substratePath,
             onCellCount = { count -> currentOnCellCount(count) },
             onFailure = { message -> currentOnFailure(message) },
@@ -462,6 +465,7 @@ private class WorldSurface(
     private val maxCellCount: Int,
     private val maxFoodCount: Int,
     private val dishRadius: Double,
+    private val dishInnerRadius: Double,
     private val substratePath: String?,
     private val onCellCount: (Long) -> Unit,
     private val onFailure: (String) -> Unit,
@@ -806,7 +810,8 @@ private class WorldSurface(
                 maxFoodCount = maxFoodCount,
                 dishRadius = dishRadius,
                 shaderRoot = shaderRoot,
-                textureRoot = textureRoot
+                textureRoot = textureRoot,
+                innerRadius = dishInnerRadius
             )
         } else {
             DesktopNativeRenderer.nativeCreateSessionFromSubstrate(

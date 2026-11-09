@@ -335,7 +335,9 @@ object DesktopNativeRenderer {
         maxFoodCount: Int,
         dishRadius: Double,
         shaderRoot: String,
-        textureRoot: String
+        textureRoot: String,
+        /** The dish's inner radius (a ring dish when positive), as Android's nativeCreate takes. */
+        innerRadius: Double = 0.0
     ): Long
 
     /**

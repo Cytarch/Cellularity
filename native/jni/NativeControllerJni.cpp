@@ -13,6 +13,7 @@
 #include "NativeJniUtils.h"
 #include "SubstrateFilesJni.h"
 #include "app/NativeCellularityController.h"
+#include "app/NativeControllerFactory.h"
 #include "app/NativeWorldEditing.h"
 #include "core/SimulationWorld.h"
 #include "core/Environment.h"
@@ -27,19 +28,8 @@ namespace {
 
 jlong createControllerHandle(bool previewMode, const Environment& environment,
         std::int64_t createdAtUnixMillis) {
-    cellularity::snapshot_codec::validateEnvironmentForAllocation(environment);
-    if (createdAtUnixMillis <= 0) {
-        throw std::invalid_argument("World creation time must be positive");
-    }
-    auto controller =
-            std::make_shared<NativeCellularityController>(previewMode, environment);
-    {
-        auto access = controller->writeWorld();
-        access.world().mCreatedAtUnixMillis = createdAtUnixMillis;
-        cellularity::snapshot_codec::preserveEnvironmentRuntimeFields(
-                access.world(), environment);
-    }
-    return createNativeControllerHandle(std::move(controller));
+    return createNativeControllerHandle(cellularity::app::createNewPlateController(
+            previewMode, environment, createdAtUnixMillis));
 }
 
 Environment createFallbackEnvironment(bool previewMode, int maxCellCount,
@@ -55,14 +45,8 @@ Java_com_cytarch_cellularity_NativeCellularityControllerBridge_nativeCreate(
         JNIEnv* env, jclass, jboolean previewMode, jint maxCellCount,
         jint maxFoodCount, jdouble radius, jdouble innerRadius, jlong createdAtUnixMillis) {
     try {
-        Environment environment =
-                previewMode
-                ? Environment::setupPreviewSimulationEnvironment(maxCellCount)
-                : Environment::constructDefaultEnvironment(maxCellCount,
-                          maxFoodCount, radius);
-        if (!previewMode) {
-            environment.mInnerRadius = innerRadius;
-        }
+        Environment environment = cellularity::app::newPlateEnvironment(
+                previewMode, maxCellCount, maxFoodCount, radius, innerRadius);
         return createControllerHandle(
                 previewMode, environment,
                 static_cast<std::int64_t>(createdAtUnixMillis));
@@ -95,17 +79,8 @@ Java_com_cytarch_cellularity_NativeCellularityControllerBridge_nativeIsConfigura
 extern "C" JNIEXPORT jlong JNICALL
 Java_com_cytarch_cellularity_NativeCellularityControllerBridge_nativeEstimateWorldAllocationBytes(
         JNIEnv*, jclass, jint maxCellCount, jint maxFoodCount, jdouble radius) {
-    try {
-        const Environment environment = Environment::constructDefaultEnvironment(
-                maxCellCount, maxFoodCount, radius);
-        const cellularity::memory::WorldAllocationEstimate estimate =
-                cellularity::memory::estimateCurrentWorldAllocation(environment);
-        return estimate.bytes <= estimate.budgetBytes
-                ? static_cast<jlong>(estimate.bytes)
-                : static_cast<jlong>(-1);
-    } catch (...) {
-        return static_cast<jlong>(-1);
-    }
+    return static_cast<jlong>(cellularity::app::estimateNewPlateAllocationBytes(
+            maxCellCount, maxFoodCount, radius));
 }
 
 extern "C" JNIEXPORT jlong JNICALL
@@ -117,20 +92,10 @@ Java_com_cytarch_cellularity_NativeCellularityControllerBridge_nativeCreateFromS
         Environment fallbackEnvironment =
                 createFallbackEnvironment(previewMode, fallbackMaxCellCount,
                         fallbackMaxFoodCount, fallbackRadius);
-        NativeSubstrateLoadResult loaded = loadNativeSubstrateFromPath(
+        return createNativeControllerHandle(cellularity::app::createStoredPlateController(
                 readJavaString(env, substratePath, "SubstratePath"), previewMode,
-                fallbackEnvironment);
-        if (loaded.world->mCreatedAtUnixMillis <= 0) {
-            if (fallbackCreatedAtUnixMillis <= 0) {
-                throw std::invalid_argument(
-                        "Fallback substrate creation time must be positive");
-            }
-            loaded.world->mCreatedAtUnixMillis =
-                    static_cast<std::int64_t>(fallbackCreatedAtUnixMillis);
-        }
-        auto controller =
-                std::make_shared<NativeCellularityController>(std::move(loaded.world));
-        return createNativeControllerHandle(std::move(controller));
+                fallbackEnvironment,
+                static_cast<std::int64_t>(fallbackCreatedAtUnixMillis)));
     } catch (const std::exception& exception) {
         throwRuntimeException(env, exception);
         return 0;

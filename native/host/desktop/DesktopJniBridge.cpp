@@ -28,18 +28,13 @@
 // load-time failure: the library still loads and the mismatch surfaces as an
 // UnsatisfiedLinkError on the first call.
 //
-// The start entry point is exported under two names, nativeStartSession and
-// nativeCreateSession, because the managed declaration and the specification for this
-// bridge disagree about which one it is. Both forward to one implementation; see the
-// alias below.
-//
 // ## Threading: one calling thread, and it is not the simulation's
 //
 // VulkanBackendSession records the std::thread::id that created it, and every
 // operation it forwards refuses to run on any other thread (see its mOwnerThread and
 // beginCall). The swapchain, the command buffers and the controller's render-facing
 // state are single-owner for the same reason. The managed side is therefore required
-// to call nativeStartSession, nativeRenderFrame and nativeStopSession from one and
+// to call nativeCreateSession, nativeRenderFrame and nativeStopSession from one and
 // the same thread for the lifetime of a session. Nothing here makes that requirement
 // optional, and a call from a second thread fails rather than working by accident.
 //
@@ -94,6 +89,7 @@
 #include <vector>
 
 #include "app/NativeCellularityController.h"
+#include "app/NativeControllerFactory.h"
 #include "jni/GenomeCodecJni.h"
 #include "jni/SubstrateFilesJni.h"
 #include "core/Utf8Path.h"
@@ -678,17 +674,8 @@ Java_com_cytarch_cellularity_desktop_nativebridge_DesktopNativeRenderer_nativeDe
 extern "C" JNIEXPORT jlong JNICALL
 Java_com_cytarch_cellularity_desktop_nativebridge_DesktopNativeRenderer_nativeEstimateWorldAllocationBytes(
         JNIEnv*, jclass, jint maxCellCount, jint maxFoodCount, jdouble radius) {
-    try {
-        const Environment environment = Environment::constructDefaultEnvironment(
-                maxCellCount, maxFoodCount, radius);
-        const cellularity::memory::WorldAllocationEstimate estimate =
-                cellularity::memory::estimateCurrentWorldAllocation(environment);
-        return estimate.bytes <= estimate.budgetBytes
-                ? static_cast<jlong>(estimate.bytes)
-                : static_cast<jlong>(-1);
-    } catch (...) {
-        return static_cast<jlong>(-1);
-    }
+    return static_cast<jlong>(cellularity::app::estimateNewPlateAllocationBytes(
+            maxCellCount, maxFoodCount, radius));
 }
 
 #if defined(_WIN32)
@@ -1596,7 +1583,7 @@ Java_com_cytarch_cellularity_desktop_nativebridge_DesktopNativeRenderer_nativeDe
 // this returns 0.
 [[nodiscard]] static jlong startSession(JNIEnv* env, jlong windowHandle, jint width,
         jint height, jint maxCellCount, jint maxFoodCount, jdouble dishRadius,
-        jstring shaderRoot, jstring textureRoot, jstring substratePath) {
+        jdouble innerRadius, jstring shaderRoot, jstring textureRoot, jstring substratePath) {
     try {
         const BridgeWindow window = windowFromHandle(windowHandle);
         if (!isBridgeWindow(window)) {
@@ -1651,40 +1638,20 @@ Java_com_cytarch_cellularity_desktop_nativebridge_DesktopNativeRenderer_nativeDe
                 return 0;
             }
 
-            Environment environment = Environment::constructDefaultEnvironment(
-                    maxCellCount, maxFoodCount, dishRadius);
-                cellularity::snapshot_codec::validateEnvironmentForAllocation(
-                    environment);
-
+            // Android's creation path (app/NativeControllerFactory.h): the same environment,
+            // the same validation, and the same creation-time rules for both kinds of plate.
+            Environment environment = cellularity::app::newPlateEnvironment(
+                    /*previewMode=*/false, maxCellCount, maxFoodCount, dishRadius, innerRadius);
             if (openStoredPlate) {
-                // A saved plate is decoded rather than approximated. The counts above are
-                // the plate's own named allocation, so they are the fallback the loader
-                // needs if the file predates recording them; the file's world supplies
-                // everything else, including when it was created, which is the whole point
-                // of opening a stored plate rather than starting a new one.
-                NativeSubstrateLoadResult loaded = loadNativeSubstrateFromPath(
-                        substratePathValue, /*previewMode=*/false, environment);
-                if (loaded.world == nullptr) {
-                    return 0;
-                }
-                if (loaded.world->mCreatedAtUnixMillis <= 0) {
-                    loaded.world->mCreatedAtUnixMillis = currentUnixMillis();
-                }
-                environment = loaded.world->mEnvironment;
-                controller = std::make_shared<NativeCellularityController>(
-                        std::move(loaded.world));
+                // The counts above are the fallback for a file that predates recording its own
+                // allocation; the file's world supplies everything else.
+                controller = cellularity::app::createStoredPlateController(
+                        substratePathValue, /*previewMode=*/false, environment,
+                        currentUnixMillis());
+                environment = controller->writeWorld().world().mEnvironment;
             } else {
-                // A new plate starts as Android's does: Environment's defaults, with
-                // random-cell seeding off until the user turns it on in the substrate
-                // panel.
-                controller = std::make_shared<NativeCellularityController>(
-                        false, environment);
-                {
-                    auto access = controller->writeWorld();
-                    access.world().mCreatedAtUnixMillis = currentUnixMillis();
-                    cellularity::snapshot_codec::preserveEnvironmentRuntimeFields(
-                            access.world(), environment);
-                }
+                controller = cellularity::app::createNewPlateController(
+                        /*previewMode=*/false, environment, currentUnixMillis());
             }
             controller->installRenderSurfaceSession(
                     std::make_unique<cellularity::render::abi::
@@ -1742,30 +1709,15 @@ Java_com_cytarch_cellularity_desktop_nativebridge_DesktopNativeRenderer_nativeDe
     }
 }
 
-// Creates the simulation and attaches it to the child window. Returns an opaque
+// Creates the simulation and attaches it to the anchor window. Returns an opaque
 // session handle, or 0 if anything failed.
-extern "C" JNIEXPORT jlong JNICALL
-Java_com_cytarch_cellularity_desktop_nativebridge_DesktopNativeRenderer_nativeStartSession(
-        JNIEnv* env, jclass, jlong windowHandle, jint width, jint height,
-        jint maxCellCount, jint maxFoodCount, jdouble dishRadius, jstring shaderRoot,
-        jstring textureRoot) {
-    return startSession(env, windowHandle, width, height, maxCellCount, maxFoodCount,
-            dishRadius, shaderRoot, textureRoot, nullptr);
-}
-
-// The same entry point under the second name the managed side uses for it. The
-// declaration in DesktopNativeRenderer.kt is currently called nativeCreateSession,
-// while the task that specified this bridge named the symbol nativeStartSession;
-// exporting both costs one jump and removes a failure mode that is invisible until the
-// first call, because the JVM resolves external functions lazily and reports a name
-// mismatch as an UnsatisfiedLinkError rather than at load time.
 extern "C" JNIEXPORT jlong JNICALL
 Java_com_cytarch_cellularity_desktop_nativebridge_DesktopNativeRenderer_nativeCreateSession(
         JNIEnv* env, jclass, jlong windowHandle, jint width, jint height,
         jint maxCellCount, jint maxFoodCount, jdouble dishRadius, jstring shaderRoot,
-        jstring textureRoot) {
+        jstring textureRoot, jdouble innerRadius) {
     return startSession(env, windowHandle, width, height, maxCellCount, maxFoodCount,
-            dishRadius, shaderRoot, textureRoot, nullptr);
+            dishRadius, innerRadius, shaderRoot, textureRoot, nullptr);
 }
 
 // The same thing, opening a plate that was saved earlier.
@@ -1780,7 +1732,7 @@ Java_com_cytarch_cellularity_desktop_nativebridge_DesktopNativeRenderer_nativeCr
         jint maxCellCount, jint maxFoodCount, jdouble dishRadius, jstring shaderRoot,
         jstring textureRoot, jstring substratePath) {
     return startSession(env, windowHandle, width, height, maxCellCount, maxFoodCount,
-            dishRadius, shaderRoot, textureRoot, substratePath);
+            dishRadius, 0.0, shaderRoot, textureRoot, substratePath);
 }
 
 // Says why a stored plate cannot be opened, or null when it can.

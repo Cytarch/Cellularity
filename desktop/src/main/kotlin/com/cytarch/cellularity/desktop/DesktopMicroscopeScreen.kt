@@ -91,6 +91,7 @@ fun MicroscopeTab(
                 maxCellCount = configuration.maxCellCount,
                 maxFoodCount = configuration.maxFoodCount,
                 dishRadius = configuration.radius,
+                dishInnerRadius = configuration.innerRadius,
                 // The mode and the tool are the interface's, and the simulation is only
                 // consistent with them while it has been told. Both values are the same numbers
                 // the phone sends, because they are read from the same shared state.
