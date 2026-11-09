@@ -476,11 +476,8 @@ void testRuntimeFileAndAllocationPolicy() {
             memory::runtimeLimitsForDevice(64, twoGib);
     const memory::RuntimeLimits oneGibDevice32 =
             memory::runtimeLimitsForDevice(32, twoGib / 2);
-#if defined(_WIN32)
-    constexpr std::uint64_t kTestBudgetDenominator = 2;
-#else
+    // The same RAM share on every platform.
     constexpr std::uint64_t kTestBudgetDenominator = 4;
-#endif
     const std::uint64_t expectedTwoGibBudget = twoGib / kTestBudgetDenominator;
     // 32-bit: RAM share of 1 GiB, clamped by the 384 MiB address-space ceiling.
     const std::uint64_t expectedOneGibBudget =
@@ -494,13 +491,8 @@ void testRuntimeFileAndAllocationPolicy() {
             memory::runtimeLimitsForDevice(64, twoGib * 8);
     const memory::RuntimeLimits largeDevice32 =
             memory::runtimeLimitsForDevice(32, twoGib * 8);
-#if defined(_WIN32)
-    assertTrue(largeDevice64.worldAllocationBudgetBytes == twoGib / 4 * 3,
-            "Desktop 64-bit budget must stay within its 1.5 GiB ceiling");
-#else
     assertTrue(largeDevice64.worldAllocationBudgetBytes == twoGib / 2,
             "64-bit budget must stay within the 1 GiB ceiling on large-RAM devices");
-#endif
     assertTrue(largeDevice32.worldAllocationBudgetBytes == 384ULL * 1024ULL * 1024ULL,
             "32-bit budget must never exceed the address-space ceiling");
 

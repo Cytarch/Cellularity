@@ -139,8 +139,12 @@ jobs:
           7z x $archive "-o$mesa" "x64\vulkan_lvp.dll" "x64\lvp_icd.x86_64.json" -y | Out-Null
           if ($LASTEXITCODE -ne 0) { throw "Could not extract lavapipe" }
           $icd = "$mesa\x64\lvp_icd.x86_64.json"
-          "VK_DRIVER_FILES=$icd" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
-          "VK_ICD_FILENAMES=$icd" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          # The runner's processes are elevated, and the Vulkan loader ignores VK_DRIVER_FILES
+          # in elevated processes, so the driver is registered the way a driver installer does.
+          $drivers = "HKLM:\SOFTWARE\Khronos\Vulkan\Drivers"
+          New-Item -Path $drivers -Force | Out-Null
+          New-ItemProperty -Path $drivers -Name $icd -PropertyType DWord -Value 0 -Force | Out-Null
+          Get-ItemProperty -Path $drivers | Format-List | Out-String | Write-Host
 
       - name: Build and run the native tests
         run: |

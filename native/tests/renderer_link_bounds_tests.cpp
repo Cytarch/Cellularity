@@ -271,13 +271,8 @@ void testFileAndAdmissionPolicy() {
         },
                 "Absolute file boundary rejects one extra byte");
         const auto deviceLimits = runtimeLimitsForDevice(limits.addressBits, 512U * kMiB);
-#if defined(_WIN32)
-        const std::uint64_t expectedDeviceBudget = 256U * kMiB;
-#else
-        const std::uint64_t expectedDeviceBudget = 128U * kMiB;
-#endif
-        assertTrue(deviceLimits.worldAllocationBudgetBytes == expectedDeviceBudget,
-                "Device RAM applies the platform RAM share (50% Windows, 25% elsewhere) within the ABI ceiling");
+        assertTrue(deviceLimits.worldAllocationBudgetBytes == 128U * kMiB,
+                "Device RAM applies the 25% RAM share within the ABI ceiling on every platform");
         const auto environment = Environment::constructDefaultEnvironment(10000, 0, 1.0);
         const auto world = estimateWorldAllocation(environment, limits.addressBits);
         RendererMemoryEstimate renderer;
