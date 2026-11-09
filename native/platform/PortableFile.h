@@ -48,6 +48,24 @@ namespace cellularity::platform {
 // does not hard-code the assumption.
 inline constexpr char kPathSeparator = '/';
 
+#if defined(_WIN32)
+// Paths arrive as UTF-8 (JNI and the Windows host both produce UTF-8), while the
+// Win32 "A" functions read the process code page. This widens a UTF-8 path into a
+// caller-owned buffer without allocating, so the crash-report path stays usable from
+// a failing process. Returns false for null, invalid, or overlong input.
+inline constexpr int kWidePathCapacity = 4096;
+[[nodiscard]] inline bool widenUtf8Path(
+        const char* path, wchar_t (&wide)[kWidePathCapacity]) noexcept {
+    if (path == nullptr || path[0] == '\0') {
+        return false;
+    }
+    const int written = ::MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS,
+            path, -1, wide, kWidePathCapacity);
+    return written > 0;
+}
+
+#endif
+
 // True when the file can be opened for writing by the current process. This is
 // the portable stand-in for the POSIX owner-only permission check: it proves the
 // caller's own access rather than enumerating the ACL, which is what the
@@ -58,7 +76,11 @@ inline constexpr char kPathSeparator = '/';
     if (path == nullptr) {
         return false;
     }
-    const HANDLE handle = ::CreateFileA(path, GENERIC_WRITE, 0, nullptr,
+    wchar_t widePath[kWidePathCapacity];
+    if (!widenUtf8Path(path, widePath)) {
+        return false;
+    }
+    const HANDLE handle = ::CreateFileW(widePath, GENERIC_WRITE, 0, nullptr,
             OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
     if (handle == INVALID_HANDLE_VALUE) {
         return false;
@@ -87,7 +109,8 @@ inline void closeFile(FileHandle handle) noexcept {
 // Creates or truncates a file readable and writable only by the current user.
 // Returns kInvalidFileHandle on any failure; the caller must not need an errno.
 [[nodiscard]] inline FileHandle createOwnerOnlyFile(const char* path) noexcept {
-    if (path == nullptr || path[0] == '\0') {
+    wchar_t widePath[kWidePathCapacity];
+    if (!widenUtf8Path(path, widePath)) {
         return kInvalidFileHandle;
     }
 
@@ -106,14 +129,15 @@ inline void closeFile(FileHandle handle) noexcept {
 
     bool haveSid = false;
     HANDLE token = nullptr;
+    unsigned char* tokenUser = nullptr;
     if (::OpenProcessToken(::GetCurrentProcess(), TOKEN_QUERY, &token) != 0) {
         DWORD size = 0;
         ::GetTokenInformation(token, TokenUser, nullptr, 0, &size);
         if (size > 0) {
-            auto* buffer = static_cast<unsigned char*>(::LocalAlloc(LPTR, size));
-            if (buffer != nullptr) {
-                if (::GetTokenInformation(token, TokenUser, buffer, size, &size) != 0) {
-                    userSid = reinterpret_cast<TOKEN_USER*>(buffer)->User.Sid;
+            tokenUser = static_cast<unsigned char*>(::LocalAlloc(LPTR, size));
+            if (tokenUser != nullptr) {
+                if (::GetTokenInformation(token, TokenUser, tokenUser, size, &size) != 0) {
+                    userSid = reinterpret_cast<TOKEN_USER*>(tokenUser)->User.Sid;
                     haveSid = true;
                 }
             }
@@ -157,12 +181,14 @@ inline void closeFile(FileHandle handle) noexcept {
     // If the descriptor could not be assembled, fall back to the default DACL of
     // the process token. That is weaker than 0600 but still user-scoped, and it
     // is better than failing to write a crash report at all.
-    const HANDLE handle = ::CreateFileA(path, GENERIC_WRITE | GENERIC_READ, 0,
+    const HANDLE handle = ::CreateFileW(widePath, GENERIC_WRITE | GENERIC_READ, 0,
             attributes, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
 
     if (descriptor != nullptr) { ::LocalFree(descriptor); }
     if (dacl != nullptr) { ::LocalFree(dacl); }
     if (systemSid != nullptr) { ::FreeSid(systemSid); }
+    // userSid points into tokenUser, so it is released only after the DACL is gone.
+    if (tokenUser != nullptr) { ::LocalFree(tokenUser); }
     if (token != nullptr) { ::CloseHandle(token); }
 
     if (handle == INVALID_HANDLE_VALUE) {
@@ -199,8 +225,12 @@ inline void closeFile(FileHandle handle) noexcept {
     if (path == nullptr) {
         return -1;
     }
+    wchar_t widePath[kWidePathCapacity];
+    if (!widenUtf8Path(path, widePath)) {
+        return -1;
+    }
     WIN32_FILE_ATTRIBUTE_DATA data{};
-    if (::GetFileAttributesExA(path, GetFileExInfoStandard, &data) == 0) {
+    if (::GetFileAttributesExW(widePath, GetFileExInfoStandard, &data) == 0) {
         return -1;
     }
     LARGE_INTEGER size{};
@@ -222,8 +252,12 @@ inline void closeFile(FileHandle handle) noexcept {
         return false;
     }
 
+    wchar_t widePath[kWidePathCapacity];
+    if (!widenUtf8Path(path, widePath)) {
+        return false;
+    }
     PSECURITY_DESCRIPTOR descriptor = nullptr;
-    if (::GetNamedSecurityInfoA(const_cast<char*>(path), SE_FILE_OBJECT,
+    if (::GetNamedSecurityInfoW(widePath, SE_FILE_OBJECT,
                 DACL_SECURITY_INFORMATION, nullptr, nullptr, nullptr, nullptr,
                 &descriptor)
             != ERROR_SUCCESS) {

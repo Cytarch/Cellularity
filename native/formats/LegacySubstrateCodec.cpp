@@ -1,4 +1,5 @@
 #include "formats/LegacySubstrateCodec.h"
+#include "core/Utf8Path.h"
 
 #include <algorithm>
 #include <array>
@@ -479,7 +480,7 @@ LegacySubstrateLoadResult loadLegacySubstratePathDirect(
         headerInput.finishPrimitiveSection();
         expandedFile = std::make_unique<TemporarySnapshotFile>(inputPath);
         std::ofstream expandedOutput(
-                expandedFile->path(), std::ios::binary | std::ios::trunc);
+                cellularity::paths::fromUtf8(expandedFile->path()), std::ios::binary | std::ios::trunc);
         if (!expandedOutput) {
             failDecode(
                     DecodeErrorCode::IoFailure,

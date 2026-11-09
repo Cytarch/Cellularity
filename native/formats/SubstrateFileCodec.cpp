@@ -1,4 +1,5 @@
 #include "formats/SubstrateFileCodec.h"
+#include "core/Utf8Path.h"
 
 #include <algorithm>
 #include <array>
@@ -353,7 +354,7 @@ void attachSubstratePreviewPath(
                 "Substrate preview path is empty");
     }
     requireWebpPayload(webpBytes);
-    std::fstream file(path, std::ios::binary | std::ios::in | std::ios::out);
+    std::fstream file(cellularity::paths::fromUtf8(path), std::ios::binary | std::ios::in | std::ios::out);
     if (!file) {
         cellularity::snapshot_codec::failDecode(
                 DecodeErrorCode::IoFailure,

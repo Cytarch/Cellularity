@@ -1,4 +1,5 @@
 #include "formats/release/SaveContainerBody.h"
+#include "core/Utf8Path.h"
 
 #include <algorithm>
 #include <array>
@@ -803,7 +804,7 @@ ContainerWriteResult writeContainerPath(
     result.stats.previewBytes = preview.bytes.size();
 
     std::fstream output(
-            path,
+            cellularity::paths::fromUtf8(path),
             std::ios::binary | std::ios::in | std::ios::out
                     | std::ios::trunc);
     if (!output) {

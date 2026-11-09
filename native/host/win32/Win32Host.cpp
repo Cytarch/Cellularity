@@ -43,6 +43,7 @@
 #include <vector>
 
 #include "app/NativeCellularityController.h"
+#include "core/Utf8Path.h"
 #include "app/interaction/NativeViewport.h"
 #include "app/microscope/NativeMicroscopeRuntime.h"
 #include "host/win32/Win32HostCamera.h"
@@ -213,12 +214,23 @@ LRESULT CALLBACK hostWindowProc(
 // getenv is flagged as unsafe by the MSVC runtime even though the value is only
 // read. Wrapping it keeps that warning out of the build without disabling the
 // warning for the whole file.
+// Read as UTF-16 and returned as UTF-8, the encoding every native path uses.
 std::string environmentValue(const char* name) {
-#pragma warning(push)
-#pragma warning(disable : 4996)
-    const char* value = std::getenv(name);
-#pragma warning(pop)
-    return value != nullptr ? std::string(value) : std::string();
+    std::wstring wideName;
+    for (const char* character = name; *character != '\0'; ++character) {
+        wideName.push_back(static_cast<wchar_t>(*character));
+    }
+    const DWORD needed = ::GetEnvironmentVariableW(wideName.c_str(), nullptr, 0);
+    if (needed == 0) {
+        return {};
+    }
+    std::wstring value(needed, L'\0');
+    const DWORD written = ::GetEnvironmentVariableW(wideName.c_str(), value.data(), needed);
+    if (written == 0 || written >= needed) {
+        return {};
+    }
+    value.resize(written);
+    return cellularity::paths::toUtf8(std::filesystem::path(value));
 }
 
 // The build layout puts the compiled shaders under the build tree and the source
@@ -234,18 +246,20 @@ std::string resolveAssetRoot(const char* environmentName,
         return fromEnvironment;
     }
     const std::filesystem::path nextToExecutable =
-            std::filesystem::path(executableDirectory) / relativeFromExecutable;
-    if (std::filesystem::exists(nextToExecutable)) {
-        return nextToExecutable.string();
+            cellularity::paths::fromUtf8(executableDirectory)
+            / cellularity::paths::fromUtf8(relativeFromExecutable);
+    std::error_code status;
+    if (std::filesystem::exists(nextToExecutable, status)) {
+        return cellularity::paths::toUtf8(nextToExecutable);
     }
     const std::filesystem::path fromWorkingDirectory =
-            std::filesystem::path(relativeFromWorkingDirectory);
-    if (std::filesystem::exists(fromWorkingDirectory)) {
-        return fromWorkingDirectory.string();
+            cellularity::paths::fromUtf8(relativeFromWorkingDirectory);
+    if (std::filesystem::exists(fromWorkingDirectory, status)) {
+        return cellularity::paths::toUtf8(fromWorkingDirectory);
     }
     // Report the path that was expected rather than an empty string, so a failure
     // names the directory that is missing.
-    return nextToExecutable.string();
+    return cellularity::paths::toUtf8(nextToExecutable);
 }
 
 std::string executableDirectory() {
@@ -262,7 +276,7 @@ std::string executableDirectory() {
         }
         buffer.resize(buffer.size() * 2);
     }
-    return std::filesystem::path(buffer).parent_path().string();
+    return cellularity::paths::toUtf8(std::filesystem::path(buffer).parent_path());
 }
 
 void reportFailure(const char* stage, const std::string& detail) {

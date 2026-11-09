@@ -1,4 +1,5 @@
 #include "render/FileRenderAssets.h"
+#include "core/Utf8Path.h"
 
 #include <cstdio>
 #include <limits>
@@ -44,7 +45,7 @@ const std::vector<std::string>& FileRenderAssets::roots() const noexcept {
 std::string FileRenderAssets::resolve(const std::string& path) const {
     for (const std::string& root : mRoots) {
         std::string candidate = joinPath(root, path);
-        if (std::FILE* file = std::fopen(candidate.c_str(), "rb")) {
+        if (std::FILE* file = cellularity::paths::openFile(candidate, "rb")) {
             std::fclose(file);
             return candidate;
         }
@@ -67,7 +68,7 @@ std::vector<unsigned char> FileRenderAssets::readBytes(
 
     const std::string resolved = resolve(path);
 
-    std::FILE* file = std::fopen(resolved.c_str(), "rb");
+    std::FILE* file = cellularity::paths::openFile(resolved, "rb");
     if (file == nullptr) {
         throw std::runtime_error("Render resource not found: " + path);
     }
