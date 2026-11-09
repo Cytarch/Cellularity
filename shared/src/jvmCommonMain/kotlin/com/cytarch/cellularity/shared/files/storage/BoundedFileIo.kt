@@ -1,10 +1,10 @@
-package com.cytarch.cellularity.platform.files
+package com.cytarch.cellularity.shared.files.storage
 
 import java.io.FilterOutputStream
 import java.io.InputStream
 import java.io.OutputStream
 
-internal fun requireDeclaredSizeWithinLimit(
+fun requireDeclaredSizeWithinLimit(
     declaredBytes: Long?,
     maximumBytes: Long
 ) {
@@ -14,7 +14,7 @@ internal fun requireDeclaredSizeWithinLimit(
     }
 }
 
-internal fun copyWithLimit(
+fun copyWithLimit(
     input: InputStream,
     output: OutputStream,
     maximumBytes: Long,
@@ -37,7 +37,7 @@ internal fun copyWithLimit(
     return copied
 }
 
-internal class LimitedOutputStream(
+class LimitedOutputStream(
     output: OutputStream,
     private val maximumBytes: Long
 ) : FilterOutputStream(output) {

@@ -1,45 +1,28 @@
-package com.cytarch.cellularity.platform.files
+package com.cytarch.cellularity.shared.files.storage
 
-import android.system.Os
-import android.system.OsConstants
 import java.io.File
 import java.io.FileNotFoundException
 import java.io.FileOutputStream
 import java.io.IOException
 import java.io.InterruptedIOException
 
-internal class FileSizeLimitExceededException : IOException()
+class FileSizeLimitExceededException : IOException()
 
-internal class DestinationExistsException : IOException()
+class DestinationExistsException : IOException()
 
-internal interface DurableFileOperations {
+interface DurableFileOperations {
     fun syncFile(file: File)
     fun replace(source: File, target: File)
     fun syncDirectory(directory: File)
 }
 
-internal object AndroidDurableFileOperations : DurableFileOperations {
-    override fun syncFile(file: File) {
-        FileOutputStream(file, true).use { it.fd.sync() }
-    }
-
-    override fun replace(source: File, target: File) {
-        Os.rename(source.absolutePath, target.absolutePath)
-    }
-
-    override fun syncDirectory(directory: File) {
-        val descriptor = Os.open(directory.absolutePath, OsConstants.O_RDONLY, 0)
-        try {
-            Os.fsync(descriptor)
-        } finally {
-            Os.close(descriptor)
-        }
-    }
-}
-
 /** Produces a sibling temporary file and exposes the target only after a durable write. */
-internal class AtomicFileStore(
-    private val operations: DurableFileOperations = AndroidDurableFileOperations
+/**
+ * Atomic, durable replacement of application files, shared by Android and the desktop.
+ * Only [DurableFileOperations] -- the fsync and rename primitives -- is per platform.
+ */
+class AtomicFileStore(
+    private val operations: DurableFileOperations
 ) {
     fun cleanupTemporaryFiles(directory: File) {
         val canonicalDirectory = directory.canonicalFile
@@ -139,7 +122,7 @@ internal class AtomicFileStore(
     }
 }
 
-internal fun throwIfThreadInterrupted() {
+fun throwIfThreadInterrupted() {
     if (Thread.currentThread().isInterrupted) {
         throw InterruptedIOException("File operation was interrupted")
     }

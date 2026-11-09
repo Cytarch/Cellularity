@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <exception>
 
+#include "GenomeCodecJni.h"
 #include "NativeJniUtils.h"
 #include "app/NativeCellularityController.h"
 #include "app/NativeWorldEditing.h"
@@ -18,18 +19,7 @@ extern "C" JNIEXPORT void JNICALL
 Java_com_cytarch_cellularity_NativeCellularityControllerBridge_nativeValidateGenomeDraft(JNIEnv* env,
         jclass,
         jbyteArray genomeBytes) {
-    try {
-        if (genomeBytes == nullptr) {
-            throw DecodeError(DecodeErrorCode::InvalidValue,
-                    "Genome draft payload is required");
-        }
-        ByteReader reader(readJavaBytes(env, genomeBytes, "Genome draft"));
-        (void)readGenomeDraft(reader);
-    } catch (const std::exception& exception) {
-        throwRuntimeException(env, exception);
-    } catch (...) {
-        throwUnknownDecodeException(env);
-    }
+    cellularity::jni::validateGenomeDraft(env, genomeBytes);
 }
 
 extern "C" JNIEXPORT jbyteArray JNICALL
@@ -41,45 +31,8 @@ Java_com_cytarch_cellularity_NativeCellularityControllerBridge_nativeEncodeRelea
         jint previewCodec,
         jint previewWidth,
         jint previewHeight) {
-    try {
-        ByteReader reader(readJavaBytes(env, genomeBytes, "Genome draft"));
-        const cellularity::GenomeData genome = readGenomeDraft(reader);
-        cellularity::save_format::release::EncodedPreview preview;
-        if (previewCodec != static_cast<jint>(cellularity::save_format::release::PreviewCodec::None)) {
-            if (previewBytes == nullptr) {
-                throw DecodeError(DecodeErrorCode::InvalidValue,
-                        "Encoded genome preview bytes are required");
-            }
-            if (previewCodec < static_cast<jint>(
-                        cellularity::save_format::release::PreviewCodec::Png)
-                    || previewCodec > static_cast<jint>(
-                               cellularity::save_format::release::PreviewCodec::WebpLossless)) {
-                throw DecodeError(DecodeErrorCode::UnsupportedFeature,
-                        "Unsupported genome preview codec");
-            }
-            if (previewWidth <= 0 || previewHeight <= 0) {
-                throw DecodeError(DecodeErrorCode::InvalidValue,
-                        "Encoded genome preview dimensions are invalid");
-            }
-            preview.codec = static_cast<
-                    cellularity::save_format::release::PreviewCodec>(previewCodec);
-            preview.pixelWidth = static_cast<std::uint32_t>(previewWidth);
-            preview.pixelHeight = static_cast<std::uint32_t>(previewHeight);
-            preview.bytes = readJavaBytes(env, previewBytes, "Genome preview");
-        } else if (previewBytes != nullptr || previewWidth != 0 || previewHeight != 0) {
-            throw DecodeError(DecodeErrorCode::InvalidValue,
-                    "NONE genome preview has nonzero descriptor data");
-        }
-        return toJavaByteArray(
-                env,
-                cellularity::save_format::release::encodeReleaseGenome(
-                        genome, preview));
-    } catch (const std::exception& exception) {
-        throwRuntimeException(env, exception);
-    } catch (...) {
-        throwUnknownDecodeException(env);
-    }
-    return nullptr;
+    return cellularity::jni::encodeReleaseGenome(
+            env, genomeBytes, previewBytes, previewCodec, previewWidth, previewHeight);
 }
 
 extern "C" JNIEXPORT jbyteArray JNICALL
@@ -87,15 +40,5 @@ Java_com_cytarch_cellularity_NativeCellularityControllerBridge_nativeDecodeRelea
         JNIEnv* env,
         jclass,
         jbyteArray releaseBytes) {
-    try {
-        const cellularity::GenomeData genome =
-                cellularity::save_format::release::decodeReleaseGenome(
-                        readJavaBytes(env, releaseBytes, "Release genome"));
-        return toJavaByteArray(env, writeGenomeDraft(genome));
-    } catch (const std::exception& exception) {
-        throwRuntimeException(env, exception);
-    } catch (...) {
-        throwUnknownDecodeException(env);
-    }
-    return nullptr;
+    return cellularity::jni::decodeReleaseGenome(env, releaseBytes);
 }

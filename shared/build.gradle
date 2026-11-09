@@ -52,13 +52,23 @@ kotlin {
                 implementation kotlin('test')
             }
         }
-        androidMain { }
+        // Code for every JVM the application runs on -- Android and the desktop -- that may
+        // use java.io/java.nio but nothing platform-specific: file codecs, atomic storage and
+        // the exceptions the native layer throws. One copy serves both apps.
+        jvmCommonMain {
+            dependsOn(commonMain)
+        }
+        androidMain {
+            dependsOn(jvmCommonMain)
+        }
         androidHostTest {
             dependencies {
                 implementation kotlin('test')
             }
         }
-        jvmMain { }
+        jvmMain {
+            dependsOn(jvmCommonMain)
+        }
         jvmTest {
             resources.srcDirs(
                     rootProject.file('testdata/release-format')

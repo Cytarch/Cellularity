@@ -1,6 +1,9 @@
 package com.cytarch.cellularity.platform.files
 
-import com.cytarch.cellularity.CellularityDataException
+import com.cytarch.cellularity.shared.files.genome.GenomeFileCodec
+import com.cytarch.cellularity.shared.files.genome.ReleaseGenomeCodecBridge
+import com.cytarch.cellularity.shared.files.genome.LegacyGenomeFormat
+import com.cytarch.cellularity.shared.files.CellularityDataException
 import com.cytarch.cellularity.shared.model.CellType
 import com.cytarch.cellularity.shared.model.CellDataConstants
 import com.cytarch.cellularity.shared.model.CellularityErrorCode
@@ -31,7 +34,7 @@ class GenomeFileCodecTest {
         )
 
         fixtures.forEach { (name, expectedVersion) ->
-            val decoded = resource(name).use(GenomeFileCodec::read)
+            val decoded = resource(name).use { GenomeFileCodec.read(it, TestReleaseGenomeCodec()) }
 
             assertEquals(expectedVersion, decoded.familyLocalVersion)
             assertEquals(CellDataConstants.LEGACY_GENOME_GENE_COUNT, decoded.genome.genes.size)

@@ -1,7 +1,7 @@
 package com.cytarch.cellularity.platform.settings
 
-import com.cytarch.cellularity.platform.files.AtomicFileStore
-import com.cytarch.cellularity.platform.files.DurableFileOperations
+import com.cytarch.cellularity.shared.files.storage.AtomicFileStore
+import com.cytarch.cellularity.shared.files.storage.DurableFileOperations
 import com.cytarch.cellularity.shared.settings.AndroidDisplaySettings
 import com.cytarch.cellularity.shared.settings.AndroidRenderBackendPreference
 import com.cytarch.cellularity.shared.settings.AndroidRenderBackendSettings

@@ -2,7 +2,9 @@
 
 #include <jni.h>
 
+#include <cstddef>
 #include <exception>
+#include <limits>
 #include <memory>
 #include <stdexcept>
 #include <string>
@@ -13,9 +15,14 @@
 constexpr const char* JAVA_RUNTIME_EXCEPTION = "java/lang/RuntimeException";
 constexpr const char* JAVA_ILLEGAL_ARGUMENT_EXCEPTION = "java/lang/IllegalArgumentException";
 constexpr const char* JAVA_ILLEGAL_STATE_EXCEPTION = "java/lang/IllegalStateException";
-constexpr const char* JAVA_DATA_EXCEPTION = "com/cytarch/cellularity/CellularityDataException";
+constexpr const char* JAVA_DATA_EXCEPTION = "com/cytarch/cellularity/shared/files/CellularityDataException";
 
+// Null when the JVM refused the allocation (its OutOfMemoryError stays pending) or when
+// the vector is longer than a Java array can describe -- refused rather than truncated.
 inline jbyteArray toJavaByteArray(JNIEnv* env, const std::vector<uint8_t>& bytes) {
+    if (bytes.size() > static_cast<std::size_t>(std::numeric_limits<jsize>::max())) {
+        return nullptr;
+    }
     jbyteArray result = env->NewByteArray(static_cast<jsize>(bytes.size()));
     if (result != nullptr && !bytes.empty()) {
         env->SetByteArrayRegion(result, 0, static_cast<jsize>(bytes.size()), reinterpret_cast<const jbyte*>(bytes.data()));

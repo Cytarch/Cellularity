@@ -94,6 +94,7 @@
 #include <vector>
 
 #include "app/NativeCellularityController.h"
+#include "jni/GenomeCodecJni.h"
 #include "core/Utf8Path.h"
 #include "app/NativeRenderSession.h"
 #include "app/genome_preview/GenomeFilePreviewSimulation.h"
@@ -480,37 +481,6 @@ void registerChildWindow(BridgeWindow window) {
     return true;
 }
 
-// Copies a native byte vector into a freshly allocated Java array. Null means the JVM
-// refused to allocate it, and the OutOfMemoryError it raised is left pending so the
-// caller returns immediately rather than stacking a second failure on top of it.
-//
-// The bytes are copied verbatim and are never interpreted here. The documents that
-// travel through this bridge are written big-endian (ByteWriter in io/NativeByteStream.h
-// shifts the most significant byte out first), and the decoder lives in the managed
-// application; a second reader on this side would be a second schema to keep in step.
-[[nodiscard]] jbyteArray toJavaByteArray(
-        JNIEnv* env, const std::vector<std::uint8_t>& bytes) noexcept {
-    // A vector longer than a Java array can describe is refused rather than truncated.
-    // Every document on this path is bounded by EnvironmentBatch::MAX_WIRE_BYTES, so
-    // this cannot happen for a real one; a silently shortened document would be worse
-    // than a null, because the decoder would report a schema fault instead of a failure
-    // to copy.
-    if (bytes.size()
-            > static_cast<std::size_t>(std::numeric_limits<jsize>::max())) {
-        return nullptr;
-    }
-    const jsize length = static_cast<jsize>(bytes.size());
-    jbyteArray result = env->NewByteArray(length);
-    if (result == nullptr) {
-        return nullptr;
-    }
-    if (length > 0) {
-        env->SetByteArrayRegion(result, 0, length,
-                reinterpret_cast<const jbyte*>(bytes.data()));
-    }
-    return result;
-}
-
 // Reads a Java byte array into a std::vector, verbatim. False means the argument was
 // null, or the copy could not be made, and the caller answers null rather than throwing:
 // the managed side sends a patch as bytes, and a malformed argument is a refusal, not a
@@ -630,6 +600,32 @@ void registerChildWindow(BridgeWindow window) {
 extern "C" JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM*, void*) {
     (void)std::setlocale(LC_NUMERIC, "C");
     return JNI_VERSION_1_8;
+}
+
+// ---------------------------------------------------------------------------
+// Genome files
+// ---------------------------------------------------------------------------
+
+// The release-genome (CLTY) codec, the same implementation the Android bridge exports
+// (jni/GenomeCodecJni.h). Failures arrive as the shared CellularityDataException.
+extern "C" JNIEXPORT jbyteArray JNICALL
+Java_com_cytarch_cellularity_desktop_nativebridge_DesktopNativeRenderer_nativeEncodeReleaseGenome(
+        JNIEnv* env, jclass, jbyteArray genomeBytes, jbyteArray previewBytes,
+        jint previewCodec, jint previewWidth, jint previewHeight) {
+    return cellularity::jni::encodeReleaseGenome(
+            env, genomeBytes, previewBytes, previewCodec, previewWidth, previewHeight);
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_cytarch_cellularity_desktop_nativebridge_DesktopNativeRenderer_nativeValidateGenomeDraft(
+        JNIEnv* env, jclass, jbyteArray genomeBytes) {
+    cellularity::jni::validateGenomeDraft(env, genomeBytes);
+}
+
+extern "C" JNIEXPORT jbyteArray JNICALL
+Java_com_cytarch_cellularity_desktop_nativebridge_DesktopNativeRenderer_nativeDecodeReleaseGenome(
+        JNIEnv* env, jclass, jbyteArray releaseBytes) {
+    return cellularity::jni::decodeReleaseGenome(env, releaseBytes);
 }
 
 // ---------------------------------------------------------------------------

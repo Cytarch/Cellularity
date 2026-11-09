@@ -26,7 +26,7 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
-import com.cytarch.cellularity.platform.files.DecodedEmbeddedFilePreview
+import com.cytarch.cellularity.shared.files.genome.DecodedEmbeddedFilePreview
 import com.cytarch.cellularity.shared.files.release.EmbeddedPreviewFormat
 import com.cytarch.cellularity.shared.ui.theme.CellularityDimensions
 import kotlinx.coroutines.Dispatchers

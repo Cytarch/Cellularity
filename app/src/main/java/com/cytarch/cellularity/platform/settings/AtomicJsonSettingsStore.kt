@@ -1,8 +1,9 @@
 package com.cytarch.cellularity.platform.settings
 
-import com.cytarch.cellularity.platform.files.AtomicFileStore
-import com.cytarch.cellularity.platform.files.FileSizeLimitExceededException
-import com.cytarch.cellularity.platform.files.copyWithLimit
+import com.cytarch.cellularity.platform.files.AndroidDurableFileOperations
+import com.cytarch.cellularity.shared.files.storage.AtomicFileStore
+import com.cytarch.cellularity.shared.files.storage.FileSizeLimitExceededException
+import com.cytarch.cellularity.shared.files.storage.copyWithLimit
 import com.cytarch.cellularity.shared.settings.SettingsError
 import com.cytarch.cellularity.shared.settings.SettingsErrorCode
 import com.cytarch.cellularity.shared.settings.SettingsRecoveryState
@@ -36,7 +37,7 @@ internal class AtomicJsonSettingsStore<T>(
     private val normalize: (T) -> T,
     private val encode: (T) -> String,
     private val decode: (String) -> SettingsResult<T>,
-    private val atomicFiles: AtomicFileStore = AtomicFileStore(),
+    private val atomicFiles: AtomicFileStore = AtomicFileStore(AndroidDurableFileOperations),
     private val dispatcher: CoroutineDispatcher = Dispatchers.IO,
     private val maximumBytes: Long = MAX_SETTINGS_BYTES
 ) {

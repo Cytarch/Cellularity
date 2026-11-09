@@ -1,7 +1,6 @@
-package com.cytarch.cellularity.platform.files
+package com.cytarch.cellularity.shared.files.genome
 
-import com.cytarch.cellularity.CellularityDataException
-import com.cytarch.cellularity.NativeCellularityControllerBridge
+import com.cytarch.cellularity.shared.files.CellularityDataException
 import com.cytarch.cellularity.shared.files.CellularityFileLimits
 import com.cytarch.cellularity.shared.files.release.EmbeddedPreviewFormat
 import com.cytarch.cellularity.shared.files.release.ReleaseGenomeFileInspector
@@ -34,50 +33,39 @@ import java.io.StreamCorruptedException
 import kotlin.math.PI
 import kotlin.math.floor
 
-internal data class EncodedGenomePreview(
+data class EncodedGenomePreview(
     val codec: Int,
     val pixelWidth: Int,
     val pixelHeight: Int,
     val bytes: ByteArray
 )
 
-internal data class GenomeFileInspection(
+data class GenomeFileInspection(
     /** Product version for Java legacy, content-schema major for release CLTY. */
     val familyLocalVersion: Int,
     val loadSupported: Boolean,
     val releaseSummary: ReleaseGenomeFileSummary?
 )
 
-internal data class DecodedEmbeddedFilePreview(
+data class DecodedEmbeddedFilePreview(
     val format: EmbeddedPreviewFormat,
     val pixelWidth: Int,
     val pixelHeight: Int,
     val bytes: ByteArray
 )
 
-internal interface ReleaseGenomeCodecBridge {
+/**
+ * The native release-genome (CLTY) codec. Each platform supplies the same C++ codec through
+ * its own JNI bridge; this file holds everything around it, so Android and the desktop read
+ * and write genomes with one implementation.
+ */
+interface ReleaseGenomeCodecBridge {
     fun encode(genomeDraftWire: ByteArray, preview: EncodedGenomePreview?): ByteArray
     fun decode(releaseGenome: ByteArray): ByteArray
 }
 
-private object NativeReleaseGenomeCodecBridge : ReleaseGenomeCodecBridge {
-    override fun encode(
-        genomeDraftWire: ByteArray,
-        preview: EncodedGenomePreview?
-    ): ByteArray = NativeCellularityControllerBridge.encodeReleaseGenome(
-        genomeDraftWire,
-        preview?.bytes,
-        preview?.codec ?: PREVIEW_CODEC_NONE,
-        preview?.pixelWidth ?: 0,
-        preview?.pixelHeight ?: 0
-    )
-
-    override fun decode(releaseGenome: ByteArray): ByteArray =
-        NativeCellularityControllerBridge.decodeReleaseGenome(releaseGenome)
-}
-
 /** Release CLTY codec with a frozen read-only original-game import path. */
-internal object GenomeFileCodec {
+object GenomeFileCodec {
     data class Decoded(
         /** Product version for Java legacy, content-schema major for release CLTY. */
         val familyLocalVersion: Int,
@@ -86,7 +74,7 @@ internal object GenomeFileCodec {
 
     fun read(
         source: InputStream,
-        releaseCodec: ReleaseGenomeCodecBridge = NativeReleaseGenomeCodecBridge
+        releaseCodec: ReleaseGenomeCodecBridge
     ): Decoded = decodeIo {
         val input = sniffable(source)
         when (sniffMagic(input)) {
@@ -116,7 +104,7 @@ internal object GenomeFileCodec {
         destination: OutputStream,
         genome: GenomeDraft,
         preview: EncodedGenomePreview? = null,
-        releaseCodec: ReleaseGenomeCodecBridge = NativeReleaseGenomeCodecBridge
+        releaseCodec: ReleaseGenomeCodecBridge
     ) {
         val releaseBytes = releaseCodec.encode(GenomeDraftWireCodec.encode(genome), preview)
         if (releaseBytes.size.toLong() > CellularityFileLimits.MAX_GENOME_SIZE_BYTES) {
@@ -586,8 +574,8 @@ internal object GenomeFileCodec {
     private const val JAVA_STREAM_MAGIC = 0xaced0005.toInt()
 }
 
-private const val PREVIEW_CODEC_NONE = 0
-internal const val PREVIEW_CODEC_PNG = 1
+const val PREVIEW_CODEC_NONE = 0
+const val PREVIEW_CODEC_PNG = 1
 
 private data class MutableLegacyParametricValue(
     var variableA: Float = 0.0f,

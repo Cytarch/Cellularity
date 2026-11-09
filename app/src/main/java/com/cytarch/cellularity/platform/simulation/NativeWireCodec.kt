@@ -1,6 +1,6 @@
 package com.cytarch.cellularity.platform.simulation
 
-import com.cytarch.cellularity.CellularityDataException
+import com.cytarch.cellularity.shared.files.CellularityDataException
 import com.cytarch.cellularity.shared.files.release.EmbeddedPreviewFormat
 import com.cytarch.cellularity.shared.model.CellSnapshot
 import com.cytarch.cellularity.shared.model.CellType

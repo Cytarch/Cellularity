@@ -1,6 +1,6 @@
-package com.cytarch.cellularity.platform.files
+package com.cytarch.cellularity.shared.files.storage
 
-import com.cytarch.cellularity.CellularityDataException
+import com.cytarch.cellularity.shared.files.CellularityDataException
 import com.cytarch.cellularity.shared.files.StorageError
 import com.cytarch.cellularity.shared.files.StorageErrorCode
 import com.cytarch.cellularity.shared.files.StorageResult
@@ -15,7 +15,8 @@ import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 
 /** Executes every UI-facing file operation away from the Android main dispatcher. */
-internal class AndroidStorageExecutor(
+/** Runs a storage operation off the caller's thread and maps every failure to a typed result. */
+class StorageExecutor(
     private val dispatcher: CoroutineDispatcher = Dispatchers.IO
 ) {
     suspend fun <T> execute(
@@ -65,7 +66,7 @@ internal class AndroidStorageExecutor(
     }
 }
 
-internal class StorageOperationException(
+class StorageOperationException(
     val code: StorageErrorCode,
     message: String
 ) : IOException(message)

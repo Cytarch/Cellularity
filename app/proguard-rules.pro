@@ -12,7 +12,7 @@
 -keepattributes SourceFile,LineNumberTable
 
 # Constructed directly from JNI when external data cannot be decoded.
--keep class com.cytarch.cellularity.CellularityDataException {
+-keep class com.cytarch.cellularity.shared.files.CellularityDataException {
     public <init>(java.lang.String);
     public <init>(java.lang.String, java.lang.String);
     *;

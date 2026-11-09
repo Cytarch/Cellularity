@@ -1,7 +1,7 @@
-package com.cytarch.cellularity.platform.files
+package com.cytarch.cellularity.shared.files.genome
 
 /** Frozen contract for the original Java object-stream `.genome` format. */
-internal object LegacyGenomeFormat {
+object LegacyGenomeFormat {
     const val MIN_PRODUCT_VERSION = 1
     const val MAX_PRODUCT_VERSION = 103
     const val OBSOLETE_EXTENSION_PRODUCT_VERSION = 103

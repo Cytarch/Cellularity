@@ -1,7 +1,7 @@
 package com.cytarch.cellularity.platform.simulation
 
 import com.cytarch.cellularity.NativeSimulationFacade
-import com.cytarch.cellularity.CellularityDataException
+import com.cytarch.cellularity.shared.files.CellularityDataException
 import com.cytarch.cellularity.platform.files.AndroidCellularityFileRepository
 import com.cytarch.cellularity.platform.files.SubstratePreviewEncoder
 import com.cytarch.cellularity.platform.logging.AppLog

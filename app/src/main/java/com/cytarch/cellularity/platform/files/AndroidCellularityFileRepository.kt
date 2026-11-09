@@ -1,5 +1,15 @@
 package com.cytarch.cellularity.platform.files
 
+import com.cytarch.cellularity.shared.files.storage.AtomicFileStore
+import com.cytarch.cellularity.shared.files.storage.DestinationExistsException
+import com.cytarch.cellularity.shared.files.storage.FileSizeLimitExceededException
+import com.cytarch.cellularity.shared.files.storage.LimitedOutputStream
+import com.cytarch.cellularity.shared.files.storage.StorageExecutor
+import com.cytarch.cellularity.shared.files.storage.StorageOperationException
+import com.cytarch.cellularity.shared.files.storage.copyWithLimit
+import com.cytarch.cellularity.shared.files.storage.requireDeclaredSizeWithinLimit
+import com.cytarch.cellularity.shared.files.genome.GenomeFileCodec
+import com.cytarch.cellularity.shared.files.genome.DecodedEmbeddedFilePreview
 import android.content.Context
 import android.net.Uri
 import android.provider.OpenableColumns
@@ -52,12 +62,12 @@ internal value class PrivateSubstratePath(val value: String)
 class AndroidCellularityFileRepository internal constructor(
     context: Context,
     private val atomicFiles: AtomicFileStore,
-    private val storageExecutor: AndroidStorageExecutor
+    private val storageExecutor: StorageExecutor
 ) : CellularityFileRepository {
     constructor(context: Context) : this(
         context = context,
-        atomicFiles = AtomicFileStore(),
-        storageExecutor = AndroidStorageExecutor()
+        atomicFiles = AtomicFileStore(AndroidDurableFileOperations),
+        storageExecutor = StorageExecutor()
     )
 
     private val context = context.applicationContext ?: context
@@ -192,7 +202,7 @@ class AndroidCellularityFileRepository internal constructor(
         nameOrFilename: String?
     ): StorageResult<GenomeDraft> = storageExecutor.execute {
         openGenomeInput(nameOrFilename).use { source ->
-            GenomeFileCodec.read(source).genome.also(::validateGenomeDraft)
+            GenomeFileCodec.read(source, NativeReleaseGenomeCodecBridge).genome.also(::validateGenomeDraft)
         }
     }
 
@@ -261,7 +271,8 @@ class AndroidCellularityFileRepository internal constructor(
                     GenomeFileCodec.write(
                         LimitedOutputStream(output, CellularityFileLimits.MAX_GENOME_SIZE_BYTES),
                         genome,
-                        preview
+                        preview,
+                        NativeReleaseGenomeCodecBridge
                     )
                 }
             },
@@ -566,7 +577,7 @@ class AndroidCellularityFileRepository internal constructor(
             throw FileSizeLimitExceededException()
         }
         FileInputStream(file).use { input ->
-            validateGenomeDraft(GenomeFileCodec.read(input).genome)
+            validateGenomeDraft(GenomeFileCodec.read(input, NativeReleaseGenomeCodecBridge).genome)
         }
         if (requirePreview) {
             val summary = GenomeFileCodec.inspect(file).releaseSummary

@@ -1,5 +1,6 @@
 package com.cytarch.cellularity.platform.files
 
+import com.cytarch.cellularity.shared.files.genome.GenomeFileCodec
 import com.cytarch.cellularity.shared.files.CellularityFileLimits
 import com.cytarch.cellularity.shared.model.CellDataConstants
 import com.cytarch.cellularity.shared.model.GenomeContract

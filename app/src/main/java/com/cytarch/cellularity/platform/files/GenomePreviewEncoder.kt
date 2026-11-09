@@ -1,5 +1,7 @@
 package com.cytarch.cellularity.platform.files
 
+import com.cytarch.cellularity.shared.files.genome.EncodedGenomePreview
+import com.cytarch.cellularity.shared.files.genome.PREVIEW_CODEC_PNG
 import android.graphics.Bitmap
 import java.io.ByteArrayOutputStream
 import java.io.IOException

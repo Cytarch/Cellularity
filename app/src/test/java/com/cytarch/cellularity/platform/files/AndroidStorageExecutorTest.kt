@@ -1,6 +1,9 @@
 package com.cytarch.cellularity.platform.files
 
-import com.cytarch.cellularity.CellularityDataException
+import com.cytarch.cellularity.shared.files.storage.DestinationExistsException
+import com.cytarch.cellularity.shared.files.storage.FileSizeLimitExceededException
+import com.cytarch.cellularity.shared.files.storage.StorageExecutor
+import com.cytarch.cellularity.shared.files.CellularityDataException
 import com.cytarch.cellularity.shared.files.StorageErrorCode
 import com.cytarch.cellularity.shared.files.StorageResult
 import com.cytarch.cellularity.shared.model.CellularityErrorCode
@@ -24,7 +27,7 @@ class AndroidStorageExecutorTest {
         val dispatcher = executor.asCoroutineDispatcher()
         try {
             val result = runBlocking {
-                AndroidStorageExecutor(dispatcher).execute { Thread.currentThread().name }
+                StorageExecutor(dispatcher).execute { Thread.currentThread().name }
             }
 
             assertTrue(
@@ -61,7 +64,7 @@ class AndroidStorageExecutorTest {
 
         cases.forEach { (failure, expectedCode) ->
             val result = runBlocking {
-                AndroidStorageExecutor().execute<Unit> { throw failure }
+                StorageExecutor().execute<Unit> { throw failure }
             }
             assertEquals(
                 expectedCode,
@@ -74,7 +77,7 @@ class AndroidStorageExecutorTest {
     fun cancellationIsPropagatedInsteadOfBecomingAStorageFailure() {
         assertThrows(CancellationException::class.java) {
             runBlocking {
-                AndroidStorageExecutor().execute<Unit> {
+                StorageExecutor().execute<Unit> {
                     throw CancellationException("cancelled")
                 }
             }

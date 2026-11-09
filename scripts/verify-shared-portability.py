@@ -16,7 +16,12 @@ COMMON_SOURCE_ROOTS = (
     SHARED_ROOT / "src/commonMain/kotlin",
     SHARED_ROOT / "src/commonTest/kotlin",
 )
-JVM_SOURCE_ROOTS = (SHARED_ROOT / "src/jvmMain/kotlin",)
+# jvmCommonMain is shared by the Android and desktop JVMs: java.* is allowed there, while
+# Android, window, JNI-declaration and renderer code stays out, exactly as for jvmMain.
+JVM_SOURCE_ROOTS = (
+    SHARED_ROOT / "src/jvmMain/kotlin",
+    SHARED_ROOT / "src/jvmCommonMain/kotlin",
+)
 
 FORBIDDEN_IMPORT_PREFIXES = (
     "android.",

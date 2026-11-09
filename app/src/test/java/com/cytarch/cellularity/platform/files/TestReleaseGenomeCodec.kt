@@ -1,5 +1,8 @@
 package com.cytarch.cellularity.platform.files
 
+import com.cytarch.cellularity.shared.files.genome.EncodedGenomePreview
+import com.cytarch.cellularity.shared.files.genome.ReleaseGenomeCodecBridge
+
 /** JVM-test stand-in for the JNI-owned release body codec. */
 internal class TestReleaseGenomeCodec : ReleaseGenomeCodecBridge {
     var lastEncodedWire: ByteArray? = null

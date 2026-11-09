@@ -417,6 +417,21 @@ object DesktopNativeRenderer {
      */
     external fun nativeSubstratePreviewPixels(): Int
 
+    /** Converts an internal CGDW genome draft into a persistent CLTY genome (shared codec). */
+    external fun nativeEncodeReleaseGenome(
+        genomeDraftBytes: ByteArray,
+        previewBytes: ByteArray?,
+        previewCodec: Int,
+        previewWidth: Int,
+        previewHeight: Int
+    ): ByteArray
+
+    /** Throws CellularityDataException when a CGDW draft is not a loadable genome. */
+    external fun nativeValidateGenomeDraft(genomeDraftBytes: ByteArray)
+
+    /** Converts a persistent CLTY genome into the internal CGDW editor message. */
+    external fun nativeDecodeReleaseGenome(releaseGenomeBytes: ByteArray): ByteArray
+
     /**
      * Draws the prepared substrate preview [token] into the direct [pixels] buffer, once.
      *

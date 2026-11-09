@@ -1,7 +1,8 @@
 package com.cytarch.cellularity.platform.settings
 
+import com.cytarch.cellularity.platform.files.AndroidDurableFileOperations
+import com.cytarch.cellularity.shared.files.storage.AtomicFileStore
 import android.content.Context
-import com.cytarch.cellularity.platform.files.AtomicFileStore
 import com.cytarch.cellularity.shared.settings.AndroidDisplaySettings
 import com.cytarch.cellularity.shared.settings.AndroidDisplaySettingsJson
 import com.cytarch.cellularity.shared.settings.AndroidRenderBackendSettings
@@ -25,7 +26,7 @@ internal class AndroidCellularitySettingsRepository private constructor(
 
     internal constructor(
         settingsFile: File,
-        atomicFiles: AtomicFileStore = AtomicFileStore(),
+        atomicFiles: AtomicFileStore = AtomicFileStore(AndroidDurableFileOperations),
         dispatcher: CoroutineDispatcher = Dispatchers.IO
     ) : this(
         AtomicJsonSettingsStore(
@@ -67,7 +68,7 @@ internal class AndroidDisplaySettingsRepository private constructor(
 
     internal constructor(
         settingsFile: File,
-        atomicFiles: AtomicFileStore = AtomicFileStore(),
+        atomicFiles: AtomicFileStore = AtomicFileStore(AndroidDurableFileOperations),
         dispatcher: CoroutineDispatcher = Dispatchers.IO
     ) : this(
         AtomicJsonSettingsStore(
@@ -109,7 +110,7 @@ internal class AndroidRenderBackendSettingsRepository private constructor(
 
     internal constructor(
         settingsFile: File,
-        atomicFiles: AtomicFileStore = AtomicFileStore(),
+        atomicFiles: AtomicFileStore = AtomicFileStore(AndroidDurableFileOperations),
         dispatcher: CoroutineDispatcher = Dispatchers.IO
     ) : this(
         AtomicJsonSettingsStore(
