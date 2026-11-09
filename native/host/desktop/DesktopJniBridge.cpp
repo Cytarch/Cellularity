@@ -77,6 +77,7 @@
 
 #include <atomic>
 #include <chrono>
+#include <clocale>
 #include <condition_variable>
 #include <cmath>
 #include <cstdint>
@@ -614,6 +615,22 @@ void registerChildWindow(BridgeWindow window) {
 }
 
 } // namespace
+
+// ---------------------------------------------------------------------------
+// Library load
+// ---------------------------------------------------------------------------
+
+// The JVM calls setlocale(LC_ALL, "") on Linux, so the C library formats and parses
+// numbers in the user's locale -- a decimal comma under ru_RU, de_DE and many others.
+// The native code formats with printf and relies on '.' (the performance HUD's font
+// has no comma glyph, and rendered '?' instead), and the Android and Windows runtimes
+// never see a non-"C" numeric locale. Only LC_NUMERIC is reset: Java formats numbers
+// through its own Locale and is unaffected, and text, collation and messages keep the
+// user's settings.
+extern "C" JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM*, void*) {
+    (void)std::setlocale(LC_NUMERIC, "C");
+    return JNI_VERSION_1_8;
+}
 
 // ---------------------------------------------------------------------------
 // Window lifetime
@@ -1539,7 +1556,7 @@ Java_com_cytarch_cellularity_desktop_nativebridge_DesktopNativeRenderer_nativeDe
 // The body is the part of the standalone host's main() between obtaining the backend
 // API and the first frame, in the same order and with the same values: it creates the
 // backend session against the two asset roots, attaches the window, builds the
-// default environment with random seeding, validates it for the allocation it is
+// default environment (random seeding off, as on Android), validates it for the allocation it is
 // about to make, constructs the controller, stamps the world's creation time and
 // carries the environment's runtime fields across, installs the Vulkan render surface
 // adapter, tells the controller what it is projecting into, selects the Observe
@@ -1609,8 +1626,7 @@ Java_com_cytarch_cellularity_desktop_nativebridge_DesktopNativeRenderer_nativeDe
 
             Environment environment = Environment::constructDefaultEnvironment(
                     maxCellCount, maxFoodCount, dishRadius);
-            environment.addRandom = true;
-            cellularity::snapshot_codec::validateEnvironmentForAllocation(
+                cellularity::snapshot_codec::validateEnvironmentForAllocation(
                     environment);
 
             if (openStoredPlate) {
@@ -1631,9 +1647,9 @@ Java_com_cytarch_cellularity_desktop_nativebridge_DesktopNativeRenderer_nativeDe
                 controller = std::make_shared<NativeCellularityController>(
                         std::move(loaded.world));
             } else {
-                // A fresh substrate with no cells is a valid world but a poor first
-                // impression, and the application's own "new substrate" path seeds life
-                // the same way.
+                // A new plate starts as Android's does: Environment's defaults, with
+                // random-cell seeding off until the user turns it on in the substrate
+                // panel.
                 controller = std::make_shared<NativeCellularityController>(
                         false, environment);
                 {
@@ -1767,7 +1783,6 @@ Java_com_cytarch_cellularity_desktop_nativebridge_DesktopNativeRenderer_nativeDe
         }
         Environment environment = Environment::constructDefaultEnvironment(
                 maxCellCount, maxFoodCount, dishRadius);
-        environment.addRandom = true;
         cellularity::snapshot_codec::validateEnvironmentForAllocation(environment);
         validateNativeSubstratePath(pathValue, /*previewMode=*/false, environment);
         return nullptr;
@@ -2013,7 +2028,6 @@ Java_com_cytarch_cellularity_desktop_nativebridge_DesktopNativeRenderer_nativeIn
     try {
         Environment environment = Environment::constructDefaultEnvironment(
                 maxCellCount, maxFoodCount, dishRadius);
-        environment.addRandom = true;
         cellularity::snapshot_codec::validateEnvironmentForAllocation(environment);
         const NativeSubstrateInspection inspection =
                 inspectSubstratePath(pathValue, /*previewMode=*/false, environment);
