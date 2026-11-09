@@ -56,6 +56,8 @@ class DesktopLiveFrameTest {
                 textureRoot = resolvedRoots.textureRoot.toString()
             )
             assertTrue("the simulation did not start", session != 0L)
+            // A new plate starts empty, as on Android; the first cell is placed by hand.
+            seedCellAtCenter(session, width, height)
 
             val pixels = ByteBuffer.allocateDirect(width * height * BYTES_PER_PIXEL)
             var frames = 0

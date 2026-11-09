@@ -1,5 +1,6 @@
 package com.cytarch.cellularity.platform.simulation
 
+import com.cytarch.cellularity.shared.nativewire.NativeWireCodec
 import com.cytarch.cellularity.NativeSimulationFacade
 import com.cytarch.cellularity.shared.files.CellularityDataException
 import com.cytarch.cellularity.platform.files.AndroidCellularityFileRepository

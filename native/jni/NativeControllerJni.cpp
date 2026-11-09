@@ -11,6 +11,7 @@
 
 #include "NativeControllerHandle.h"
 #include "NativeJniUtils.h"
+#include "SubstrateFilesJni.h"
 #include "app/NativeCellularityController.h"
 #include "app/NativeWorldEditing.h"
 #include "core/SimulationWorld.h"
@@ -43,10 +44,8 @@ jlong createControllerHandle(bool previewMode, const Environment& environment,
 
 Environment createFallbackEnvironment(bool previewMode, int maxCellCount,
         int maxFoodCount, double radius) {
-    return previewMode
-            ? Environment::setupPreviewSimulationEnvironment(maxCellCount)
-            : Environment::constructDefaultEnvironment(maxCellCount,
-                      maxFoodCount, radius);
+    return cellularity::jni::substrateFallbackEnvironment(
+            previewMode, maxCellCount, maxFoodCount, radius);
 }
 
 } // namespace
@@ -76,19 +75,7 @@ Java_com_cytarch_cellularity_NativeCellularityControllerBridge_nativeCreate(
 extern "C" JNIEXPORT jlongArray JNICALL
 Java_com_cytarch_cellularity_NativeCellularityControllerBridge_nativeRuntimeLimits(
         JNIEnv* env, jclass) {
-    const cellularity::memory::RuntimeLimits limits =
-            cellularity::memory::currentRuntimeLimits();
-    const jlong values[4] = {
-            static_cast<jlong>(limits.absoluteSubstrateFileBytes),
-            static_cast<jlong>(limits.operationalSubstrateFileBytes),
-            static_cast<jlong>(limits.worldAllocationBudgetBytes),
-            static_cast<jlong>(limits.addressBits)
-    };
-    jlongArray result = env->NewLongArray(4);
-    if (result != nullptr) {
-        env->SetLongArrayRegion(result, 0, 4, values);
-    }
-    return result;
+    return cellularity::jni::runtimeLimits(env);
 }
 
 extern "C" JNIEXPORT jboolean JNICALL
@@ -158,21 +145,8 @@ Java_com_cytarch_cellularity_NativeCellularityControllerBridge_nativeInspectSubs
         JNIEnv* env, jclass, jstring substratePath, jboolean previewMode,
         jint fallbackMaxCellCount, jint fallbackMaxFoodCount,
         jdouble fallbackRadius) {
-    try {
-        Environment fallbackEnvironment =
-                createFallbackEnvironment(previewMode, fallbackMaxCellCount,
-                        fallbackMaxFoodCount, fallbackRadius);
-        NativeSubstrateInspection inspection = inspectSubstratePath(
-                readJavaString(env, substratePath, "SubstratePath"), previewMode,
-                fallbackEnvironment);
-        return toJavaByteArray(env, writeSubstrateInspectionSnapshot(inspection));
-    } catch (const std::exception& exception) {
-        throwRuntimeException(env, exception);
-        return nullptr;
-    } catch (...) {
-        throwUnknownDecodeException(env);
-        return nullptr;
-    }
+    return cellularity::jni::inspectSubstratePath(env, substratePath, previewMode,
+            fallbackMaxCellCount, fallbackMaxFoodCount, fallbackRadius);
 }
 
 extern "C" JNIEXPORT void JNICALL
@@ -180,18 +154,8 @@ Java_com_cytarch_cellularity_NativeCellularityControllerBridge_nativeValidateSub
         JNIEnv* env, jclass, jstring substratePath, jboolean previewMode,
         jint fallbackMaxCellCount, jint fallbackMaxFoodCount,
         jdouble fallbackRadius) {
-    try {
-        Environment fallbackEnvironment =
-                createFallbackEnvironment(previewMode, fallbackMaxCellCount,
-                        fallbackMaxFoodCount, fallbackRadius);
-        validateNativeSubstratePath(
-                readJavaString(env, substratePath, "SubstratePath"), previewMode,
-                fallbackEnvironment);
-    } catch (const std::exception& exception) {
-        throwRuntimeException(env, exception);
-    } catch (...) {
-        throwUnknownDecodeException(env);
-    }
+    cellularity::jni::validateSubstratePath(env, substratePath, previewMode,
+            fallbackMaxCellCount, fallbackMaxFoodCount, fallbackRadius);
 }
 
 extern "C" JNIEXPORT jlong JNICALL
@@ -232,18 +196,7 @@ Java_com_cytarch_cellularity_NativeCellularityControllerBridge_nativeAttachSubst
 extern "C" JNIEXPORT jbyteArray JNICALL
 Java_com_cytarch_cellularity_NativeCellularityControllerBridge_nativeReadSubstratePreviewPath(
         JNIEnv* env, jclass, jstring substratePath) {
-    try {
-        return toJavaByteArray(
-                env,
-                readSubstratePreviewPath(
-                        readJavaString(env, substratePath, "SubstratePath")));
-    } catch (const std::exception& exception) {
-        throwRuntimeException(env, exception);
-        return nullptr;
-    } catch (...) {
-        throwUnknownDecodeException(env);
-        return nullptr;
-    }
+    return cellularity::jni::readSubstratePreviewPath(env, substratePath);
 }
 
 extern "C" JNIEXPORT void JNICALL

@@ -1,5 +1,7 @@
 package com.cytarch.cellularity.platform.simulation
 
+import com.cytarch.cellularity.shared.nativewire.NativeSubstrateFormatFamily
+import com.cytarch.cellularity.shared.nativewire.NativeWireCodec
 import com.cytarch.cellularity.shared.files.CellularityDataException
 import com.cytarch.cellularity.shared.files.release.EmbeddedPreviewFormat
 import com.cytarch.cellularity.shared.model.CellType

@@ -1,4 +1,4 @@
-package com.cytarch.cellularity.platform.simulation
+package com.cytarch.cellularity.shared.nativewire
 
 import com.cytarch.cellularity.shared.files.CellularityDataException
 import com.cytarch.cellularity.shared.files.release.EmbeddedPreviewFormat
@@ -11,7 +11,7 @@ import java.nio.BufferUnderflowException
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 
-internal data class NativeSubstrateInspection(
+data class NativeSubstrateInspection(
     val familyLocalVersion: Int,
     val time: Double,
     val cellCount: Int,
@@ -28,13 +28,13 @@ internal data class NativeSubstrateInspection(
     val organismIdentityComplete: Boolean = false
 )
 
-internal enum class NativeSubstrateFormatFamily {
+enum class NativeSubstrateFormatFamily {
     UNKNOWN,
     ORIGINAL_JAVA,
     RELEASE_CLTY
 }
 
-internal data class NativeSubstratePreviewDescriptor(
+data class NativeSubstratePreviewDescriptor(
     val format: EmbeddedPreviewFormat,
     val pixelWidth: Int,
     val pixelHeight: Int,
@@ -44,7 +44,11 @@ internal data class NativeSubstratePreviewDescriptor(
 )
 
 /** Decodes the small, transient native-to-Android payloads into shared immutable models. */
-internal object NativeWireCodec {
+/**
+ * Decoder for the documents the native layer returns (cell snapshot, substrate inspection).
+ * Shared by the Android and desktop bridges, which call the same C++ producers.
+ */
+object NativeWireCodec {
     private const val CELL_SNAPSHOT_MAGIC = 0x434c4353 // CLCS
     private const val CELL_SNAPSHOT_VERSION = 8
     private const val SUBSTRATE_INSPECTION_MAGIC = 0x434c494e // CLIN

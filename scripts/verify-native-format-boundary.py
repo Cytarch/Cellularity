@@ -16,7 +16,7 @@ IO_ROOT = NATIVE_ROOT / "io"
 CMAKE_PATH = NATIVE_ROOT / "CMakeLists.txt"
 ANDROID_LEGACY_GENOME_CODEC = (
     REPO_ROOT
-    / "app/src/main/java/com/cytarch/cellularity/platform/files/GenomeFileCodec.kt"
+    / "shared/src/jvmCommonMain/kotlin/com/cytarch/cellularity/shared/files/genome/GenomeFileCodec.kt"
 )
 
 REQUIRED_COMPONENTS = {
@@ -280,7 +280,7 @@ def main() -> None:
     if ANDROID_LEGACY_GENOME_CODEC.is_file():
         legacy_sources.append(ANDROID_LEGACY_GENOME_CODEC.read_text(encoding="utf-8"))
     else:
-        errors.append("Android legacy Genome codec is missing")
+        errors.append("shared legacy Genome codec (Android and desktop) is missing")
     canonical_dependency = re.compile(
         r'#\s*include\s*[<"]core/CanonicalGene\.h[>"]|'
         r'\bCanonicalGeneDefaults\s*(?:::|\.)'

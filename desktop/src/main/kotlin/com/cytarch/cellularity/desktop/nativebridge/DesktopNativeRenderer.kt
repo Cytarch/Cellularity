@@ -426,6 +426,30 @@ object DesktopNativeRenderer {
         previewHeight: Int
     ): ByteArray
 
+    /** Substrate inspection document (shared NativeWireCodec); throws CellularityDataException. */
+    external fun nativeInspectSubstratePath(
+        substratePath: String,
+        previewMode: Boolean,
+        fallbackMaxCellCount: Int,
+        fallbackMaxFoodCount: Int,
+        fallbackRadius: Double
+    ): ByteArray
+
+    /** Throws CellularityDataException when the file is not a loadable substrate. */
+    external fun nativeValidateSubstratePath(
+        substratePath: String,
+        previewMode: Boolean,
+        fallbackMaxCellCount: Int,
+        fallbackMaxFoodCount: Int,
+        fallbackRadius: Double
+    )
+
+    /** The substrate's encoded preview bytes; throws CellularityDataException. */
+    external fun nativeReadSubstratePreviewPath(substratePath: String): ByteArray
+
+    /** absolute file bytes, operational file bytes, world budget bytes, address bits. */
+    external fun nativeRuntimeLimits(): LongArray
+
     /** Throws CellularityDataException when a CGDW draft is not a loadable genome. */
     external fun nativeValidateGenomeDraft(genomeDraftBytes: ByteArray)
 
@@ -473,34 +497,6 @@ object DesktopNativeRenderer {
      * not be reported as unsaved because cleaning up after it failed.
      */
     external fun nativeDiscardSubstratePreview(sessionHandle: Long, token: Long)
-
-    /**
-     * The plate's own description, as the container records it, or null when it cannot be read.
-     *
-     * Everything the collection shows about a plate -- how many cells, how long it has been running,
-     * how much food is left -- is in the metadata block and the body, which only the release codec
-     * can read. The desktop adapter used to report nothing rather than guess, which was honest and
-     * useless: the freezer showed zero cells for a plate holding thousands. This is the phone's own
-     * inspection in the phone's own versioned form, decoded on this side by the desktop's codec.
-     *
-     * The allocation is passed for the same reason it is passed when opening: a plate that predates
-     * recording its own needs a fallback, and describing a file with a different one would describe
-     * a different plate than opening it would.
-     */
-    external fun nativeInspectSubstrate(
-        substratePath: String,
-        maxCellCount: Int,
-        maxFoodCount: Int,
-        dishRadius: Double
-    ): ByteArray?
-
-    /**
-     * The picture a plate carries, as the file stores it, or null when it has none.
-     *
-     * The bytes are the container's own encoded preview rather than a re-encoding, so what is shown
-     * is what a reader of the file sees. A plate without a picture is a normal plate, not a failure.
-     */
-    external fun nativeReadSubstratePreview(substratePath: String): ByteArray?
 
     /**
      * Draws the newest frame into [pixels] and returns what happened.

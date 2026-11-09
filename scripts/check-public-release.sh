@@ -263,8 +263,11 @@ fi
 whole_substrate_heap_apis="$(
     rg -n --glob '*.{java,kt,cpp,h}' \
         'readSubstrate.*ByteArray|writeSubstrate.*ByteArray|substrateDataSnapshot|nativeCreateFromSubstrate(Bytes|Data)' \
-        app/src/main shared/src/commonMain native/jni || true
+        app/src/main shared/src/commonMain shared/src/jvmCommonMain native/jni \
+        | rg -v 'readSubstratePreview' || true
 )"
+# The embedded preview image is read on its own, bounded by its descriptor; it is not
+# the whole substrate, so it is not what this check forbids.
 if [[ -n "${whole_substrate_heap_apis}" ]]; then
     echo "Whole-file substrate heap API found:" >&2
     echo "${whole_substrate_heap_apis}" >&2

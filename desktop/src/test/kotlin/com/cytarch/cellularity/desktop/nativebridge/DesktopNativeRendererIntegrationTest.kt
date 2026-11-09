@@ -56,6 +56,8 @@ class DesktopNativeRendererIntegrationTest {
                 roots.textureRoot.toString()
             )
             assertTrue("the simulation did not start", sessionHandle != 0L)
+            // A new plate starts empty, as on Android; the first cell is placed by hand.
+            seedCellAtCenter(sessionHandle, size, size)
 
             // A frame that is merely accepted is not evidence that anything was drawn,
             // so the world is given time to produce cells and the count is required to

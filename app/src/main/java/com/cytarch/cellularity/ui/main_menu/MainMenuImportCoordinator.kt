@@ -6,7 +6,7 @@ import android.content.Intent
 import android.net.Uri
 import com.cytarch.cellularity.platform.files.AndroidCellularityFileRepository
 import com.cytarch.cellularity.platform.files.ExternalCellularityFile
-import com.cytarch.cellularity.platform.files.ExternalCellularityFileKind
+import com.cytarch.cellularity.shared.files.storage.ExternalCellularityFileKind
 import com.cytarch.cellularity.shared.files.StorageError
 import com.cytarch.cellularity.shared.files.StorageErrorCode
 import com.cytarch.cellularity.shared.files.StorageResult

@@ -29,7 +29,6 @@ import androidx.compose.ui.graphics.asComposeImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import com.cytarch.cellularity.desktop.files.DesktopCellularityFileRepository
-import com.cytarch.cellularity.shared.files.StorageResult
 import com.cytarch.cellularity.shared.files.StoredSubstrateId
 import com.cytarch.cellularity.shared.generated.resources.Res
 import com.cytarch.cellularity.shared.generated.resources.plate
@@ -68,10 +67,7 @@ fun DesktopStoredSubstratePreview(
     LaunchedEffect(id, previewAvailable) {
         image = null
         if (!previewAvailable) return@LaunchedEffect
-        val bytes = when (val result = currentRepository.readSubstratePreview(id)) {
-            is StorageResult.Success -> result.value
-            is StorageResult.Failure -> null
-        } ?: return@LaunchedEffect
+        val bytes = currentRepository.readSubstratePreview(id)?.bytes ?: return@LaunchedEffect
         image = withContext(Dispatchers.Default) { decodePreview(bytes) }
     }
 

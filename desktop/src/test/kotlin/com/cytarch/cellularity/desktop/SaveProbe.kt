@@ -232,7 +232,7 @@ fun main() {
             isWebp(previewBytes)
         )
         DesktopNativeRenderer.nativeAttachSubstratePreview(savedFile.toString(), previewBytes)
-        val readBack = DesktopNativeRenderer.nativeReadSubstratePreview(savedFile.toString())
+        val readBack = DesktopNativeRenderer.nativeReadSubstratePreviewPath(savedFile.toString())
         step(
             "the container keeps the picture it was given",
             "${previewBytes.size} bytes",
@@ -250,8 +250,8 @@ fun main() {
         step(
             "the card's own reader returns that picture",
             "${previewBytes.size} bytes",
-            "${(loadedPicture as? StorageResult.Success)?.value?.size ?: 0} bytes",
-            (loadedPicture as? StorageResult.Success)?.value?.contentEquals(previewBytes) == true
+            "${loadedPicture?.bytes?.size ?: 0} bytes",
+            loadedPicture?.bytes?.contentEquals(previewBytes) == true
         )
     } finally {
         DesktopNativeRenderer.nativeStopSession(session)

@@ -95,6 +95,7 @@
 
 #include "app/NativeCellularityController.h"
 #include "jni/GenomeCodecJni.h"
+#include "jni/SubstrateFilesJni.h"
 #include "core/Utf8Path.h"
 #include "app/NativeRenderSession.h"
 #include "app/genome_preview/GenomeFilePreviewSimulation.h"
@@ -614,6 +615,36 @@ Java_com_cytarch_cellularity_desktop_nativebridge_DesktopNativeRenderer_nativeEn
         jint previewCodec, jint previewWidth, jint previewHeight) {
     return cellularity::jni::encodeReleaseGenome(
             env, genomeBytes, previewBytes, previewCodec, previewWidth, previewHeight);
+}
+
+// Substrate files: the same inspection, validation, preview read and limits the Android
+// bridge exports (jni/SubstrateFilesJni.h), used by the shared CellularityFileStore.
+extern "C" JNIEXPORT jbyteArray JNICALL
+Java_com_cytarch_cellularity_desktop_nativebridge_DesktopNativeRenderer_nativeInspectSubstratePath(
+        JNIEnv* env, jclass, jstring substratePath, jboolean previewMode,
+        jint fallbackMaxCellCount, jint fallbackMaxFoodCount, jdouble fallbackRadius) {
+    return cellularity::jni::inspectSubstratePath(env, substratePath, previewMode,
+            fallbackMaxCellCount, fallbackMaxFoodCount, fallbackRadius);
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_cytarch_cellularity_desktop_nativebridge_DesktopNativeRenderer_nativeValidateSubstratePath(
+        JNIEnv* env, jclass, jstring substratePath, jboolean previewMode,
+        jint fallbackMaxCellCount, jint fallbackMaxFoodCount, jdouble fallbackRadius) {
+    cellularity::jni::validateSubstratePath(env, substratePath, previewMode,
+            fallbackMaxCellCount, fallbackMaxFoodCount, fallbackRadius);
+}
+
+extern "C" JNIEXPORT jbyteArray JNICALL
+Java_com_cytarch_cellularity_desktop_nativebridge_DesktopNativeRenderer_nativeReadSubstratePreviewPath(
+        JNIEnv* env, jclass, jstring substratePath) {
+    return cellularity::jni::readSubstratePreviewPath(env, substratePath);
+}
+
+extern "C" JNIEXPORT jlongArray JNICALL
+Java_com_cytarch_cellularity_desktop_nativebridge_DesktopNativeRenderer_nativeRuntimeLimits(
+        JNIEnv* env, jclass) {
+    return cellularity::jni::runtimeLimits(env);
 }
 
 extern "C" JNIEXPORT void JNICALL
@@ -1995,83 +2026,6 @@ Java_com_cytarch_cellularity_desktop_nativebridge_DesktopNativeRenderer_nativeDi
     } catch (...) {
         // Discarding is best effort: the frame is dead either way, and a plate that was written
         // must not be reported as unsaved because cleaning up after it failed.
-    }
-}
-
-// The plate's own description, as the container records it.
-//
-// The collection shows a plate by what is inside it -- how many cells, how long it has been
-// running, how much food is left -- and none of that is in the file's header: it is in the
-// metadata block and the body, which only the release codec can read. The desktop adapter used to
-// report nothing rather than guess, which is honest but useless: the freezer showed zero cells for
-// a plate holding thousands. This is the same inspection the phone's list uses, in the same
-// versioned form, so both platforms describe a file the same way.
-//
-// The allocation is passed because a plate written before it recorded its own needs a fallback,
-// exactly as when opening one. Null means the file could not be described at all -- which the
-// caller can explain by asking nativeDescribeSubstrateProblem.
-extern "C" JNIEXPORT jbyteArray JNICALL
-Java_com_cytarch_cellularity_desktop_nativebridge_DesktopNativeRenderer_nativeInspectSubstrate(
-        JNIEnv* env, jclass, jstring substratePath, jint maxCellCount, jint maxFoodCount,
-        jdouble dishRadius) {
-    if (substratePath == nullptr) {
-        return nullptr;
-    }
-    std::string pathValue;
-    if (!readUtf8String(env, substratePath, pathValue) || pathValue.empty()) {
-        return nullptr;
-    }
-    try {
-        Environment environment = Environment::constructDefaultEnvironment(
-                maxCellCount, maxFoodCount, dishRadius);
-        cellularity::snapshot_codec::validateEnvironmentForAllocation(environment);
-        const NativeSubstrateInspection inspection =
-                inspectSubstratePath(pathValue, /*previewMode=*/false, environment);
-        const std::vector<std::uint8_t> snapshot =
-                writeSubstrateInspectionSnapshot(inspection);
-        jbyteArray result = env->NewByteArray(
-                static_cast<jsize>(snapshot.size()));
-        if (result == nullptr) {
-            return nullptr;
-        }
-        env->SetByteArrayRegion(result, 0, static_cast<jsize>(snapshot.size()),
-                reinterpret_cast<const jbyte*>(snapshot.data()));
-        return result;
-    } catch (...) {
-        return nullptr;
-    }
-}
-
-// The picture a plate carries, as the file stores it.
-//
-// The bytes are the container's own encoded preview -- WebP for a plate -- so what the caller gets
-// is what a reader of the file gets, not a re-encoding of it. Null or empty means the plate has no
-// picture, which is a normal state and not a failure: a plate saved without one, or written by a
-// build that had no encoder, is still a plate.
-extern "C" JNIEXPORT jbyteArray JNICALL
-Java_com_cytarch_cellularity_desktop_nativebridge_DesktopNativeRenderer_nativeReadSubstratePreview(
-        JNIEnv* env, jclass, jstring substratePath) {
-    if (substratePath == nullptr) {
-        return nullptr;
-    }
-    std::string pathValue;
-    if (!readUtf8String(env, substratePath, pathValue) || pathValue.empty()) {
-        return nullptr;
-    }
-    try {
-        const std::vector<std::uint8_t> preview = readSubstratePreviewPath(pathValue);
-        if (preview.empty()) {
-            return nullptr;
-        }
-        jbyteArray result = env->NewByteArray(static_cast<jsize>(preview.size()));
-        if (result == nullptr) {
-            return nullptr;
-        }
-        env->SetByteArrayRegion(result, 0, static_cast<jsize>(preview.size()),
-                reinterpret_cast<const jbyte*>(preview.data()));
-        return result;
-    } catch (...) {
-        return nullptr;
     }
 }
 

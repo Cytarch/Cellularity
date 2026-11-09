@@ -4,6 +4,7 @@
 
 package com.cytarch.cellularity.desktop
 
+import com.cytarch.cellularity.desktop.nativebridge.seedCellAtCenter
 import com.cytarch.cellularity.desktop.nativebridge.DesktopAssetRoots
 import com.cytarch.cellularity.desktop.nativebridge.DesktopNativeRenderer
 import com.cytarch.cellularity.shared.simulation.ApplyResult
@@ -64,6 +65,8 @@ class DesktopSimulationGatewayIntegrationTest {
                 roots!!.shaderRoot.toString(), roots.textureRoot.toString()
             )
             assertTrue("the simulation did not start", sessionHandle != 0L)
+            // A new plate starts empty, as on Android; the first cell is placed by hand.
+            seedCellAtCenter(sessionHandle, side, side)
 
             // Frames must be drawn: the runtime advances the world as it presents, so a
             // session nobody draws never produces anything to read.
