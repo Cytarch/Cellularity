@@ -480,6 +480,7 @@ private class WorldSurface(
      * is what tells the drawing phase to look at it again. Making it state would add a second
      * reason to redraw for every size change, which is harmless and misleading at once.
      */
+    @Volatile
     var frameBitmap: ImageBitmap? = null
         private set
 
@@ -766,7 +767,11 @@ private class WorldSurface(
                 abandonedCapture.completion(null)
                 abandonedCapture = pendingPreviewCaptures.poll()
             }
-            frameTargetRef?.close()
+            frameTargetRef?.let { last ->
+                frameTargetRef = null
+                frameBitmap = null
+                retireOnUiThread(last)
+            }
             // The picture is freed with the session that drew into it: the address the renderer
             // holds is the memory of this bitmap, and leaving it alive after the session stops would
             // be a leak of exactly the size of the window.
@@ -951,8 +956,17 @@ private class WorldSurface(
             return null
         }
         frameTargetRef = created
-        previous?.close()
+        previous?.let(::retireOnUiThread)
         return created
+    }
+
+    /**
+     * Frees a picture the interface may still be drawing. The canvas reads [frameBitmap] on the
+     * AWT event thread, so the old bitmap is released there, after any draw already under way and
+     * after the swap to its replacement is visible -- never under a frame that is being painted.
+     */
+    private fun retireOnUiThread(target: FrameTarget) {
+        javax.swing.SwingUtilities.invokeLater { target.close() }
     }
 
     /**

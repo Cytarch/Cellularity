@@ -476,7 +476,8 @@ private class PreviewSurface(
         val status = DesktopNativeRenderer.nativeDrawGenomePreviewIntoAddress(
             sessionHandle = session,
             address = target.address,
-            rowStride = target.rowStride
+            rowStride = target.rowStride,
+            capacityBytes = target.rowStride.toLong() * target.bitmap.height
         )
         if (status != PREVIEW_DRAWN) {
             // Nothing to draw is an idle state and not a fault: the frame already on screen stays,

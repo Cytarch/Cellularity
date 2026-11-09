@@ -418,32 +418,15 @@ object DesktopNativeRenderer {
     external fun nativeSubstratePreviewPixels(): Int
 
     /**
-     * Draws the prepared preview [token] into memory the caller holds, once.
+     * Draws the prepared substrate preview [token] into the direct [pixels] buffer, once.
      *
-     * The picture is [nativeSubstratePreviewPixels] square, tightly packed RGBA8 with [rowStride]
-     * bytes to a row, and it lands in the caller's memory exactly once. It is drawn by the renderer,
-     * so it must be asked for from the thread that owns the session -- the same thread that draws
-     * frames -- which is why the request travels through the surface instead of being made from the
-     * interface.
+     * The picture is [nativeSubstratePreviewPixels] square RGBA8 with [rowStride] bytes to a row; the
+     * buffer's capacity is checked against that layout. It must be asked for from the thread that
+     * owns the session -- the thread that draws frames.
      *
      * Returns 0 when the picture was drawn, 1 when the renderer refused it, 2 when the handle or the
      * arguments are not usable, and 3 when there was nothing left to capture -- the token had already
-     * been used, or was never a preview token. The last one is an answer about the plate rather than
-     * a fault: a plate may be saved without a picture.
-     */
-    external fun nativeCaptureSubstratePreviewIntoAddress(
-        sessionHandle: Long,
-        token: Long,
-        address: Long,
-        rowStride: Int
-    ): Int
-
-    /**
-     * The same picture into a direct [pixels] buffer, for a caller that holds one.
-     *
-     * A drawing loop has the buffer already and does not have an address for it, so this is the form
-     * that loop uses; the address form exists because a caller that owns memory outside the heap
-     * should not have to copy through a buffer to reach it. Both are the same capture.
+     * been used, or was never a preview token.
      */
     external fun nativeCaptureSubstratePreview(
         sessionHandle: Long,
@@ -746,26 +729,6 @@ object DesktopNativeRenderer {
     external fun nativeGenomePreviewPixels(): Int
 
     /**
-     * Draws the organism [genomeBytes] grows into, into memory at [address].
-     *
-     * The bytes are the same bounded draft payload the editor saves and the phone publishes, so
-     * what is previewed is what can be saved. The picture is [nativeGenomePreviewPixels] square,
-     * tightly packed RGBA8 with [rowStride] bytes to a row, and it lands in the caller's memory
-     * once.
-     *
-     * Returns 0 when a preview was drawn, 1 when the renderer refused it, 2 when the handle or
-     * the arguments are not usable, and 3 when the genome grew into nothing living -- which is an
-     * answer about the genome, not a fault, and the caller shows it as an empty preview.
-     */
-    external fun nativeCaptureGenomePreviewIntoAddress(
-        sessionHandle: Long,
-        genomeBytes: ByteArray,
-        maximumSimulationTime: Double,
-        address: Long,
-        rowStride: Int
-    ): Int
-
-    /**
      * The same preview into a direct buffer, for callers that hold one.
      *
      * Written as a second entry point rather than as a conversion in the caller because the
@@ -779,26 +742,6 @@ object DesktopNativeRenderer {
         pixels: java.nio.ByteBuffer,
         rowStride: Int
     ): Int
-    /**
-     * The same preview, taken from a camera the caller holds.
-     *
-     * The plain [nativeCaptureGenomePreview] frames the organism itself, which is what a genome's
-     * saved picture wants. This one is for a preview somebody is looking at and moving: the camera
-     * is theirs, and the picture is taken from where they put it. It is used as it stands, even
-     * where it shows nothing, because a preview that snapped back to the organism whenever the view
-     * moved off it would fight the hand that moved it.
-     */
-    external fun nativeCaptureGenomePreviewWithCameraIntoAddress(
-        sessionHandle: Long,
-        genomeBytes: ByteArray,
-        maximumSimulationTime: Double,
-        cameraCenterX: Double,
-        cameraCenterY: Double,
-        cameraZoom: Float,
-        address: Long,
-        rowStride: Int
-    ): Int
-
     /** The same into a direct buffer, for callers that hold one. */
     external fun nativeCaptureGenomePreviewWithCamera(
         sessionHandle: Long,
@@ -846,13 +789,15 @@ object DesktopNativeRenderer {
      * The preview's own frame, drawn into the caller's memory.
      *
      * This is the world the published content built, seen through the viewport the published view
-     * moved -- so a camera somebody dragged is the camera the picture comes from. Returns 0 when a
+     * moved -- so a camera somebody dragged is the camera the picture comes from. [capacityBytes] is
+     * the size of the memory at [address]; a frame that would not fit is refused. Returns 0 when a
      * frame was written, 3 when there is nothing to draw yet, 1 when the session is gone.
      */
     external fun nativeDrawGenomePreviewIntoAddress(
         sessionHandle: Long,
         address: Long,
-        rowStride: Int
+        rowStride: Int,
+        capacityBytes: Long
     ): Int
 
     /**

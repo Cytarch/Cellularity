@@ -164,7 +164,8 @@ fun main() {
         val liveStatus = DesktopNativeRenderer.nativeDrawGenomePreviewIntoAddress(
             sessionHandle = previewSession,
             address = live.address,
-            rowStride = live.rowStride
+            rowStride = live.rowStride,
+            capacityBytes = live.rowStride.toLong() * live.edge
         )
         // Read after the frame, not before it: the camera is published with the picture it was
         // taken through, so the one worth reporting is the one this picture came from.
@@ -190,7 +191,8 @@ fun main() {
         val zoomedStatus = DesktopNativeRenderer.nativeDrawGenomePreviewIntoAddress(
             sessionHandle = previewSession,
             address = zoomed.address,
-            rowStride = zoomed.rowStride
+            rowStride = zoomed.rowStride,
+            capacityBytes = zoomed.rowStride.toLong() * zoomed.edge
         )
         val after = cameraOf(previewSession)
         println("GENOMEPREVIEW zoom accepted=$zoom status=$zoomedStatus")

@@ -29,7 +29,7 @@ class DesktopThemeFileTest {
 
     @Test
     fun `a theme survives being exported and imported`() {
-        val colors = CellularityThemeColors(name = "Полярная ночь / polar")
+        val colors = CellularityThemeColors(name = "\u041f\u043e\u043b\u044f\u0440\u043d\u0430\u044f \u043d\u043e\u0447\u044c / polar")
         val components = com.cytarch.cellularity.shared.settings.CellularityThemeComponents()
 
         val text = CellularityThemeFileJson.encode(colors, components)
@@ -63,7 +63,7 @@ class DesktopThemeFileTest {
         // called anything at all. A name that cannot be a file must not become an export
         // that silently fails, so the cleaning is asserted rather than assumed.
         val awkward = listOf(
-            "Полярная ночь / polar",
+            "\u041f\u043e\u043b\u044f\u0440\u043d\u0430\u044f \u043d\u043e\u0447\u044c / polar",
             "a:b*c?d",
             "   ",
             ""

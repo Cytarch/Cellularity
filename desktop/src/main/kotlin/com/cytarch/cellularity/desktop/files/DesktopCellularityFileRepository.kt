@@ -484,15 +484,13 @@ class DesktopCellularityFileRepository(
      * is what the phone does and what the rename here does: an import that overwrote a plate would
      * destroy the one file the user was trying to keep, and the report would look like success.
      *
-     * The bytes are checked before the copy rather than after it. The phone validates the temporary
-     * file because reading from a content provider can fail halfway; a file on a disk is read by
-     * position, and a copy that ends short is caught by the same length check every other write
-     * goes through, so what is worth refusing up front is a document that is not what its name
-     * claims -- a text file called `.substrate`, a genome of a kind this adapter cannot recognise.
+     * The source is size-checked up front so an oversized file is refused before anything is
+     * copied, and the copy is then validated in place, before it is given its name. Validating the
+     * copy rather than the source means a file that changes between the check and the copy -- on a
+     * removable drive or a network share -- can never be committed unchecked.
      *
-     * A substrate is copied without a size ceiling. The limit the phone enforces is its own native
-     * loader's, because it reads the whole plate into memory; this side streams the file and hands
-     * the renderer a path, so a ceiling here would refuse plates that the desktop can open.
+     * Substrates are held to the same absolute 2 GiB ceiling as on the phone, which is also the
+     * native loader's own file boundary; genomes to their release size limit.
      */
     suspend fun importExternalFile(file: DesktopExternalFile): StorageResult<Unit> =
         storageOperation { checkCancellation ->
@@ -503,13 +501,15 @@ class DesktopCellularityFileRepository(
                     "A file with that name already exists"
                 )
             }
-            validateImportedFile(file)
+            val declaredBytes = Files.size(file.source)
+            requireImportSize(file.kind, declaredBytes)
             checkCancellation()
             atomicReplace(
                 target = target,
-                declaredBytes = Files.size(file.source),
+                declaredBytes = declaredBytes,
                 checkCancellation = checkCancellation,
-                replaceExisting = false
+                replaceExisting = false,
+                validate = { temporary -> validateImportedFile(file.kind, temporary) }
             ) { temporary ->
                 Files.copy(file.source, temporary, StandardCopyOption.REPLACE_EXISTING)
             }
@@ -612,9 +612,22 @@ class DesktopCellularityFileRepository(
      * because the collection that lists it reports its compatibility -- and its refusal, if it
      * cannot be opened -- from the same inspection that runs for a file that was already there.
      */
-    private fun validateImportedFile(file: DesktopExternalFile) {
-        when (file.kind) {
-            DesktopExternalFileKind.SUBSTRATE -> when (substrateFileKind(file.source)) {
+    private fun requireImportSize(kind: DesktopExternalFileKind, bytes: Long) {
+        val limit = when (kind) {
+            DesktopExternalFileKind.SUBSTRATE -> MAXIMUM_SUBSTRATE_IMPORT_BYTES
+            DesktopExternalFileKind.GENOME -> maximumGenomeBytes
+        }
+        if (bytes > limit) {
+            throw StorageOperationException(
+                StorageErrorCode.TOO_LARGE,
+                "File exceeds the release file size limit"
+            )
+        }
+    }
+
+    private fun validateImportedFile(kind: DesktopExternalFileKind, source: Path) {
+        when (kind) {
+            DesktopExternalFileKind.SUBSTRATE -> when (substrateFileKind(source)) {
                 is SubstrateFileKind.Unknown -> throw StorageOperationException(
                     StorageErrorCode.UNSUPPORTED_FORMAT,
                     "Substrate file is not a release container"
@@ -629,15 +642,10 @@ class DesktopCellularityFileRepository(
             }
 
             DesktopExternalFileKind.GENOME -> {
-                val fileBytes = Files.size(file.source)
-                if (fileBytes > maximumGenomeBytes) {
-                    throw StorageOperationException(
-                        StorageErrorCode.TOO_LARGE,
-                        "Genome exceeds the release file size limit"
-                    )
-                }
-                when (fileKind(file.source)) {
-                    FileKind.DraftWire -> decodeDraftFile(file.source, fileBytes).requireLoadable()
+                val fileBytes = Files.size(source)
+                requireImportSize(kind, fileBytes)
+                when (fileKind(source)) {
+                    FileKind.DraftWire -> decodeDraftFile(source, fileBytes).requireLoadable()
 
                     FileKind.ReleaseContainer -> Unit
 
@@ -1339,6 +1347,7 @@ class DesktopCellularityFileRepository(
 
         /** Suffix of an in-flight write; see [atomicReplace]. */
         const val TEMPORARY_SUFFIX = ".writing"
+        const val MAXIMUM_SUBSTRATE_IMPORT_BYTES = 2L * 1024L * 1024L * 1024L
 
         /**
          * How many seconds of simulated time an hour is.

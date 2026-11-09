@@ -12,6 +12,8 @@ import com.cytarch.cellularity.shared.settings.SettingsErrorCode
 import com.cytarch.cellularity.shared.settings.SettingsRecoveryState
 import com.cytarch.cellularity.shared.settings.SettingsResult
 import java.io.IOException
+import java.nio.ByteBuffer
+import java.nio.channels.FileChannel
 import java.nio.charset.StandardCharsets
 import java.nio.file.AtomicMoveNotSupportedException
 import java.nio.file.Files
@@ -303,11 +305,27 @@ class DesktopCellularitySettingsRepository(
                 Files.deleteIfExists(temporary)
                 throw failure
             }
+            directory?.let { forceDirectoryEntry(it) }
             SettingsResult.Success(normalized)
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (failure: Exception) {
             SettingsResult.Failure(ioError(failure))
+        }
+    }
+
+    /**
+     * Makes the rename itself durable where the platform allows opening a directory.
+     * Windows refuses to open one as a channel; NTFS journals the rename, so the
+     * failure is ignored there rather than reported as a failed save.
+     */
+    private fun forceDirectoryEntry(directory: Path) {
+        try {
+            FileChannel.open(directory, StandardOpenOption.READ).use { channel ->
+                channel.force(true)
+            }
+        } catch (ignored: IOException) {
+            // Best effort; see the method comment.
         }
     }
 
@@ -347,12 +365,20 @@ class DesktopCellularitySettingsRepository(
         checkCancellation()
         val temporary = Files.createTempFile(directory, settingsFile.fileName.toString(), ".tmp")
         try {
-            Files.write(
+            // Written and flushed to the device before it is moved over the document, so a
+            // power loss after the rename cannot leave an empty settings file that the next
+            // start would set aside as corrupt.
+            FileChannel.open(
                 temporary,
-                encoded,
                 StandardOpenOption.WRITE,
                 StandardOpenOption.TRUNCATE_EXISTING
-            )
+            ).use { channel ->
+                val buffer = ByteBuffer.wrap(encoded)
+                while (buffer.hasRemaining()) {
+                    channel.write(buffer)
+                }
+                channel.force(true)
+            }
             return temporary
         } catch (failure: Exception) {
             // A temporary file that was created and then refused a write is left behind unless it

@@ -67,7 +67,7 @@ fun main(args: Array<String>) {
     // activity reads when it inflates. A desktop has no such mechanism: the shared interface asks
     // Compose for its strings, and Compose on the JVM resolves them with the default locale --
     // reading each resource file once, with whatever locale was current at that moment. Nothing
-    // applied the setting, so the language picker in Настройки changed a stored value and nothing
+    // applied the setting, so the language picker in Settings changed a stored value and nothing
     // else, and the interface stayed in whatever language Windows was set to while the setting
     // said otherwise.
     //

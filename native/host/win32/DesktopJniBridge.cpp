@@ -73,6 +73,7 @@
 
 #include <atomic>
 #include <chrono>
+#include <condition_variable>
 #include <cmath>
 #include <cstdint>
 #include <cstring>
@@ -88,6 +89,7 @@
 #include <vector>
 
 #include "app/NativeCellularityController.h"
+#include "core/Utf8Path.h"
 #include "app/NativeRenderSession.h"
 #include "app/genome_preview/GenomeFilePreviewSimulation.h"
 
@@ -276,6 +278,14 @@ struct DesktopSession final {
     // construction; it only keeps a call that has already started from reading a
     // member another thread is clearing.
     std::mutex mutex;
+
+    // Calls that hold the controller right now, and whether a stop has begun. A stop
+    // refuses new calls and then waits for these to finish before it closes the
+    // backend, so no thread is still drawing or saving through a device that is being
+    // destroyed. Both are guarded by the mutex above.
+    std::size_t callsInFlight = 0;
+    bool stopping = false;
+    std::condition_variable callsDrained;
 };
 
 // One lock covers both registries. They are touched once per session and once per
@@ -382,13 +392,52 @@ void registerChildWindow(HWND window) {
 // thread cannot clear the member under a call that has already started. Every entry
 // point that draws or queues goes through this, and every one of them checks for
 // null.
+//
+// The pointer returned also counts the call as in flight until the caller drops it:
+// it aliases a small guard whose destruction ends the call, so every existing call
+// site keeps its plain shared_ptr while a stop can wait for them. Callers hold it
+// only for the duration of one entry point and never store it.
 [[nodiscard]] std::shared_ptr<NativeCellularityController> liveController(
         const std::shared_ptr<DesktopSession>& session) {
     if (!session) {
         return nullptr;
     }
-    std::lock_guard<std::mutex> lock(session->mutex);
-    return session->controller;
+    struct CallGuard {
+        CallGuard(std::shared_ptr<DesktopSession> owner,
+                std::shared_ptr<NativeCellularityController> held) noexcept
+                : session(std::move(owner)), controller(std::move(held)) {}
+        CallGuard(const CallGuard&) = delete;
+        CallGuard& operator=(const CallGuard&) = delete;
+        std::shared_ptr<DesktopSession> session;
+        std::shared_ptr<NativeCellularityController> controller;
+        ~CallGuard() {
+            std::lock_guard<std::mutex> lock(session->mutex);
+            if (--session->callsInFlight == 0) {
+                session->callsDrained.notify_all();
+            }
+        }
+    };
+    std::shared_ptr<NativeCellularityController> controller;
+    {
+        std::lock_guard<std::mutex> lock(session->mutex);
+        if (session->stopping || !session->controller) {
+            return nullptr;
+        }
+        controller = session->controller;
+        ++session->callsInFlight;
+    }
+    std::shared_ptr<CallGuard> guard;
+    try {
+        guard = std::make_shared<CallGuard>(session, std::move(controller));
+    } catch (...) {
+        std::lock_guard<std::mutex> lock(session->mutex);
+        if (--session->callsInFlight == 0) {
+            session->callsDrained.notify_all();
+        }
+        throw;
+    }
+    NativeCellularityController* raw = guard->controller.get();
+    return std::shared_ptr<NativeCellularityController>(std::move(guard), raw);
 }
 
 // Reads a Java string into a std::string. A null argument is refused; a failed
@@ -513,7 +562,13 @@ void registerChildWindow(HWND window) {
     std::shared_ptr<NativeCellularityController> controller;
     std::shared_ptr<VulkanBackendSession> backend;
     {
-        std::lock_guard<std::mutex> lock(session->mutex);
+        // Refuse new calls, then wait for the ones already running: the backend is
+        // closed below and must not be in use on another thread when it is.
+        std::unique_lock<std::mutex> lock(session->mutex);
+        session->stopping = true;
+        session->callsDrained.wait(lock, [&session] {
+            return session->callsInFlight == 0;
+        });
         controller = std::move(session->controller);
         backend = std::move(session->session);
     }
@@ -1016,7 +1071,7 @@ Java_com_cytarch_cellularity_desktop_nativebridge_DesktopNativeRenderer_nativeCa
         append32(0);
         file.insert(file.end(), pixels.begin(), pixels.end());
 
-        std::ofstream output(destination, std::ios::binary | std::ios::trunc);
+        std::ofstream output(cellularity::paths::fromUtf8(destination), std::ios::binary | std::ios::trunc);
         if (!output) {
             return -1;
         }
@@ -1711,9 +1766,17 @@ Java_com_cytarch_cellularity_desktop_nativebridge_DesktopNativeRenderer_nativeSu
         jlong sessionHandle,
         jlong token,
         std::uint8_t* destination,
+        std::size_t destinationSize,
         jint rowStride) {
     const auto side = static_cast<jint>(NativeRenderSession::SUBSTRATE_PREVIEW_PIXELS);
     if (destination == nullptr || token == 0 || rowStride < side * 4) {
+        return kStatusInvalidHandle;
+    }
+    // The last row needs only its pixels, every earlier row a whole stride.
+    const std::size_t required = static_cast<std::size_t>(rowStride)
+                    * static_cast<std::size_t>(side - 1)
+            + static_cast<std::size_t>(side) * 4U;
+    if (destinationSize < required) {
         return kStatusInvalidHandle;
     }
     const std::shared_ptr<DesktopSession> session = findSession(sessionHandle);
@@ -1748,19 +1811,6 @@ Java_com_cytarch_cellularity_desktop_nativebridge_DesktopNativeRenderer_nativeSu
     }
 }
 
-// The same picture into memory the caller holds, which is how the surface takes it: the buffer
-// lives in the drawing loop and does not have to be found through the module system.
-extern "C" JNIEXPORT jint JNICALL
-Java_com_cytarch_cellularity_desktop_nativebridge_DesktopNativeRenderer_nativeCaptureSubstratePreviewIntoAddress(
-        JNIEnv*, jclass, jlong sessionHandle, jlong token, jlong address,
-        jint rowStride) {
-    if (address == 0) {
-        return kStatusInvalidHandle;
-    }
-    return captureSubstratePreviewInto(sessionHandle, token,
-            reinterpret_cast<std::uint8_t*>(address), rowStride);
-}
-
 // The same picture into a direct java.nio.ByteBuffer, which is the form a test can hold without
 // asking the module system for the address of its memory.
 extern "C" JNIEXPORT jint JNICALL
@@ -1773,13 +1823,11 @@ Java_com_cytarch_cellularity_desktop_nativebridge_DesktopNativeRenderer_nativeCa
     auto* destination = static_cast<std::uint8_t*>(
             env->GetDirectBufferAddress(pixelBuffer));
     const jlong capacity = env->GetDirectBufferCapacity(pixelBuffer);
-    const jlong required =
-            static_cast<jlong>(NativeRenderSession::SUBSTRATE_PREVIEW_PIXELS)
-            * static_cast<jlong>(NativeRenderSession::SUBSTRATE_PREVIEW_PIXELS) * 4;
-    if (destination == nullptr || capacity < required) {
+    if (destination == nullptr || capacity <= 0) {
         return kStatusInvalidHandle;
     }
-    return captureSubstratePreviewInto(sessionHandle, token, destination, rowStride);
+    return captureSubstratePreviewInto(sessionHandle, token, destination,
+            static_cast<std::size_t>(capacity), rowStride);
 }
 
 // Attaches an encoded preview to a plate that was just written.
@@ -2175,6 +2223,14 @@ extern "C" JNIEXPORT jint JNICALL
 Java_com_cytarch_cellularity_desktop_nativebridge_DesktopNativeRenderer_nativeRenderFrameIntoAddress(
         JNIEnv*, jclass, jlong sessionHandle, jlong address, jint width, jint height,
         jint rowStride) {
+    // This thread owns the hidden surface anchor window and has no other message loop.
+    // Draining its queue once per frame keeps a broadcast SendMessage from another
+    // process (WM_SETTINGCHANGE and friends) from blocking on a window nobody pumps.
+    MSG message{};
+    while (::PeekMessageW(&message, nullptr, 0, 0, PM_REMOVE) != 0) {
+        ::TranslateMessage(&message);
+        ::DispatchMessageW(&message);
+    }
     const std::shared_ptr<DesktopSession> session = findSession(sessionHandle);
     if (!session) {
         return kStatusInvalidHandle;
@@ -2182,7 +2238,7 @@ Java_com_cytarch_cellularity_desktop_nativebridge_DesktopNativeRenderer_nativeRe
     if (address == 0 || width <= 0 || height <= 0) {
         return kStatusInvalidHandle;
     }
-    if (rowStride < width * 4) {
+    if (static_cast<std::int64_t>(rowStride) < static_cast<std::int64_t>(width) * 4) {
         return kStatusInvalidHandle;
     }
     const std::size_t requiredBytes = static_cast<std::size_t>(rowStride)
@@ -2877,19 +2933,6 @@ static jint captureGenomePreviewInto(JNIEnv* env, jlong sessionHandle,
     }
 }
 
-extern "C" JNIEXPORT jint JNICALL
-Java_com_cytarch_cellularity_desktop_nativebridge_DesktopNativeRenderer_nativeCaptureGenomePreviewIntoAddress(
-        JNIEnv* env, jclass, jlong sessionHandle, jbyteArray genomeBytes,
-        jdouble maximumSimulationTime, jlong address, jint rowStride) {
-    if (address == 0) {
-        return kStatusInvalidHandle;
-    }
-    constexpr std::size_t kNoSizeCheck = std::numeric_limits<std::size_t>::max();
-    return captureGenomePreviewInto(env, sessionHandle, genomeBytes,
-            maximumSimulationTime, reinterpret_cast<std::uint8_t*>(address),
-            kNoSizeCheck, rowStride, nullptr);
-}
-
 // The same preview into a direct java.nio.ByteBuffer, which is the form a test can hold without
 // asking the module system for the address of its memory.
 extern "C" JNIEXPORT jint JNICALL
@@ -2908,25 +2951,6 @@ Java_com_cytarch_cellularity_desktop_nativebridge_DesktopNativeRenderer_nativeCa
     return captureGenomePreviewInto(env, sessionHandle, genomeBytes,
             maximumSimulationTime, destination,
             static_cast<std::size_t>(capacity), rowStride, nullptr);
-}
-
-// The same preview from a camera the caller holds, which is what an interactive preview needs: the
-// file preview frames the organism itself, while a person looking at it has panned and zoomed and
-// expects the picture from where they put the camera.
-extern "C" JNIEXPORT jint JNICALL
-Java_com_cytarch_cellularity_desktop_nativebridge_DesktopNativeRenderer_nativeCaptureGenomePreviewWithCameraIntoAddress(
-        JNIEnv* env, jclass, jlong sessionHandle, jbyteArray genomeBytes,
-        jdouble maximumSimulationTime, jdouble cameraCenterX, jdouble cameraCenterY,
-        jfloat cameraZoom, jlong address, jint rowStride) {
-    if (address == 0) {
-        return kStatusInvalidHandle;
-    }
-    const GenomePreviewController::Camera camera{
-            cameraCenterX, cameraCenterY, cameraZoom};
-    constexpr std::size_t kNoSizeCheck = std::numeric_limits<std::size_t>::max();
-    return captureGenomePreviewInto(env, sessionHandle, genomeBytes,
-            maximumSimulationTime, reinterpret_cast<std::uint8_t*>(address),
-            kNoSizeCheck, rowStride, &camera);
 }
 
 // The same into a direct java.nio.ByteBuffer, for callers that hold one -- a probe, or anything
@@ -2978,12 +3002,18 @@ Java_com_cytarch_cellularity_desktop_nativebridge_DesktopNativeRenderer_nativePu
         }
         return 1;
     }
-    const auto status = controller->publishGenomePreviewContent(
-            reinterpret_cast<const std::uint8_t*>(pinned),
-            static_cast<std::size_t>(length),
-            static_cast<double>(simulationTimeHours));
+    jint status = 1;
+    try {
+        status = static_cast<jint>(controller->publishGenomePreviewContent(
+                reinterpret_cast<const std::uint8_t*>(pinned),
+                static_cast<std::size_t>(length),
+                static_cast<double>(simulationTimeHours)));
+    } catch (...) {
+        // An exception must not cross the JNI boundary, and the array must be released.
+        status = 1;
+    }
     env->ReleaseByteArrayElements(genomeBytes, pinned, JNI_ABORT);
-    return static_cast<jint>(status);
+    return status;
 }
 // Where the preview's view stands: selected gene, grid, tree, viewport size.
 extern "C" JNIEXPORT jint JNICALL
@@ -3025,26 +3055,32 @@ Java_com_cytarch_cellularity_desktop_nativebridge_DesktopNativeRenderer_nativeEn
 // the camera survives between frames because it lives in the session, not in the caller.
 extern "C" JNIEXPORT jint JNICALL
 Java_com_cytarch_cellularity_desktop_nativebridge_DesktopNativeRenderer_nativeDrawGenomePreviewIntoAddress(
-        JNIEnv*, jclass, jlong sessionHandle, jlong address, jint rowStride) {
-    if (address == 0 || rowStride <= 0) {
+        JNIEnv*, jclass, jlong sessionHandle, jlong address, jint rowStride,
+        jlong capacityBytes) {
+    if (address == 0 || rowStride <= 0 || capacityBytes <= 0) {
         return kStatusInvalidHandle;
     }
-    const std::shared_ptr<DesktopSession> session = findSession(sessionHandle);
-    const auto controller = liveController(session);
-    if (controller == nullptr) {
-        return kStatusInvalidHandle;
+    try {
+        const std::shared_ptr<DesktopSession> session = findSession(sessionHandle);
+        const auto controller = liveController(session);
+        if (controller == nullptr) {
+            return kStatusInvalidHandle;
+        }
+        // The caller states how much memory it owns; the frame is refused rather than
+        // written past it when the preview's size and the caller's buffer disagree.
+        bool wrote = false;
+        const std::size_t bytes = controller->drawGenomePreviewIntoRgba(
+                reinterpret_cast<std::uint8_t*>(address),
+                static_cast<std::size_t>(capacityBytes),
+                static_cast<std::size_t>(rowStride),
+                wrote);
+        if (!wrote || bytes == 0) {
+            return kStatusNoFrameYet;
+        }
+        return kStatusOk;
+    } catch (...) {
+        return kStatusFailed;
     }
-    constexpr std::size_t kNoLimit = std::numeric_limits<std::size_t>::max();
-    bool wrote = false;
-    const std::size_t bytes = controller->drawGenomePreviewIntoRgba(
-            reinterpret_cast<std::uint8_t*>(address),
-            kNoLimit,
-            static_cast<std::size_t>(rowStride),
-            wrote);
-    if (!wrote || bytes == 0) {
-        return kStatusNoFrameYet;
-    }
-    return kStatusOk;
 }
 
 // Where the preview stands: the Cells it grew, the gene a tap chose, and the camera the last

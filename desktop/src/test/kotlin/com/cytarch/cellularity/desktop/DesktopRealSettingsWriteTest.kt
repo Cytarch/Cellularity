@@ -10,6 +10,7 @@ import com.cytarch.cellularity.shared.settings.SettingsResult
 import java.nio.file.Files
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertTrue
+import org.junit.Assume.assumeTrue
 import org.junit.Test
 
 /**
@@ -31,11 +32,19 @@ import org.junit.Test
  *
  * The user's own document is backed up and put back, because a test that damages the settings it
  * is checking would be a worse problem than the one it is looking for.
+ *
+ * Because it touches the real profile, it is opt-in and never part of an ordinary test run:
+ *
+ *     ./gradlew :desktop:test -Pcellularity.realSettingsTest=true
  */
 class DesktopRealSettingsWriteTest {
 
     @Test
     fun aSwitchSurvivesBeingWrittenToTheDirectoryTheApplicationUses() {
+        assumeTrue(
+            "writes to the real user profile; enable with -Pcellularity.realSettingsTest=true",
+            System.getProperty(REAL_SETTINGS_PROPERTY) == "true"
+        )
         val environment = DesktopEnvironment.create()
         val settingsFile = environment.dataDirectory.resolve("settings.json")
         println("SETTINGS the application writes to $settingsFile")
@@ -87,3 +96,5 @@ class DesktopRealSettingsWriteTest {
         }
     }
 }
+
+private const val REAL_SETTINGS_PROPERTY = "cellularity.realSettingsTest"

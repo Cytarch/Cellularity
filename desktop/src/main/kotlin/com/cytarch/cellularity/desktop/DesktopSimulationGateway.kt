@@ -224,7 +224,7 @@ class DesktopSimulationGateway(
      * Keeps the counters current for as long as this call runs.
      *
      * The counters were read once, when the session was created, and never again: the substrate
-     * panel then said "0,0 ч, 0 cells, 0,0 nutrients" for ever while the world behind it filled up.
+     * panel then said "0,0 h, 0 cells, 0,0 nutrients" for ever while the world behind it filled up.
      * That is not a stale label, it is a screen reporting a moment that passed, and no amount of
      * reading the panel would have shown it -- the desktop had no loop at all, where the phone
      * publishes on every frame it is handed and throttles that to about seven times a second.
