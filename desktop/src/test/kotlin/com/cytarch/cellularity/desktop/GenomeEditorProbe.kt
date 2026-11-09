@@ -149,17 +149,17 @@ fun main() {
     store.dispatch(GenomeEditorAction.MoveGene(GeneIndex(2), GeneIndex(0)))
     check("move", 3)
 
-    store.deleteGene(GeneIndex(1))
+    deleteGeneAsTheScreenDoes(store, GeneIndex(1))
     check("delete", 2)
 
-    store.deleteGene(GeneIndex(0))
+    deleteGeneAsTheScreenDoes(store, GeneIndex(0))
     check("delete to the floor", 1)
 
     // The floor has to refuse rather than produce an unrepresentable genome. Refusing
     // loudly is the intent, so a throw is the pass and silence would be the failure.
     val floorBefore = store.state.genome.genes.size
     val refusedBelowTheFloor = try {
-        store.deleteGene(GeneIndex(0))
+        deleteGeneAsTheScreenDoes(store, GeneIndex(0))
         false
     } catch (_: IllegalArgumentException) {
         true
@@ -259,4 +259,14 @@ private fun capture(window: Frame, destination: File): File? = try {
     // is not the same as the editor being broken, so it does not stop the run.
     System.err.println("GENOME could not capture ${destination.name}: $thrown")
     null
+}
+
+/** Deletes a gene the way the shared editor's delete dialog does: one DeleteGene action. */
+private fun deleteGeneAsTheScreenDoes(store: DesktopGenomeEditorStore, index: GeneIndex) {
+    val genes = store.state.genome.genes
+    require(genes.size > com.cytarch.cellularity.shared.model.GenomeContract.MIN_GENE_COUNT) {
+        "The last gene cannot be deleted"
+    }
+    val replacement = GeneIndex(if (index.value == 0) 1 else 0)
+    store.dispatch(GenomeEditorAction.DeleteGene(index, replacement))
 }
