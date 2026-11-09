@@ -4,7 +4,9 @@
 #include <array>
 #include <cmath>
 #include <cstdint>
+#include <cfenv>
 #include <cstdlib>
+#include <cstring>
 #include <limits>
 #include <stdexcept>
 #include <string_view>
@@ -23,6 +25,96 @@
 namespace hn = hwy::HWY_NAMESPACE;
 
 namespace {
+
+// Viscosity slows a free mobile food towards rest, and for thousands of steps its float
+// velocity, or the results computed from it, lie in the subnormal range. On x86 every such
+// float operation takes a microcode assist; a settled plate of mobile food spent ~35x longer in
+// motion than with the assists gone. These helpers compute those float results exactly from
+// normal doubles instead: + - * of two floats done in double and rounded once to float is
+// the correctly rounded float result (53 >= 2 * 24 + 2), and the rounding onto the subnormal
+// grid is done by hand, so no operation has a subnormal input or output. All of it assumes
+// round-to-nearest, which the caller checks.
+
+// The exact value of a float, without converting a subnormal float in hardware.
+inline double exactFloatValue(float value) noexcept {
+    std::uint32_t bits = 0;
+    std::memcpy(&bits, &value, sizeof(bits));
+    if ((bits & 0x7f800000U) != 0U) {
+        return static_cast<double>(value);
+    }
+    const double magnitude = static_cast<double>(bits & 0x007fffffU) * 0x1p-149;
+    return (bits & 0x80000000U) != 0U ? -magnitude : magnitude;
+}
+
+// x rounded to the nearest float (ties to even), returned as its exact double value.
+inline double roundToFloatGrid(double x) noexcept {
+    if (std::fabs(x) >= 0x1p-126) {
+        return static_cast<double>(static_cast<float>(x));
+    }
+    // Below 2^-126 floats are the multiples of 2^-149; adding and removing 2^52 rounds the
+    // scaled value to an integer with ties to even.
+    const double scaled = std::fabs(x) * 0x1p149;
+    const double rounded = (scaled + 0x1p52) - 0x1p52;
+    return std::copysign(rounded * 0x1p-149, x);
+}
+
+// The float holding a value already on the float grid, built from bits when subnormal.
+inline float floatFromGridValue(double value) noexcept {
+    if (std::fabs(value) >= 0x1p-126) {
+        return static_cast<float>(value);
+    }
+    std::uint32_t bits = static_cast<std::uint32_t>(std::fabs(value) * 0x1p149);
+    if (std::signbit(value)) {
+        bits |= 0x80000000U;
+    }
+    float result = 0.0F;
+    std::memcpy(&result, &bits, sizeof(result));
+    return result;
+}
+
+// One axis of a food's motion step for a velocity below 2^-100:
+//     velocity -= float(0.2 * velocity * viscosity * deltaTime);
+//     position += velocity * float(deltaTime);
+// Writes the new velocity and returns true when the step leaves the position unchanged
+// whether or not the compiler fused the position update into an FMA: the step is at most a
+// quarter of a unit of the position, so neither rounding can reach it. Returns false for
+// every other case, which the caller computes the ordinary way.
+inline bool tinyFoodAxisStep(float velocity,
+        float position,
+        double viscosity,
+        double deltaTime,
+        float& newVelocity) noexcept {
+    std::uint32_t velocityBits = 0;
+    std::memcpy(&velocityBits, &velocity, sizeof(velocityBits));
+    const std::uint32_t velocityMagnitude = velocityBits & 0x7fffffffU;
+    // Zero is fast in hardware; |velocity| >= 2^-100 rarely produces a subnormal.
+    if (velocityMagnitude == 0U || velocityMagnitude >= (27U << 23U)) {
+        return false;
+    }
+    std::uint32_t positionBits = 0;
+    std::memcpy(&positionBits, &position, sizeof(positionBits));
+    const std::uint32_t positionExponent = (positionBits >> 23U) & 0xffU;
+    // A normal position of at least 2^-97 (and not infinite or NaN).
+    if (positionExponent < 30U || positionExponent == 0xffU) {
+        return false;
+    }
+    const double exactVelocity = exactFloatValue(velocity);
+    const double slowdown = roundToFloatGrid(0.2 * exactVelocity * viscosity * deltaTime);
+    // Both terms are multiples of 2^-149 below 2^-99, so the difference is exact in double.
+    const double nextVelocity = roundToFloatGrid(exactVelocity - slowdown);
+    // A product of two floats is exact in double.
+    const double positionStep = nextVelocity * static_cast<double>(static_cast<float>(deltaTime));
+    // A quarter of the position's unit, 2^(exponent - 127 - 23 - 2).
+    const std::uint64_t quarterUnitBits =
+            static_cast<std::uint64_t>(positionExponent - 152U + 1023U) << 52U;
+    double quarterUnit = 0.0;
+    std::memcpy(&quarterUnit, &quarterUnitBits, sizeof(quarterUnit));
+    if (!(std::fabs(positionStep) <= quarterUnit)) {
+        return false;
+    }
+    newVelocity = floatFromGridValue(nextVelocity);
+    return true;
+}
 
 #if defined(CELLULARITY_PROFILE) || defined(CELLULARITY_PERFORMANCE_HUD)
 class ProfileStageTimer {
@@ -1779,18 +1871,25 @@ void SimulationWorld::eatFoods(double deltaTime) {
         if (mEnvironment.mobileFood) {
             const auto geometry = mEnvironment.geometry();
             bool foodPositionsChanged = false;
+            // Tiny velocities are stepped by tinyFoodAxisStep, which needs round-to-nearest.
+            const bool tinyVelocityShortcut = std::fegetround() == FE_TONEAREST;
             for (int foodIndex = 0; foodIndex < mFoodData.mFoodCount; foodIndex++) {
                 const float oldPositionX = mFoodData.mPositionX[foodIndex];
                 const float oldPositionY = mFoodData.mPositionY[foodIndex];
                 float newVelocityX = mFoodData.mVelocityX[foodIndex];
                 float newVelocityY = mFoodData.mVelocityY[foodIndex];
-                newVelocityX -=
-                        static_cast<float>(0.2 * mFoodData.mVelocityX[foodIndex] * mEnvironment.mViscosity * deltaTime);
-                newVelocityY -=
-                        static_cast<float>(0.2 * mFoodData.mVelocityY[foodIndex] * mEnvironment.mViscosity * deltaTime);
-
-                mFoodData.mPositionX[foodIndex] += newVelocityX * static_cast<float>(deltaTime);
-                mFoodData.mPositionY[foodIndex] += newVelocityY * static_cast<float>(deltaTime);
+                if (!tinyVelocityShortcut || !tinyFoodAxisStep(mFoodData.mVelocityX[foodIndex],
+                            oldPositionX, mEnvironment.mViscosity, deltaTime, newVelocityX)) {
+                    newVelocityX -=
+                            static_cast<float>(0.2 * mFoodData.mVelocityX[foodIndex] * mEnvironment.mViscosity * deltaTime);
+                    mFoodData.mPositionX[foodIndex] += newVelocityX * static_cast<float>(deltaTime);
+                }
+                if (!tinyVelocityShortcut || !tinyFoodAxisStep(mFoodData.mVelocityY[foodIndex],
+                            oldPositionY, mEnvironment.mViscosity, deltaTime, newVelocityY)) {
+                    newVelocityY -=
+                            static_cast<float>(0.2 * mFoodData.mVelocityY[foodIndex] * mEnvironment.mViscosity * deltaTime);
+                    mFoodData.mPositionY[foodIndex] += newVelocityY * static_cast<float>(deltaTime);
+                }
                 CELLULARITY_WORLD_PROFILE_IF {
                     mProfile->eatFoodMovedFoods++;
                 }
