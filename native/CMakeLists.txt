@@ -83,6 +83,23 @@ option(CELLULARITY_BUILD_EXECUTION_CONTEXT_TRACE
 option(CELLULARITY_BUILD_HOST_GLES_PROBE
         "Build the opt-in headless GLES baseline and diagnostics probe"
         OFF)
+# The desktop application's native half (the JNI bridge and its Vulkan backend). It is
+# always built on Windows; on Linux it is opt-in so the host test gate keeps needing
+# no Vulkan SDK, X11 or JDK headers.
+if(WIN32)
+    set(CELLULARITY_BUILD_DESKTOP_DEFAULT ON)
+else()
+    set(CELLULARITY_BUILD_DESKTOP_DEFAULT OFF)
+endif()
+option(CELLULARITY_BUILD_DESKTOP
+        "Build the desktop JNI bridge and its Vulkan backend (Windows, Linux)"
+        ${CELLULARITY_BUILD_DESKTOP_DEFAULT})
+if(CELLULARITY_BUILD_DESKTOP AND NOT WIN32 AND NOT ANDROID)
+    # The bridge is a shared library that links the static simulation and renderer
+    # layers, so on ELF platforms all of them have to be position independent.
+    set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+endif()
+
 if(ANDROID)
     set(CELLULARITY_RUNTIME_OVERLAP_SELECTION_DEFAULT OFF)
 else()
@@ -836,14 +853,19 @@ if(ANDROID)
 endif()
 
 # The Vulkan backend on a desktop host. It is the same backend source as the
-# Android DSO above with the Android-only pieces replaced by their Win32
-# equivalents, so the two platforms exercise one implementation rather than two.
+# Android DSO above with the Android-only pieces replaced by their Win32 or Xlib
+# equivalents, so every platform exercises one implementation rather than several.
 #
 # The Windows build does not need the JNI capability probe: that probe exists to
 # answer a managed-side question about the packaged app, and the host has no
 # managed layer. Its place is taken by the host tests, which drive the session
 # directly.
-if(WIN32)
+if(CELLULARITY_BUILD_DESKTOP AND NOT ANDROID)
+    if(NOT WIN32)
+        # Linux: the system Vulkan loader and headers, and Xlib for the hidden
+        # window the device is created against.
+        find_package(X11 REQUIRED)
+    endif()
     # vcpkg ships vulkan-headers and vulkan-loader; either that or the LunarG SDK
     # provides the import library. Both spell the loader import library
     # vulkan-1.lib, which is what CMake records here.
@@ -852,6 +874,11 @@ if(WIN32)
         set(CELLULARITY_HOST_VULKAN_LIBRARY Vulkan::Vulkan)
     else()
         find_library(CELLULARITY_HOST_VULKAN_LIBRARY NAMES vulkan-1 vulkan REQUIRED)
+    endif()
+    if(NOT Vulkan_FOUND AND NOT WIN32)
+        message(FATAL_ERROR
+                "The Linux desktop build needs the Vulkan headers and loader "
+                "(for example the vulkan-headers and vulkan-icd-loader packages).")
     endif()
     # vcpkg places the Vulkan headers outside the default include path, and a
     # STATIC library does not forward its own include directories, so the test
@@ -881,7 +908,7 @@ if(WIN32)
             DOC "spirv-val, used to validate the compiled shader modules")
     if(NOT CELLULARITY_GLSLC OR NOT CELLULARITY_SPIRV_VAL)
         message(FATAL_ERROR
-                "The Windows Vulkan build needs glslc and spirv-val to compile "
+                "The desktop Vulkan build needs glslc and spirv-val to compile "
                 "native/rendering/vulkan/shaders. Install them with "
                 "'vcpkg install shaderc spirv-tools[tools]' or install the LunarG "
                 "Vulkan SDK. Found glslc='${CELLULARITY_GLSLC}' "
@@ -921,6 +948,7 @@ if(WIN32)
     # asserted by a test without dragging in a window, a session or a driver. It is a
     # real seam rather than a test convenience: the projection is the part of this host
     # that was wrong in a way that rendered without failing.
+    if(WIN32)
     add_library(cellularity_win32_host_camera STATIC
             host/win32/Win32HostCamera.cpp
     )
@@ -960,6 +988,7 @@ if(WIN32)
     target_include_directories(cellularity_win32_host PRIVATE
             ${CELLULARITY_HOST_VULKAN_INCLUDE_DIRS}
     )
+    endif()
 
     # The same simulation behind a JNI front door. A managed desktop application
     # already owns a window and an event loop, so it cannot use the standalone host's
@@ -995,12 +1024,17 @@ if(WIN32)
     list(APPEND CELLULARITY_DESKTOP_JNI_ROOT_CANDIDATES
             ${CELLULARITY_DESKTOP_JNI_GLOB_CANDIDATES})
     foreach(CELLULARITY_DESKTOP_JNI_ROOT IN LISTS CELLULARITY_DESKTOP_JNI_ROOT_CANDIDATES)
+        if(WIN32)
+            set(CELLULARITY_DESKTOP_JNI_MD_DIR win32)
+        else()
+            set(CELLULARITY_DESKTOP_JNI_MD_DIR linux)
+        endif()
         if(NOT CELLULARITY_DESKTOP_JNI_INCLUDE_DIRS
                 AND EXISTS "${CELLULARITY_DESKTOP_JNI_ROOT}/include/jni.h"
-                AND EXISTS "${CELLULARITY_DESKTOP_JNI_ROOT}/include/win32/jni_md.h")
+                AND EXISTS "${CELLULARITY_DESKTOP_JNI_ROOT}/include/${CELLULARITY_DESKTOP_JNI_MD_DIR}/jni_md.h")
             set(CELLULARITY_DESKTOP_JNI_INCLUDE_DIRS
                     "${CELLULARITY_DESKTOP_JNI_ROOT}/include"
-                    "${CELLULARITY_DESKTOP_JNI_ROOT}/include/win32")
+                    "${CELLULARITY_DESKTOP_JNI_ROOT}/include/${CELLULARITY_DESKTOP_JNI_MD_DIR}")
         endif()
     endforeach()
     if(NOT CELLULARITY_DESKTOP_JNI_INCLUDE_DIRS)
@@ -1018,7 +1052,10 @@ if(WIN32)
     message(STATUS
             "Cellularity desktop JNI headers: ${CELLULARITY_DESKTOP_JNI_INCLUDE_DIRS}")
 
-    add_library(cellularity_desktop_jni SHARED host/win32/DesktopJniBridge.cpp)
+    add_library(cellularity_desktop_jni SHARED host/desktop/DesktopJniBridge.cpp)
+    if(NOT WIN32)
+        target_sources(cellularity_desktop_jni PRIVATE host/desktop/DesktopXlibWindow.cpp)
+    endif()
     # System.loadLibrary("cellularity_desktop") resolves a file name, not a CMake
     # target, so the output name is part of the contract with the managed side and is
     # fixed here rather than left to follow the target name.
@@ -1042,8 +1079,13 @@ if(WIN32)
     # library that is not referenced. cellularity_interaction is named directly for the
     # reason given above the host target: the controller's layout depends on its public
     # compile definitions.
+    if(WIN32)
+        target_link_libraries(cellularity_desktop_jni PRIVATE
+                cellularity_win32_host_camera)
+    else()
+        target_link_libraries(cellularity_desktop_jni PRIVATE X11::X11)
+    endif()
     target_link_libraries(cellularity_desktop_jni PRIVATE
-            cellularity_win32_host_camera
             cellularity_interaction
             cellularity_rendering
             cellularity_vulkan_host
@@ -1064,6 +1106,12 @@ if(WIN32)
     target_link_libraries(cellularity_vulkan_host PRIVATE
             ${CELLULARITY_HOST_VULKAN_LIBRARY}
     )
+    if(NOT WIN32)
+        # PUBLIC: the bridge includes the backend window header and must agree with
+        # the backend about which window system it describes.
+        target_compile_definitions(cellularity_vulkan_host PUBLIC CELLULARITY_VULKAN_XLIB=1)
+        target_link_libraries(cellularity_vulkan_host PRIVATE X11::X11)
+    endif()
 endif()
 
 # Host builds always expose the probe for local policy calibration. Android app

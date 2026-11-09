@@ -1,7 +1,7 @@
 /*
  * Cellularity source code.
  *
- * The Windows desktop launcher.
+ * The desktop launcher, for Windows and Linux.
  *
  * It is a plain JVM module rather than another Kotlin Multiplatform target, because
  * there is nothing here to share: the UI it drives already lives in :shared, which
@@ -55,7 +55,15 @@ dependencies {
 // nor the Windows loader would look for it. Pointing both at that directory is what lets
 // the integration test exercise the real library instead of skipping itself; an installed
 // build has the library on the default search path and does not need this.
-def nativeOutputDirectory = rootProject.file('build/win-cmake')
+def isWindowsHost = org.gradle.internal.os.OperatingSystem.current().isWindows()
+// One build-tree name on every platform. Windows trees configured before the Linux port
+// used build/win-cmake, which is still picked up when it is the only one there.
+def nativeOutputDirectory = rootProject.file('build/desktop-cmake')
+if (isWindowsHost && !nativeOutputDirectory.isDirectory()
+        && rootProject.file('build/win-cmake').isDirectory()) {
+    nativeOutputDirectory = rootProject.file('build/win-cmake')
+}
+def nativeSearchPath = "${nativeOutputDirectory.absolutePath}${File.pathSeparator}${System.getenv('PATH')}"
 
 // DesktopRealSettingsWriteTest touches the user's real settings and runs only on request.
 tasks.withType(Test).configureEach {
@@ -67,7 +75,7 @@ if (nativeOutputDirectory.isDirectory()) {
     tasks.withType(Test).configureEach {
         systemProperty 'java.library.path', nativeOutputDirectory.absolutePath
         environment 'CELLULARITY_NATIVE_DIR', nativeOutputDirectory.absolutePath
-        environment 'PATH', "${nativeOutputDirectory.absolutePath};${System.getenv('PATH')}"
+        environment 'PATH', nativeSearchPath
     }
 
     dependencies {
@@ -86,9 +94,11 @@ tasks.withType(Test).configureEach {
     jvmArgs += [
         '--add-opens', 'java.desktop/java.awt=ALL-UNNAMED',
         '--add-opens', 'java.desktop/java.awt.peer=ALL-UNNAMED',
-        '--add-exports', 'java.desktop/java.awt.peer=ALL-UNNAMED',
-        '--add-exports', 'java.desktop/sun.awt.windows=ALL-UNNAMED'
+        '--add-exports', 'java.desktop/java.awt.peer=ALL-UNNAMED'
     ]
+    if (isWindowsHost) {
+        jvmArgs += ['--add-exports', 'java.desktop/sun.awt.windows=ALL-UNNAMED']
+    }
 }
 
 // AWT keeps the native window handle behind a package-private field, and JDK 21 removed
@@ -99,8 +109,8 @@ tasks.withType(Test).configureEach {
 // only applies to one of those would make the app work in development and fail when
 // installed.
 def requiredOpens = '-XX:+IgnoreUnrecognizedVMOptions ' +
-        '--add-opens=java.desktop/java.awt=ALL-UNNAMED ' +
-        '--add-exports=java.desktop/sun.awt.windows=ALL-UNNAMED'
+        '--add-opens=java.desktop/java.awt=ALL-UNNAMED' +
+        (isWindowsHost ? ' --add-exports=java.desktop/sun.awt.windows=ALL-UNNAMED' : '')
 def existingJavaOptions = System.getenv('JDK_JAVA_OPTIONS')
 if (existingJavaOptions == null || !existingJavaOptions.contains('java.desktop/java.awt')) {
     tasks.withType(JavaExec).configureEach {
@@ -123,7 +133,7 @@ tasks.register('runResponsivenessProbe', JavaExec) {
     environment 'JDK_JAVA_OPTIONS', "${existingJavaOptions ?: ''} ${requiredOpens}".trim()
     systemProperty 'java.library.path', nativeOutputDirectory.absolutePath
     environment 'CELLULARITY_NATIVE_DIR', nativeOutputDirectory.absolutePath
-    environment 'PATH', "${nativeOutputDirectory.absolutePath};${System.getenv('PATH')}"
+    environment 'PATH', nativeSearchPath
 }
 
 // Opens an experiment and stays up, parked outside every monitor, so the window can be measured
@@ -146,7 +156,7 @@ tasks.register('runFrameCostProbe', JavaExec) {
     environment 'JDK_JAVA_OPTIONS', "${existingJavaOptions ?: ''} ${requiredOpens}".trim()
     systemProperty 'java.library.path', nativeOutputDirectory.absolutePath
     environment 'CELLULARITY_NATIVE_DIR', nativeOutputDirectory.absolutePath
-    environment 'PATH', "${nativeOutputDirectory.absolutePath};${System.getenv('PATH')}"
+    environment 'PATH', nativeSearchPath
 }
 // Photos the editor's own preview panel: the editor is composed offscreen, an organism is grown
 // in it, the wheel is turned over the panel, and both frames are measured and written out. A
@@ -161,7 +171,7 @@ tasks.register('runGenomeEditorPreview', JavaExec) {
     environment 'JDK_JAVA_OPTIONS', "${existingJavaOptions ?: ''} ${requiredOpens}".trim()
     systemProperty 'java.library.path', nativeOutputDirectory.absolutePath
     environment 'CELLULARITY_NATIVE_DIR', nativeOutputDirectory.absolutePath
-    environment 'PATH', "${nativeOutputDirectory.absolutePath};${System.getenv('PATH')}"
+    environment 'PATH', nativeSearchPath
 }
 
 // Opens the application with a file, the way Windows does when a person chooses Cellularity in
@@ -182,7 +192,7 @@ tasks.register('runImportProbe', JavaExec) {
     // one to hand in: -PopenedPlate=... makes the probe import it and open the world it holds.
     environment 'CELLULARITY_PROBE_PLATE',
         providers.gradleProperty('openedPlate').getOrElse('')
-    environment 'PATH', "${nativeOutputDirectory.absolutePath};${System.getenv('PATH')}"
+    environment 'PATH', nativeSearchPath
 }
 
 // Saves a running plate and opens what was saved. A plate with a body cannot be written by this
@@ -202,7 +212,7 @@ tasks.register('runSaveProbe', JavaExec) {
         layout.projectDirectory.dir('build/diagnostics/save-check/data').asFile.absolutePath
     environment 'CELLULARITY_PROBE_PLATE',
         providers.gradleProperty('openedPlate').getOrElse('')
-    environment 'PATH', "${nativeOutputDirectory.absolutePath};${System.getenv('PATH')}"
+    environment 'PATH', nativeSearchPath
 }
 // Starts the application itself with a file on its command line, which is what Windows does when a
 // person chooses Cellularity in "Open with" or double-clicks a saved plate. This is not a test: the
@@ -221,7 +231,7 @@ tasks.register('runDesktopWithFile', JavaExec) {
     environment 'CELLULARITY_DATA_DIR', providers.gradleProperty('cellularityDataDir').getOrElse(
         layout.projectDirectory.dir('build/diagnostics/open-with/data').asFile.absolutePath
     )
-    environment 'PATH', "${nativeOutputDirectory.absolutePath};${System.getenv('PATH')}"
+    environment 'PATH', nativeSearchPath
     if (project.hasProperty('openedFile')) {
         args = [project.property('openedFile').toString()]
     }
@@ -238,7 +248,7 @@ tasks.register('runGenomePreviewProbe', JavaExec) {
     environment 'JDK_JAVA_OPTIONS', "${existingJavaOptions ?: ''} ${requiredOpens}".trim()
     systemProperty 'java.library.path', nativeOutputDirectory.absolutePath
     environment 'CELLULARITY_NATIVE_DIR', nativeOutputDirectory.absolutePath
-    environment 'PATH', "${nativeOutputDirectory.absolutePath};${System.getenv('PATH')}"
+    environment 'PATH', nativeSearchPath
 }
 // Runs the play screen in a window so it can be watched while it draws. This is not a
 // test: it is the last step of the port that no assertion covers, because the journey
@@ -252,7 +262,7 @@ tasks.register('runPlayScreen', JavaExec) {
     environment 'JDK_JAVA_OPTIONS', "${existingJavaOptions ?: ''} ${requiredOpens}".trim()
     systemProperty 'java.library.path', nativeOutputDirectory.absolutePath
     environment 'CELLULARITY_NATIVE_DIR', nativeOutputDirectory.absolutePath
-    environment 'PATH', "${nativeOutputDirectory.absolutePath};${System.getenv('PATH')}"
+    environment 'PATH', nativeSearchPath
 }
 
 // Walks the whole user journey -- menu, experiment, tabs, dialog, leaving -- and reports the state
@@ -266,7 +276,7 @@ tasks.register('runUserJourney', JavaExec) {
     environment 'JDK_JAVA_OPTIONS', "${existingJavaOptions ?: ''} ${requiredOpens}".trim()
     systemProperty 'java.library.path', nativeOutputDirectory.absolutePath
     environment 'CELLULARITY_NATIVE_DIR', nativeOutputDirectory.absolutePath
-    environment 'PATH', "${nativeOutputDirectory.absolutePath};${System.getenv('PATH')}"
+    environment 'PATH', nativeSearchPath
 }
 // Drives the genome editor the way a person would and photographs each section. An editor
 // that composes but discards its input looks finished from the outside, so this checks that
@@ -280,7 +290,7 @@ tasks.register('runGenomeEditor', JavaExec) {
     environment 'JDK_JAVA_OPTIONS', "${existingJavaOptions ?: ''} ${requiredOpens}".trim()
     systemProperty 'java.library.path', nativeOutputDirectory.absolutePath
     environment 'CELLULARITY_NATIVE_DIR', nativeOutputDirectory.absolutePath
-    environment 'PATH', "${nativeOutputDirectory.absolutePath};${System.getenv('PATH')}"
+    environment 'PATH', nativeSearchPath
 }
 
 // Opens and closes the substrate panel on a running world. A screen that is composed only
@@ -295,12 +305,12 @@ tasks.register('runSubstrateTab', JavaExec) {
     environment 'JDK_JAVA_OPTIONS', "${existingJavaOptions ?: ''} ${requiredOpens}".trim()
     systemProperty 'java.library.path', nativeOutputDirectory.absolutePath
     environment 'CELLULARITY_NATIVE_DIR', nativeOutputDirectory.absolutePath
-    environment 'PATH', "${nativeOutputDirectory.absolutePath};${System.getenv('PATH')}"
+    environment 'PATH', nativeSearchPath
 }
 
 // The renderer's native half is built by CMake into the build tree, where a packaged
 // application can never find it: the JVM searches the library path, the native loader
-// searches the executable's directory, and neither of those is build/win-cmake. The
+// searches the executable's directory, and neither of those is build/desktop-cmake. The
 // shaders and textures have the same problem for the same reason -- the discovery a
 // development run uses walks up from the working directory, and a packaged launch has no
 // working directory it can rely on.
@@ -308,7 +318,7 @@ tasks.register('runSubstrateTab', JavaExec) {
 // So the three of them are staged into a directory Compose Desktop turns into
 // $APPDIR/resources, in a layout the runtime knows (see DesktopNativeRenderer and
 // DesktopAssetRoots). The plugin's own prepareAppResources task syncs <root>/common,
-// <root>/<os> and <root>/<target> from appResourcesRootDir, so staging below windows-x64 --
+// <root>/<os> and <root>/<target> from appResourcesRootDir, so staging below the target id (windows-x64, linux-x64) --
 // the target id for this machine -- puts the tree at resources/native/... in the
 // distributable, and -Dcompose.application.resources.dir=$APPDIR/resources, which the
 // generated launcher config already carries, is all the plumbing it needs.
@@ -316,7 +326,7 @@ tasks.register('runSubstrateTab', JavaExec) {
 // The shaders keep the directory they are generated in. The renderer asks its asset root
 // for `vulkan/shaders/<name>` -- that relative path is fixed in the native backend, and
 // the host build tree carries it at
-// build/win-cmake/generated/vulkanShaders/host/assets/vulkan/shaders -- so copying the
+// build/desktop-cmake/generated/vulkanShaders/host/assets/vulkan/shaders -- so copying the
 // .spv files alone into a directory of their own would produce a package whose shader root
 // exists and holds nothing the renderer will open.
 //
@@ -325,16 +335,23 @@ tasks.register('runSubstrateTab', JavaExec) {
 // input together with the command that produces it. Failing the build would make a
 // distributable impossible to produce before the native side is compiled, and saying nothing
 // would produce one that cannot render and give no reason why.
-def nativeLibraryCommand = 'cmake --build build/win-cmake'
-def cmakeOutputDirectory = rootProject.file('build/win-cmake')
+def nativeLibraryCommand = isWindowsHost
+        ? 'cmake --build build/desktop-cmake --target cellularity_desktop_jni'
+        : 'cmake -S native -B build/desktop-cmake -G Ninja -DCMAKE_BUILD_TYPE=Release ' +
+                '-DCELLULARITY_BUILD_DESKTOP=ON && cmake --build build/desktop-cmake ' +
+                '--target cellularity_desktop_jni'
+def cmakeOutputDirectory = nativeOutputDirectory
 def textureSourceDirectory = rootProject.file('native/rendering/assets/textures')
 def shaderSourceDirectory =
-        rootProject.file('build/win-cmake/generated/vulkanShaders/host/assets')
+        new File(nativeOutputDirectory, 'generated/vulkanShaders/host/assets')
 
 // Owned by this build rather than by the Compose plugin, because the plugin creates its own
 // resource task too late in configuration to be asked for its output directory here.
 def packagedResourcesDirectory = layout.buildDirectory.dir('compose/nativeAppResources')
-def packagedTargetDirectory = packagedResourcesDirectory.map { it.dir('windows-x64') }
+// Compose Desktop's target id for this machine: <os>-<arch>, e.g. windows-x64, linux-x64.
+def hostArchitecture = System.getProperty('os.arch') in ['aarch64', 'arm64'] ? 'arm64' : 'x64'
+def composeTargetId = "${isWindowsHost ? 'windows' : 'linux'}-${hostArchitecture}"
+def packagedTargetDirectory = packagedResourcesDirectory.map { it.dir(composeTargetId) }
 def packagedNativeDirectory = packagedTargetDirectory.map { it.dir('native') }
 
 /** The regular files directly inside [directory], or none when it is not there yet. */
@@ -351,7 +368,11 @@ def filesIn = { File directory, String pattern ->
 // cellularity_desktop.dll imports them by name: it needs vulkan-1.dll for the loader and
 // z.dll for the archive reader, and neither is part of a JRE image, so a packaged launch
 // would otherwise pick up a system copy or fail outright.
-def nativeRuntimeFileNames = ['cellularity_desktop.dll', 'vulkan-1.dll', 'z.dll']
+// On Linux the Vulkan loader and zlib are system libraries every distribution ships, so only
+// the renderer itself is packaged.
+def nativeRuntimeFileNames = isWindowsHost
+        ? ['cellularity_desktop.dll', 'vulkan-1.dll', 'z.dll']
+        : ['libcellularity_desktop.so']
 def nativeRuntimeFiles =
         nativeRuntimeFileNames.collect { new File(cmakeOutputDirectory, it) }
 def nativeShaderFiles = filesIn(new File(shaderSourceDirectory, 'vulkan/shaders'), /(?i).*\.spv/)
@@ -407,7 +428,7 @@ def stageNativeAssets = tasks.register('stageNativeAssets', Sync) {
     }
     from(buildScriptFile)
     into { packagedTargetDirectory.get().asFile }
-    // build/win-cmake is written by hand rather than by Gradle, so there is nothing here
+    // build/desktop-cmake is written by hand rather than by Gradle, so there is nothing here
     // that would let the task be safely reused between builds.
     outputs.upToDateWhen { false }
 
@@ -448,7 +469,10 @@ compose.desktop {
 
         nativeDistributions {
             targetFormats(
-                org.jetbrains.compose.desktop.application.dsl.TargetFormat.Msi
+                org.jetbrains.compose.desktop.application.dsl.TargetFormat.Msi,
+                org.jetbrains.compose.desktop.application.dsl.TargetFormat.Deb,
+                org.jetbrains.compose.desktop.application.dsl.TargetFormat.Rpm,
+                org.jetbrains.compose.desktop.application.dsl.TargetFormat.AppImage
             )
             packageName = 'Cellularity'
             // Windows Installer only runs a major upgrade for a higher numeric version.
@@ -463,6 +487,15 @@ compose.desktop {
                 // Fixed for the lifetime of the product: Windows Installer recognises an
                 // upgrade by this code, so changing it would install side by side instead.
                 upgradeUuid = '5faa411c-a3db-4b38-a9b6-44b4016bfea6'
+            }
+
+            linux {
+                packageName = 'cellularity'
+                menuGroup = 'Science'
+                shortcut = true
+                debMaintainer = 'Cellularity Contributors <contributors@cellularity.invalid>'
+                appCategory = 'Science'
+                rpmLicenseType = 'MIT'
             }
 
             appResourcesRootDir.set(packagedResourcesDirectory)
@@ -498,8 +531,14 @@ afterEvaluate {
         'createDistributable',
         'packageDistributionForCurrentOS',
         'packageMsi',
+        'packageDeb',
+        'packageRpm',
+        'packageAppImage',
         'packageReleaseDistributionForCurrentOS',
         'packageReleaseMsi',
+        'packageReleaseDeb',
+        'packageReleaseRpm',
+        'packageReleaseAppImage',
         'runDistributable'
 ].each { taskName ->
     tasks.matching { it.name == taskName }.configureEach {

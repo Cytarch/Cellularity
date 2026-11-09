@@ -18,7 +18,7 @@ scripts/native/test.sh
 scripts/native/sanitizer-test.sh
 ```
 
-Windows desktop changes additionally require the native `cellularity_desktop_jni` build described in the README, followed by:
+Desktop changes additionally require the native `cellularity_desktop_jni` build described in the README, on Windows and on Linux. On Linux run `./gradlew :desktop:test :desktop:createDistributable`; on Windows:
 
 ```powershell
 .\gradlew.bat :desktop:test :desktop:packageMsi
@@ -29,7 +29,7 @@ Windows desktop changes additionally require the native `cellularity_desktop_jni
 ## Change guidelines
 
 - Keep the Android application ID and package namespace as `com.cytarch.cellularity`.
-- Keep shared UI behavior platform-neutral; put Windows window, storage, JNI, and packaging integration in `desktop`.
+- Keep shared UI behavior platform-neutral; put desktop window, storage, JNI, and packaging integration in `desktop`, and Windows/Linux differences in `DesktopPlatform`.
 - Add or update tests for behavior changes.
 - Do not commit APKs, MSIs, build directories, crash dumps, credentials, signing keys, or local SDK configuration.
 - Preserve third-party copyright and license notices.

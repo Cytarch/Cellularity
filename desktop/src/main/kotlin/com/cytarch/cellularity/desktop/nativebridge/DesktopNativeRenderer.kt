@@ -4,6 +4,7 @@
 
 package com.cytarch.cellularity.desktop.nativebridge
 
+import com.cytarch.cellularity.desktop.DesktopPlatform
 import java.io.File
 import java.nio.file.Files
 import java.nio.file.Path
@@ -39,11 +40,7 @@ object DesktopNativeRenderer {
     private const val PACKAGED_NATIVE_DIRECTORY = "native"
 
     /** Where a CMake build tree keeps the library, relative to the tree's root. */
-    private val DEVELOPMENT_LIBRARY_LOCATIONS = listOf(
-        "build/win-cmake",
-        "build/win-cmake/Release",
-        "build/win-cmake/Debug"
-    )
+    private val DEVELOPMENT_LIBRARY_LOCATIONS = DesktopPlatform.developmentNativeDirectories
 
     /**
      * The libraries the renderer imports that a JRE image does not already provide.
@@ -52,7 +49,10 @@ object DesktopNativeRenderer {
      * them: the import is resolved while `System.load` runs, and by then it is too late to
      * load anything.
      */
-    private val SUPPORT_LIBRARIES = listOf("vulkan-1.dll", "z.dll")
+    // Linux resolves libvulkan and zlib from the system, where every distribution has them,
+    // so nothing is bundled or preloaded there.
+    private val SUPPORT_LIBRARIES =
+        if (DesktopPlatform.isWindows) listOf("vulkan-1.dll", "z.dll") else emptyList()
 
     /**
      * Loads the library, or records why it could not be loaded.

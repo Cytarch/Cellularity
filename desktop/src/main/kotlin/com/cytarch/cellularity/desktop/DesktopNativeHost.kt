@@ -117,10 +117,8 @@ class DesktopNativeHost(
             return null
         }
 
-        val CANDIDATE_LOCATIONS = listOf(
-            "build/win-cmake",
-            "build/win-cmake/Release",
-            "build/win-cmake/Debug"
-        )
+        // The standalone host is a Windows executable; on Linux nothing is found and the
+        // launcher falls back to the in-process renderer, which is the normal path anyway.
+        val CANDIDATE_LOCATIONS = DesktopPlatform.developmentNativeDirectories
     }
 }

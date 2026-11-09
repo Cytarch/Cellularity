@@ -1,8 +1,8 @@
 # Cellularity
 
-Cellularity is an open-source cellular simulation for Android and Windows. The simulation core and renderer are implemented in C++; the application UI uses Kotlin and Compose Multiplatform shared code.
+Cellularity is an open-source cellular simulation for Android, Windows and Linux. The simulation core and renderer are implemented in C++; the application UI uses Kotlin and Compose Multiplatform shared code.
 
-The current public release line is **0.1.0-alpha.1** (`versionCode 1`) for Android. The repository also contains the Windows desktop application and its Vulkan renderer. Windows MSI packages are development artifacts, not a separate published release line.
+The current public release line is **0.1.0-alpha.1** (`versionCode 1`) for Android. The repository also contains the desktop application for Windows and Linux and its Vulkan renderer. Desktop packages (MSI, deb, rpm, AppImage) are development artifacts, not a separate published release line.
 
 ## Requirements
 
@@ -23,6 +23,16 @@ Windows desktop:
 - Vulkan headers and loader
 - `glslc` and `spirv-val`
 - zlib
+
+Linux desktop:
+
+- Clang or GCC, CMake and Ninja
+- Vulkan headers and loader, and a Vulkan 1.0 driver
+- Xlib headers (X11 or XWayland session)
+- `glslc` and `spirv-val`
+- zlib and a JDK 21 (for `jni.h`)
+
+On Arch-based systems: `pacman -S vulkan-headers vulkan-icd-loader libx11 shaderc spirv-tools zlib jdk21-openjdk`.
 
 The Windows native dependencies can be supplied through vcpkg. Android Studio can install the Android components declared by the project. For command-line Android builds, set `ANDROID_HOME` or add an untracked `local.properties` file:
 
@@ -59,18 +69,18 @@ Install the native dependencies with vcpkg, then configure and build the desktop
 ```powershell
 vcpkg install zlib:x64-windows vulkan-headers:x64-windows vulkan-loader:x64-windows shaderc:x64-windows 'spirv-tools[tools]:x64-windows'
 
-cmake -S native -B build/win-cmake -G Ninja `
+cmake -S native -B build/desktop-cmake -G Ninja `
   -DCMAKE_BUILD_TYPE=Release `
   -DVCPKG_TARGET_TRIPLET=x64-windows `
   -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake"
-cmake --build build/win-cmake --target cellularity_desktop_jni
+cmake --build build/desktop-cmake --target cellularity_desktop_jni
 ```
 
 Copy the runtime support libraries beside `cellularity_desktop.dll` when vcpkg has not already done so:
 
 ```powershell
 Copy-Item "$env:VCPKG_ROOT\installed\x64-windows\bin\vulkan-1.dll", `
-  "$env:VCPKG_ROOT\installed\x64-windows\bin\z.dll" build\win-cmake\
+  "$env:VCPKG_ROOT\installed\x64-windows\bin\z.dll" build\desktop-cmake\
 ```
 
 Run the desktop application and its JVM tests:
@@ -86,11 +96,26 @@ Build the MSI with the same Gradle runtime:
 .\gradlew.bat :desktop:packageMsi
 ```
 
-The installer is written under `desktop\build\compose\binaries\main\msi`. It registers a Start Menu shortcut, offers an installation-directory choice, and does not create a desktop shortcut. Packaging stages the native library, Vulkan support libraries, generated shaders, and textures from `build\win-cmake`; warnings from `stageNativeAssets` identify any missing input.
+The installer is written under `desktop\build\compose\binaries\main\msi`. It registers a Start Menu shortcut, offers an installation-directory choice, and does not create a desktop shortcut. Packaging stages the native library, Vulkan support libraries, generated shaders, and textures from `build\desktop-cmake`; warnings from `stageNativeAssets` identify any missing input. A tree configured earlier as `build\win-cmake` is still found.
+
+### Linux desktop
+
+Configure and build the desktop JNI library, then run the application and its tests:
+
+```bash
+cmake -S native -B build/desktop-cmake -G Ninja -DCMAKE_BUILD_TYPE=Release \
+  -DCELLULARITY_BUILD_DESKTOP=ON
+cmake --build build/desktop-cmake --target cellularity_desktop_jni
+
+./gradlew :desktop:run
+./gradlew :desktop:test :shared:jvmTest
+```
+
+Packages are built with `./gradlew :desktop:packageDeb`, `:desktop:packageRpm` or `:desktop:packageAppImage` (deb needs `dpkg-deb` and `fakeroot`, rpm needs `rpmbuild`) and are written under `desktop/build/compose/binaries/main`. The renderer draws off-screen; it needs an X display, which Wayland sessions provide through XWayland, the same as the desktop toolkit itself.
 
 ## Data compatibility and limits
 
-Current and legacy substrate files remain supported, as do existing genome files. Android imports external files through the document-provider interface and copies them into private application storage. Desktop imports use local files; desktop data is stored under `%APPDATA%\Cellularity` unless `CELLULARITY_DATA_DIR` overrides it.
+Current and legacy substrate files remain supported, as do existing genome files. Android imports external files through the document-provider interface and copies them into private application storage. Desktop imports use local files; desktop data is stored under `%APPDATA%\Cellularity` on Windows and `$XDG_DATA_HOME/cellularity` (default `~/.local/share/cellularity`) on Linux, unless `CELLULARITY_DATA_DIR` overrides it.
 
 Input files and decompressed legacy substrate data have an absolute 2 GiB safety limit. Simulation capacity is also rejected when its estimated allocation exceeds 2 GiB. These are upper rejection boundaries, not a promise that every device can run a world near the limit; practical capacity depends on available RAM and GPU resources.
 
@@ -98,7 +123,7 @@ Input files and decompressed legacy substrate data have an absolute 2 GiB safety
 
 - `app` — Android activities, platform integration, and packaging.
 - `shared` — Compose UI, resources, and presentation logic shared by Android and desktop.
-- `desktop` — Compose Desktop window, Windows storage and settings, desktop JNI, and MSI packaging.
+- `desktop` — Compose Desktop window, desktop storage and settings, desktop JNI, and Windows/Linux packaging.
 - `native` — C++ simulation, file formats, interaction, GLES/Vulkan rendering, JNI, and host tests.
 
 ## Native host tests

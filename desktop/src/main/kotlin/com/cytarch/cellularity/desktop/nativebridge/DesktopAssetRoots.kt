@@ -4,6 +4,7 @@
 
 package com.cytarch.cellularity.desktop.nativebridge
 
+import com.cytarch.cellularity.desktop.DesktopPlatform
 import java.nio.file.Files
 import java.nio.file.Path
 
@@ -59,10 +60,12 @@ object DesktopAssetRoots {
 
         var directory: Path? = Path.of("").toAbsolutePath()
         while (directory != null) {
-            val shader = directory.resolve(SHADER_RELATIVE)
             val texture = directory.resolve(TEXTURE_RELATIVE)
-            val roots = Roots(shader, texture)
-            if (roots.isValid) return roots
+            for (buildTree in DesktopPlatform.developmentNativeDirectories) {
+                val shader = directory.resolve(buildTree).resolve(SHADER_RELATIVE)
+                val roots = Roots(shader, texture)
+                if (roots.isValid) return roots
+            }
             directory = directory.parent
         }
         return null
@@ -100,8 +103,7 @@ object DesktopAssetRoots {
      * The shader root relative to the build tree, and the directory the renderer opens
      * inside whichever root it is given.
      */
-    private const val SHADER_RELATIVE =
-        "build/win-cmake/generated/vulkanShaders/host/assets"
+    private const val SHADER_RELATIVE = "generated/vulkanShaders/host/assets"
     private const val TEXTURE_RELATIVE = "native/rendering/assets"
 
     /**

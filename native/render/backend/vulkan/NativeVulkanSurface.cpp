@@ -82,4 +82,36 @@ VkResult createPlatformVulkanSurface(VkInstance instance,
 
 } // namespace cellularity::render::vulkan
 
+#elif defined(CELLULARITY_VULKAN_XLIB)
+
+#include <X11/Xlib.h>
+
+#include <vulkan/vulkan.h>
+#include <vulkan/vulkan_xlib.h>
+
+namespace cellularity::render::vulkan {
+
+VkResult createPlatformVulkanSurface(VkInstance instance,
+        const NativeVulkanWindow& window,
+        VkSurfaceKHR* surface) noexcept {
+    if (instance == VK_NULL_HANDLE || surface == nullptr) {
+        return VK_ERROR_INITIALIZATION_FAILED;
+    }
+    const auto* handle =
+            static_cast<const XlibWindowHandle*>(window.nativeHandle());
+    if (handle == nullptr || handle->display == nullptr || handle->window == 0) {
+        return VK_ERROR_INITIALIZATION_FAILED;
+    }
+    const VkXlibSurfaceCreateInfoKHR createInfo{
+            VK_STRUCTURE_TYPE_XLIB_SURFACE_CREATE_INFO_KHR,
+            nullptr,
+            0,
+            static_cast<Display*>(handle->display),
+            static_cast<::Window>(handle->window),
+    };
+    return vkCreateXlibSurfaceKHR(instance, &createInfo, nullptr, surface);
+}
+
+} // namespace cellularity::render::vulkan
+
 #endif

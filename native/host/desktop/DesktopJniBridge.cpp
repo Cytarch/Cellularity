@@ -61,6 +61,7 @@
 // is what makes a stale or double-stopped handle a refusal instead of a
 // use-after-free.
 
+#if defined(_WIN32)
 #ifndef NOMINMAX
 #define NOMINMAX
 #endif
@@ -68,6 +69,9 @@
 #define WIN32_LEAN_AND_MEAN
 #endif
 #include <windows.h>
+#else
+#include "host/desktop/DesktopXlibWindow.h"
+#endif
 
 #include <jni.h>
 
@@ -144,6 +148,18 @@ constexpr jint kStatusNoFrameYet = 3;
 constexpr jint kInputQueued = 1;
 constexpr jint kInputRefused = 0;
 
+// The native window a session presents into. On Windows it is an HWND; on Linux it
+// is an Xlib window on this bridge's own display connection, described by the
+// handle the Vulkan backend's attachWindow expects. Either way the jlong handed to
+// the managed side is this pointer value, and it is validated against the registry
+// below before it is ever dereferenced.
+#if defined(_WIN32)
+using BridgeWindow = HWND;
+#else
+using BridgeWindow = cellularity::render::vulkan::XlibWindowHandle*;
+#endif
+
+#if defined(_WIN32)
 // The window class this bridge registers. It belongs to this DLL rather than to the
 // executable, which matters: the backend resolves the HINSTANCE that owns a window
 // class from the window itself when it creates the Vulkan surface, and a class
@@ -235,6 +251,8 @@ LRESULT CALLBACK childWindowProc(
     return ::DefWindowProcW(window, message, wParam, lParam);
 }
 
+#endif // _WIN32
+
 // A session is a heap-allocated struct, held here rather than by an address the
 // managed side owns. The handle handed out is a monotonic key into this registry, not
 // the address of the struct: an address can be handed back out by the allocator after
@@ -244,7 +262,7 @@ struct DesktopSession final {
     // The child window this session presents into. It is written once, before the
     // session is published to the registry, and never changed afterwards, so it can
     // be read without the lock below.
-    HWND window = nullptr;
+    BridgeWindow window = nullptr;
 
     // The extent the window has been given but the surface has not taken yet. The
     // window can be resized from any thread -- the managed side does it from the one
@@ -292,26 +310,26 @@ struct DesktopSession final {
 // window rather than once per frame, so a finer split would buy nothing and cost the
 // reader a second ordering to reason about.
 std::mutex gStateMutex;
-std::unordered_set<HWND> gChildWindows;
+std::unordered_set<BridgeWindow> gChildWindows;
 
 // Windows this bridge presents into without having created them, registered by
 // nativeAdoptWindow. They are kept apart from the child windows above because every
 // operation that changes a window -- moving it, showing it, destroying it -- belongs to
 // whoever created it, and for these that is the JVM. A window in this set is one this
 // bridge may draw into and resize its own swapchain for, and nothing more.
-std::unordered_set<HWND> gAdoptedWindows;
+std::unordered_set<BridgeWindow> gAdoptedWindows;
 std::unordered_map<jlong, std::shared_ptr<DesktopSession>> gSessions;
 jlong gNextSessionHandle = 1;
 
-[[nodiscard]] HWND windowFromHandle(jlong windowHandle) noexcept {
-    return reinterpret_cast<HWND>(static_cast<std::intptr_t>(windowHandle));
+[[nodiscard]] BridgeWindow windowFromHandle(jlong windowHandle) noexcept {
+    return reinterpret_cast<BridgeWindow>(static_cast<std::intptr_t>(windowHandle));
 }
 
-[[nodiscard]] jlong handleFromWindow(HWND window) noexcept {
+[[nodiscard]] jlong handleFromWindow(BridgeWindow window) noexcept {
     return static_cast<jlong>(reinterpret_cast<std::intptr_t>(window));
 }
 
-void registerChildWindow(HWND window) {
+void registerChildWindow(BridgeWindow window) {
     std::lock_guard<std::mutex> lock(gStateMutex);
     gChildWindows.insert(window);
 }
@@ -319,7 +337,7 @@ void registerChildWindow(HWND window) {
 // True only for the windows this bridge created, so a handle the managed side made up
 // -- or one from a window that has already been destroyed -- is refused instead of
 // being passed to a Win32 call that would act on whatever now owns the address.
-[[nodiscard]] bool isBridgeWindow(HWND window) {
+[[nodiscard]] bool isBridgeWindow(BridgeWindow window) {
     if (window == nullptr) {
         return false;
     }
@@ -328,8 +346,9 @@ void registerChildWindow(HWND window) {
             || gAdoptedWindows.find(window) != gAdoptedWindows.end();
 }
 
+#if defined(_WIN32)
 // True for a window this bridge created and therefore owns.
-[[nodiscard]] bool isChildWindow(HWND window) {
+[[nodiscard]] bool isChildWindow(BridgeWindow window) {
     if (window == nullptr) {
         return false;
     }
@@ -337,11 +356,13 @@ void registerChildWindow(HWND window) {
     return gChildWindows.find(window) != gChildWindows.end();
 }
 
+#endif
+
 // True for a window this bridge draws into but does not own. Such a window is the JVM's,
 // and every call that would change it -- position, visibility, lifetime -- is refused
 // rather than performed, because the JVM decides those and a bridge that moved a window
 // out from under AWT would be answering a question nobody asked it.
-[[nodiscard]] bool isAdoptedWindow(HWND window) {
+[[nodiscard]] bool isAdoptedWindow(BridgeWindow window) {
     if (window == nullptr) {
         return false;
     }
@@ -349,7 +370,7 @@ void registerChildWindow(HWND window) {
     return gAdoptedWindows.find(window) != gAdoptedWindows.end();
 }
 
-[[nodiscard]] std::shared_ptr<DesktopSession> findSessionByWindow(HWND window) {
+[[nodiscard]] std::shared_ptr<DesktopSession> findSessionByWindow(BridgeWindow window) {
     if (window == nullptr) {
         return nullptr;
     }
@@ -598,13 +619,6 @@ void registerChildWindow(HWND window) {
 // Window lifetime
 // ---------------------------------------------------------------------------
 
-// Creates the child window the renderer presents into. Returns the HWND as a jlong,
-// or 0 if the window could not be created.
-//
-// The window is a child of the managed side's window rather than a window of its own:
-// the application decides where the renderer sits and when it goes away, and the
-// WS_CHILD style is what makes Windows clip and move it with its parent. No border or
-// caption style is requested, so the client area is the whole window and the extent
 // Estimates the peak memory one world of this shape needs.
 //
 // Returns the estimate in bytes, or -1 when the world would not fit in the budget this
@@ -633,6 +647,14 @@ Java_com_cytarch_cellularity_desktop_nativebridge_DesktopNativeRenderer_nativeEs
     }
 }
 
+#if defined(_WIN32)
+// Creates the child window the renderer presents into. Returns the HWND as a jlong,
+// or 0 if the window could not be created.
+//
+// The window is a child of the managed side's window rather than a window of its own:
+// the application decides where the renderer sits and when it goes away, and the
+// WS_CHILD style is what makes Windows clip and move it with its parent. No border or
+// caption style is requested, so the client area is the whole window and the extent
 // the session is attached with is the extent that is visible.
 //
 // The window belongs to the calling thread's message queue. Nothing here needs that
@@ -1384,6 +1406,63 @@ Java_com_cytarch_cellularity_desktop_nativebridge_DesktopNativeRenderer_nativeSe
         return kStatusFailed;
     }
 }
+#else // !_WIN32
+
+// Linux: the window a Vulkan surface needs, and nothing else. Like the Windows
+// anchor it is never shown and receives no input; the frame is read back into the
+// interface's own bitmap. The other window entry points of the Windows bridge --
+// child windows, adoption, capture and window diagnostics -- have no Linux
+// counterpart because the Linux interface never embeds a native window.
+extern "C" JNIEXPORT jlong JNICALL
+Java_com_cytarch_cellularity_desktop_nativebridge_DesktopNativeRenderer_nativeCreateSurfaceAnchorWindow(
+        JNIEnv*, jclass, jint width, jint height) {
+    try {
+        BridgeWindow anchor = cellularity::desktop::createXlibAnchorWindow(width, height);
+        if (anchor == nullptr) {
+            return 0;
+        }
+        try {
+            registerChildWindow(anchor);
+        } catch (...) {
+            cellularity::desktop::destroyXlibAnchorWindow(anchor);
+            return 0;
+        }
+        return handleFromWindow(anchor);
+    } catch (...) {
+        return 0;
+    }
+}
+
+
+// Linux: resizes the anchor window and records the extent for the session's next
+// frame, with the same contract as the Windows entry point above.
+extern "C" JNIEXPORT jint JNICALL
+Java_com_cytarch_cellularity_desktop_nativebridge_DesktopNativeRenderer_nativeResizeWindow(
+        JNIEnv*, jclass, jlong windowHandle, jint width, jint height) {
+    try {
+        const BridgeWindow window = windowFromHandle(windowHandle);
+        if (!isBridgeWindow(window)) {
+            return kStatusInvalidHandle;
+        }
+        if (width <= 0 || height <= 0) {
+            return kStatusFailed;
+        }
+        if (!cellularity::desktop::resizeXlibAnchorWindow(window, width, height)) {
+            return kStatusFailed;
+        }
+        if (const std::shared_ptr<DesktopSession> session =
+                    findSessionByWindow(window)) {
+            session->pendingSurfaceWidth.store(width, std::memory_order_release);
+            session->pendingSurfaceHeight.store(height, std::memory_order_release);
+        }
+        return kStatusOk;
+    } catch (...) {
+        return kStatusFailed;
+    }
+}
+
+#endif // _WIN32
+
 // Destroys the child window. Returns 0 when there was nothing to do (a null handle)
 // and when the window is gone, 1 if the window still has a live session or Win32
 // refused to destroy it, and 2 if the handle is not a live window this bridge
@@ -1397,7 +1476,7 @@ extern "C" JNIEXPORT jint JNICALL
 Java_com_cytarch_cellularity_desktop_nativebridge_DesktopNativeRenderer_nativeDestroyWindow(
         JNIEnv*, jclass, jlong windowHandle) {
     try {
-        const HWND window = windowFromHandle(windowHandle);
+        const BridgeWindow window = windowFromHandle(windowHandle);
         if (window == nullptr) {
             return kStatusOk;
         }
@@ -1424,6 +1503,7 @@ Java_com_cytarch_cellularity_desktop_nativebridge_DesktopNativeRenderer_nativeDe
             gAdoptedWindows.erase(window);
             return kStatusOk;
         }
+#if defined(_WIN32)
         // DestroyWindow is called outside the registry lock: it dispatches messages,
         // and a window procedure that ever reached back into the registry would
         // deadlock against a lock held across it.
@@ -1433,6 +1513,16 @@ Java_com_cytarch_cellularity_desktop_nativebridge_DesktopNativeRenderer_nativeDe
         std::lock_guard<std::mutex> lock(gStateMutex);
         gChildWindows.erase(window);
         return kStatusOk;
+#else
+        // Forgotten before it is freed, so no other thread can find a handle that is
+        // about to dangle.
+        {
+            std::lock_guard<std::mutex> lock(gStateMutex);
+            gChildWindows.erase(window);
+        }
+        cellularity::desktop::destroyXlibAnchorWindow(window);
+        return kStatusOk;
+#endif
     } catch (...) {
         return kStatusFailed;
     }
@@ -1464,7 +1554,7 @@ Java_com_cytarch_cellularity_desktop_nativebridge_DesktopNativeRenderer_nativeDe
         jint height, jint maxCellCount, jint maxFoodCount, jdouble dishRadius,
         jstring shaderRoot, jstring textureRoot, jstring substratePath) {
     try {
-        const HWND window = windowFromHandle(windowHandle);
+        const BridgeWindow window = windowFromHandle(windowHandle);
         if (!isBridgeWindow(window)) {
             return 0;
         }
@@ -2000,7 +2090,7 @@ Java_com_cytarch_cellularity_desktop_nativebridge_DesktopNativeRenderer_nativeCr
         // An anchor, not a window anyone looks at: the backend stands its device up against a
         // surface, and a preview that has none draws nothing at all. The caller passes the anchor
         // the rest of the application already has, so this costs no window of its own.
-        const HWND window = windowFromHandle(windowHandle);
+        const BridgeWindow window = windowFromHandle(windowHandle);
         if (!isBridgeWindow(window)) {
             return 0;
         }
@@ -2226,11 +2316,13 @@ Java_com_cytarch_cellularity_desktop_nativebridge_DesktopNativeRenderer_nativeRe
     // This thread owns the hidden surface anchor window and has no other message loop.
     // Draining its queue once per frame keeps a broadcast SendMessage from another
     // process (WM_SETTINGCHANGE and friends) from blocking on a window nobody pumps.
+#if defined(_WIN32)
     MSG message{};
     while (::PeekMessageW(&message, nullptr, 0, 0, PM_REMOVE) != 0) {
         ::TranslateMessage(&message);
         ::DispatchMessageW(&message);
     }
+#endif
     const std::shared_ptr<DesktopSession> session = findSession(sessionHandle);
     if (!session) {
         return kStatusInvalidHandle;

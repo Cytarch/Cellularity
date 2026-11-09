@@ -67,23 +67,15 @@ class DesktopEnvironment private constructor(
         }
 
         /**
-         * Where user data lives.
-         *
-         * Roaming is deliberate: substrates and genomes are small documents the user
-         * would expect to follow them between machines, and the format is a portable
-         * container rather than anything machine-specific.
+         * Where user data lives: see [DesktopPlatform.defaultDataDirectory].
+         * CELLULARITY_DATA_DIR overrides it on every platform.
          */
         private fun resolveDataDirectory(): Path {
             val override = System.getenv("CELLULARITY_DATA_DIR")
             val root = if (!override.isNullOrBlank()) {
                 Path.of(override)
             } else {
-                val appData = System.getenv("APPDATA")
-                if (appData.isNullOrBlank()) {
-                    Path.of(System.getProperty("user.home"), ".cellularity")
-                } else {
-                    Path.of(appData, "Cellularity")
-                }
+                DesktopPlatform.defaultDataDirectory()
             }
             // Created eagerly so a later failure names a permissions problem rather
             // than a missing directory.

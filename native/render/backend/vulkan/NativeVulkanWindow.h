@@ -24,6 +24,11 @@
 #define CELLULARITY_VULKAN_SURFACE_EXTENSION_NAME "VK_KHR_win32_surface"
 #elif defined(__ANDROID__)
 #define CELLULARITY_VULKAN_SURFACE_EXTENSION_NAME "VK_KHR_android_surface"
+#elif defined(CELLULARITY_VULKAN_XLIB)
+// The Linux desktop build presents nothing on screen but, like Windows, stands
+// its device up against a hidden window's surface; X11 also covers Wayland
+// sessions through XWayland, where AWT itself runs.
+#define CELLULARITY_VULKAN_SURFACE_EXTENSION_NAME "VK_KHR_xlib_surface"
 #else
 // No windowed surface is available. Off-screen rendering still works: the
 // session creates its instance without a surface extension.
@@ -43,6 +48,20 @@
 #endif
 
 namespace cellularity::render::vulkan {
+
+#if defined(CELLULARITY_VULKAN_XLIB)
+/**
+ * The opaque window handle a Linux caller passes through the ABI: an Xlib
+ * connection and one of its windows. Kept free of <X11/Xlib.h> so the header
+ * stays includable everywhere; the surface translation unit casts it back.
+ */
+struct XlibWindowHandle {
+    void* display = nullptr;       // Display*
+    unsigned long window = 0;      // ::Window
+    int width = 0;
+    int height = 0;
+};
+#endif
 
 class NativeVulkanWindow;
 
@@ -161,6 +180,34 @@ protected:
     };
     return std::make_unique<Win32Window>(static_cast<HWND>(hwnd));
 }
+#elif defined(CELLULARITY_VULKAN_XLIB)
+/**
+ * Borrows an Xlib window described by an XlibWindowHandle. The caller keeps both
+ * the connection and the window alive for the session's lifetime.
+ */
+[[nodiscard]] inline NativeVulkanWindowReference createNativeVulkanWindow(
+        void* handle) noexcept {
+    const auto* xlib = static_cast<const XlibWindowHandle*>(handle);
+    if (xlib == nullptr || xlib->display == nullptr || xlib->window == 0) {
+        return nullptr;
+    }
+    class XlibWindow final : public NativeVulkanWindow {
+    public:
+        explicit XlibWindow(const XlibWindowHandle& borrowed) noexcept
+                : mHandle(borrowed) {}
+
+        [[nodiscard]] int width() const noexcept override { return mHandle.width; }
+        [[nodiscard]] int height() const noexcept override { return mHandle.height; }
+
+        [[nodiscard]] void* nativeHandle() const noexcept override {
+            return const_cast<XlibWindowHandle*>(&mHandle);
+        }
+
+    private:
+        XlibWindowHandle mHandle;
+    };
+    return std::make_unique<XlibWindow>(*xlib);
+}
 #endif
 
 /**
@@ -169,7 +216,7 @@ protected:
  * off-screen host test can run on a machine with no window system.
  */
 [[nodiscard]] constexpr bool nativeVulkanWindowSurfaceSupported() noexcept {
-#if defined(_WIN32) || defined(__ANDROID__)
+#if defined(_WIN32) || defined(__ANDROID__) || defined(CELLULARITY_VULKAN_XLIB)
     return true;
 #else
     return false;

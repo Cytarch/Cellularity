@@ -8,6 +8,8 @@ Notable user-visible changes are recorded in this file.
   rendering, local settings, genome editing, and substrate import/save flows.
 - Add Gradle MSI packaging with native runtime assets, an installation-directory
   choice, and a Start Menu shortcut.
+- Run the desktop application on Linux as well, with the same Vulkan renderer,
+  XDG data directory, and deb/rpm/AppImage packaging.
 - Store standalone genomes in the bounded `CLTY` release format with dynamic
   1–256-gene support, named columnar data, and per-column compression.
 - Keep original Java genome files as read-only imports while new saves use the

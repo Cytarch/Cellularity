@@ -4,9 +4,9 @@ Last reviewed: 2026-10-31
 
 ## Overall state
 
-Cellularity has a public Android prerelease line and a Windows desktop application. The current Android release candidate remains `0.1.0-alpha.1` (`versionCode 1`). The `desktop` module adds a Compose Desktop application, Windows storage and settings, desktop JNI, Vulkan rendering, and MSI packaging; Windows installers are development artifacts rather than a published release line.
+Cellularity has a public Android prerelease line and a desktop application for Windows and Linux. The current Android release candidate remains `0.1.0-alpha.1` (`versionCode 1`). The `desktop` module adds a Compose Desktop application, desktop storage and settings, desktop JNI, Vulkan rendering, and MSI/deb/rpm/AppImage packaging; desktop packages are development artifacts rather than a published release line.
 
-The public Android package namespace and application ID are consistently `com.cytarch.cellularity`. Android native packaging produces `libcellularity.so`; the desktop JNI build produces `cellularity_desktop.dll`. GitHub Releases remains the planned binary distribution channel for the Android prerelease.
+The public Android package namespace and application ID are consistently `com.cytarch.cellularity`. Android native packaging produces `libcellularity.so`; the desktop JNI build produces `cellularity_desktop.dll` on Windows and `libcellularity_desktop.so` on Linux. GitHub Releases remains the planned binary distribution channel for the Android prerelease.
 
 ## Release scope
 
@@ -16,14 +16,14 @@ The source tree consists of three Gradle modules and one root native source tree
 | --- | --- | --- |
 | `app` | Android application and platform integration | Java, Kotlin |
 | `shared` | UI, resources, and presentation logic consumed by Android and desktop | Kotlin, Compose Multiplatform |
-| `desktop` | Windows window, storage, settings, JNI integration, and packaging | Kotlin, Compose Desktop |
+| `desktop` | Desktop window, storage, settings, JNI integration, and packaging (Windows, Linux) | Kotlin, Compose Desktop |
 | `native` | Simulation, formats, interaction, GLES/Vulkan rendering, JNI, and host tests | C++ |
 
 No signing keys, local SDK paths, generated APKs, build outputs, crash logs, or local IDE state are part of the release tree.
 
 ## Repository and publication boundary
 
-This directory is a standalone Git repository with an intentional public history. Both the Android application and the Windows desktop application are maintained on `main` and share the `shared` module and the native sources. Private-repository metadata and migration archives are outside the public source tree.
+This directory is a standalone Git repository with an intentional public history. Both the Android application and the desktop application are maintained on `main` and share the `shared` module and the native sources. Private-repository metadata and migration archives are outside the public source tree.
 
 Generated Gradle, Kotlin, CMake, native, lint, test, APK, and MSI outputs are ignored. Signing files, local SDK configuration, credentials, and local IDE state must remain untracked.
 
@@ -35,7 +35,7 @@ The public tree does not contain:
 - the old standalone Java substrate-conversion project; legacy decoding required by the applications remains in the active codecs;
 - private-repository metadata, migration archives, internal work plans, signing material, or generated artifacts.
 
-The `desktop` module is part of the project. It owns the Compose Desktop entry point, Windows platform adapters, and desktop JNI integration; the native tree owns the Vulkan implementation and Win32 host. The `shared` module remains platform-neutral and has no window, JNI, or renderer implementation. Host-native parity tests, performance tools, and the genome development CLI are development tooling, not packaged desktop application entry points.
+The `desktop` module is part of the project. It owns the Compose Desktop entry point, the Windows and Linux platform adapters (`DesktopPlatform`), and desktop JNI integration; the native tree owns the Vulkan implementation, the portable JNI bridge (`native/host/desktop`) and the standalone Win32 host. The `shared` module remains platform-neutral and has no window, JNI, or renderer implementation. Host-native parity tests, performance tools, and the genome development CLI are development tooling, not packaged desktop application entry points.
 
 ## Naming and privacy audit
 
@@ -79,7 +79,7 @@ Native CMake is split into static `cellularity_simulation`, `cellularity_formats
 
 Substrate data is decoded by the active native codec. UI-facing state changes are serialized through the controller and revision tracking. `shared` owns no low-level GL or Vulkan API: platform adapters own surface lifecycle and native rendering, while bitmap upload remains in the Android platform layer. Surface recreation reloads renderer resources without replacing the native simulation world; simulation load/save commands are separate from the surface contract.
 
-On Windows, `desktop/Main.kt` owns the Compose window and process services. `DesktopEnvironment` provides the roaming data directory, settings, and file repositories. `DesktopNativeRenderer` binds the shared C++ renderer through `cellularity_desktop.dll`; the Gradle `stageNativeAssets` task packages that library, `vulkan-1.dll`, `z.dll`, generated SPIR-V shaders, and textures. The MSI task uses the same desktop and shared JARs as development runs and registers a Start Menu shortcut without a desktop shortcut.
+`desktop/Main.kt` owns the Compose window and process services. `DesktopEnvironment` provides the data directory (roaming `%APPDATA%` on Windows, XDG data home on Linux), settings, and file repositories. The renderer draws every frame off-screen into the interface's own bitmap; the Vulkan device is created against a hidden anchor window (Win32 on Windows, Xlib on Linux, which also covers Wayland through XWayland). On Windows, `DesktopNativeRenderer` binds the shared C++ renderer through `cellularity_desktop.dll`; the Gradle `stageNativeAssets` task packages that library, `vulkan-1.dll`, `z.dll`, generated SPIR-V shaders, and textures. The MSI task uses the same desktop and shared JARs as development runs and registers a Start Menu shortcut without a desktop shortcut.
 
 Current and legacy substrate formats remain supported. External imports are streamed to a temporary private file and atomically installed after validation rather than being loaded into a Java `byte[]`. Input files, decompressed legacy data, and estimated simulation allocations have a 2 GiB safety ceiling. Native collection counts, topology counts, file headers, environment sizes, and world capacity are validated before large allocations.
 
@@ -130,18 +130,26 @@ Static checks and automated tests are the release gates. Runtime checks on Andro
 targets can provide useful vendor- and GPU-specific diagnostics, but they are
 optional and do not determine release readiness.
 
-### Windows desktop checks
+### Desktop checks
 
-The current desktop verification path is:
+Windows:
 
 ```powershell
-cmake --build build/win-cmake --target cellularity_desktop_jni
+cmake --build build/desktop-cmake --target cellularity_desktop_jni
 .\gradlew.bat :desktop:test :shared:jvmTest :desktop:packageMsi
 ```
 
-The packaged app image and installed MSI should also be smoke-tested for a cold Start Menu launch, native Vulkan rendering, genome editing, and substrate import/save/reopen flows.
+Linux:
 
-The Windows-only native sources (`native/host/win32`, desktop JNI, Win32 Vulkan tests) cannot be compiled by the Linux host gate and must be built and tested on Windows before a desktop change is merged. `scripts/check-public-release.sh` covers the whole tree, including the `desktop` module.
+```bash
+cmake -S native -B build/desktop-cmake -G Ninja -DCMAKE_BUILD_TYPE=Release -DCELLULARITY_BUILD_DESKTOP=ON
+cmake --build build/desktop-cmake --target cellularity_desktop_jni
+./gradlew :desktop:test :shared:jvmTest :desktop:createDistributable
+```
+
+Packaged builds should also be smoke-tested for a cold launch, native Vulkan rendering, genome editing, and substrate import/save/reopen flows.
+
+The Win32-only native sources (the Windows branches of `native/host/desktop`, `native/host/win32`, Win32 Vulkan tests) are not compiled on Linux and must be built and tested on Windows before a desktop change is merged; the Linux desktop build and its tests run on Linux. `scripts/check-public-release.sh` covers the whole tree, including the `desktop` module.
 
 ## Known maintenance work
 
