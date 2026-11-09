@@ -1,0 +1,140 @@
+name: Windows desktop
+
+# Builds the Windows desktop application the way README.md documents it (MSVC, vcpkg, CMake and
+# Ninja for the native library, then Gradle for the MSI), uploads the installer, and then runs the
+# native and JVM test suites on Windows. The installer is uploaded before the tests run, so a test
+# failure still leaves it available for inspection while the run is marked as failed.
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    tags:
+      - "v*"
+    paths:
+      - ".github/workflows/windows-desktop.yml"
+      - "native/**"
+      - "shared/**"
+      - "desktop/**"
+      - "gradle/**"
+      - "*.gradle"
+      - "gradle.properties"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-desktop-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  VCPKG_PACKAGES: >-
+    zlib:x64-windows vulkan-headers:x64-windows vulkan-loader:x64-windows
+    shaderc:x64-windows spirv-tools[tools]:x64-windows
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 150
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: gradle
+
+      - name: Enter the x64 MSVC developer environment
+        run: |
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $vs = & $vswhere -latest -products * `
+            -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+          if (-not $vs) { throw "No Visual Studio installation with the x64 C++ tools" }
+          $vcvars = Join-Path $vs "VC\Auxiliary\Build\vcvars64.bat"
+          cmd /c "`"$vcvars`" >nul && set" | ForEach-Object {
+            if ($_ -match '^([^=]+)=(.*)$') {
+              "$($matches[1])=$($matches[2])" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+            }
+          }
+
+      - name: Locate vcpkg
+        run: |
+          "VCPKG_ROOT=$env:VCPKG_INSTALLATION_ROOT" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "VCPKG_DEFAULT_BINARY_CACHE=${{ runner.temp }}\vcpkg-binary-cache" |
+            Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          New-Item -ItemType Directory -Force -Path "${{ runner.temp }}\vcpkg-binary-cache" | Out-Null
+          "VCPKG_COMMIT=$(git -C $env:VCPKG_INSTALLATION_ROOT rev-parse HEAD)" |
+            Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
+      - name: Restore the vcpkg binary cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}\vcpkg-binary-cache
+          key: vcpkg-${{ runner.os }}-${{ env.VCPKG_COMMIT }}-${{ hashFiles('.github/workflows/windows-desktop.yml') }}
+
+      - name: Install the native dependencies with vcpkg
+        run: |
+          & "$env:VCPKG_ROOT\vcpkg.exe" install $env:VCPKG_PACKAGES.Split(' ', [StringSplitOptions]::RemoveEmptyEntries)
+          if ($LASTEXITCODE -ne 0) { throw "vcpkg install failed" }
+          "$env:VCPKG_ROOT\installed\x64-windows\bin" | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
+          "$env:VCPKG_ROOT\installed\x64-windows\tools\shaderc" | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
+          "$env:VCPKG_ROOT\installed\x64-windows\tools\spirv-tools" | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
+
+      - name: Configure the native build
+        run: |
+          cmake -S native -B build/desktop-cmake -G Ninja `
+            -DCMAKE_BUILD_TYPE=Release `
+            -DVCPKG_TARGET_TRIPLET=x64-windows `
+            -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake"
+          if ($LASTEXITCODE -ne 0) { throw "CMake configure failed" }
+
+      - name: Build the desktop JNI library
+        run: |
+          cmake --build build/desktop-cmake --target cellularity_desktop_jni
+          if ($LASTEXITCODE -ne 0) { throw "Native build failed" }
+          Copy-Item "$env:VCPKG_ROOT\installed\x64-windows\bin\vulkan-1.dll", `
+            "$env:VCPKG_ROOT\installed\x64-windows\bin\z.dll" build\desktop-cmake\
+
+      - name: Build the MSI
+        run: |
+          .\gradlew.bat --no-daemon :desktop:packageMsi
+          if ($LASTEXITCODE -ne 0) { throw "MSI packaging failed" }
+
+      - name: Upload the MSI
+        uses: actions/upload-artifact@v4
+        with:
+          name: cellularity-windows-msi
+          path: desktop/build/compose/binaries/main/msi/*.msi
+          if-no-files-found: error
+
+      - name: Build and run the native tests
+        run: |
+          cmake --build build/desktop-cmake
+          if ($LASTEXITCODE -ne 0) { throw "Native test build failed" }
+          ctest --test-dir build/desktop-cmake --output-on-failure
+          if ($LASTEXITCODE -ne 0) { throw "Native tests failed" }
+
+      - name: Run the JVM tests
+        if: ${{ !cancelled() }}
+        run: |
+          .\gradlew.bat --no-daemon :desktop:test :shared:jvmTest
+          if ($LASTEXITCODE -ne 0) { throw "JVM tests failed" }
+
+      - name: Upload the test reports
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: cellularity-windows-test-reports
+          path: |
+            desktop/build/reports/tests
+            desktop/build/test-results
+            shared/build/reports/tests
+            build/desktop-cmake/Testing
+          if-no-files-found: ignore
