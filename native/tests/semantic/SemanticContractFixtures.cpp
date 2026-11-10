@@ -1,5 +1,7 @@
 #include "tests/semantic/SemanticContractFixtures.h"
 
+#include "core/PortableMath.h"
+
 #include <algorithm>
 #include <array>
 #include <cmath>
@@ -595,8 +597,8 @@ FixtureResult ciliocyteCapacityFixture() {
         const int neighbor = addCell(
                 world,
                 CellType::PHAGOCYTE,
-                0.979 + 0.015 * std::cos(angle),
-                0.015 * std::sin(angle),
+                0.979 + 0.015 * cellularity::portable_math::cos(angle),
+                0.015 * cellularity::portable_math::sin(angle),
                 0.008);
         addDirectedContact(cells, ciliocyte, neighbor);
     }

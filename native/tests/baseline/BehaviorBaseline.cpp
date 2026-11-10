@@ -1,5 +1,7 @@
 #include "tests/baseline/BehaviorBaseline.h"
 
+#include "core/PortableMath.h"
+
 #include <algorithm>
 #include <cmath>
 #include <stdexcept>
@@ -206,8 +208,8 @@ std::unique_ptr<SimulationWorld> makeFoodHeavy(const ScenarioDefinition& scenari
         const double angle = 2.0 * Environment::PI * cellIndex / 8.0;
         addCell(*world,
                 CellType::PHAGOCYTE,
-                0.18 * std::cos(angle),
-                0.18 * std::sin(angle),
+                0.18 * cellularity::portable_math::cos(angle),
+                0.18 * cellularity::portable_math::sin(angle),
                 angle,
                 static_cast<float>(cellIndex) * 0.01f);
     }
