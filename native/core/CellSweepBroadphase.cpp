@@ -1534,7 +1534,7 @@ void CellSweepBroadphase::collectOverlappingPairsSimdTile(ExactOverlapPairBuffer
             const auto distanceX = hn::Sub(leftXV, rightX);
             const auto distanceY = hn::Sub(leftYV, rightY);
             const auto contactDistance = hn::Add(leftRadiusV, rightRadius);
-            const auto distanceSq = hn::MulAdd(distanceX, distanceX, hn::Mul(distanceY, distanceY));
+            const auto distanceSq = hn::Add(hn::Mul(distanceX, distanceX), hn::Mul(distanceY, distanceY));
             const auto contactDistanceSq = hn::Mul(contactDistance, contactDistance);
             const auto overlapMask = hn::Lt(distanceSq, contactDistanceSq);
             checkedPairs += simdWidth;
@@ -1787,7 +1787,7 @@ void CellSweepBroadphase::collectOverlappingPairsSimdExact(ExactOverlapPairBuffe
             const auto distanceX = hn::Sub(leftXV, rightX);
             const auto distanceY = hn::Sub(leftYV, rightY);
             const auto contactDistance = hn::Add(leftRadiusV, rightRadius);
-            const auto distanceSq = hn::MulAdd(distanceX, distanceX, hn::Mul(distanceY, distanceY));
+            const auto distanceSq = hn::Add(hn::Mul(distanceX, distanceX), hn::Mul(distanceY, distanceY));
             const auto contactDistanceSq = hn::Mul(contactDistance, contactDistance);
             const auto overlapMask = hn::Lt(distanceSq, contactDistanceSq);
 

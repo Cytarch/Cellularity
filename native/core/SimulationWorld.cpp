@@ -1,5 +1,7 @@
 #include "core/SimulationWorld.h"
 
+#include "core/PortableMath.h"
+
 #include <algorithm>
 #include <array>
 #include <cmath>
@@ -1701,8 +1703,8 @@ void SimulationWorld::eatFoods(double deltaTime) {
             double ciliocyteBending = 0.0;
             double ciliocyteLifting = 0.0;
             if (cellType == CellType::CILIOCYTE) {
-                ciliocyteDirectionX = std::cos(mCellData.mAngle[cellIndex]);
-                ciliocyteDirectionY = std::sin(mCellData.mAngle[cellIndex]);
+                ciliocyteDirectionX = cellularity::portable_math::cos(mCellData.mAngle[cellIndex]);
+                ciliocyteDirectionY = cellularity::portable_math::sin(mCellData.mAngle[cellIndex]);
                 ciliocyteBending = mCellData.getValue(cellIndex, Gene::MYOCYTE_BENDING_VALUE_INDEX, 0);
                 ciliocyteLifting = mCellData.getValue(cellIndex, Gene::MYOCYTE_LIFTING_VALUE_INDEX, 0);
             }
@@ -1981,8 +1983,8 @@ void SimulationWorld::updateCellSmellInteraction(int targetCellIndex) {
     double sin = 0.0;
     if (targetCellType == CellType::STEREOCYTE) {
         double targetCellAngle = mCellData.mAngle[targetCellIndex];
-        cos = std::cos(targetCellAngle);
-        sin = std::sin(targetCellAngle);
+        cos = cellularity::portable_math::cos(targetCellAngle);
+        sin = cellularity::portable_math::sin(targetCellAngle);
     }
 
     float resultSmellSignalValue = 0.0f;

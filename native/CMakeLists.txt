@@ -193,6 +193,17 @@ elseif(CELLULARITY_WARNINGS_AS_ERRORS)
     message(FATAL_ERROR "CELLULARITY_WARNINGS_AS_ERRORS is unsupported by ${CMAKE_CXX_COMPILER_ID}")
 endif()
 
+# The simulation must compute the same bits on every platform. Contracting a multiply and
+# an add into one FMA rounds once instead of twice, and compilers do it by default on some
+# targets (Clang for ARM), so contraction is disabled everywhere. MSVC's /fp:precise
+# keeps evaluation order and does not contract.
+set(CELLULARITY_PROJECT_FLOATING_POINT_FLAGS)
+if(MSVC)
+    list(APPEND CELLULARITY_PROJECT_FLOATING_POINT_FLAGS /fp:precise)
+elseif(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
+    list(APPEND CELLULARITY_PROJECT_FLOATING_POINT_FLAGS -ffp-contract=off)
+endif()
+
 set(CELLULARITY_IPO_SUPPORTED OFF)
 if(CELLULARITY_ENABLE_IPO
         AND NOT ANDROID
@@ -228,6 +239,7 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
 endif()
 
 set(CELLULARITY_SIMULATION_SOURCES
+        core/PortableMath.cpp
         core/SimulationRandom.cpp
         core/BesselLookup.cpp
         core/CellType.cpp
@@ -425,6 +437,7 @@ function(cellularity_configure_source_target target_name)
     target_include_directories(${target_name} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
     target_compile_features(${target_name} PRIVATE cxx_std_17)
     target_compile_options(${target_name} PRIVATE ${CELLULARITY_PROJECT_WARNING_FLAGS})
+    target_compile_options(${target_name} PRIVATE ${CELLULARITY_PROJECT_FLOATING_POINT_FLAGS})
 
     if(CELLULARITY_ENABLE_SANITIZERS)
         target_compile_options(${target_name} PRIVATE
@@ -1402,6 +1415,13 @@ if(NOT ANDROID)
             cellularity_substrate_geometry_tests
             tests/substrate_geometry_tests.cpp
             substrate_geometry
+            cellularity_simulation
+    )
+
+    cellularity_add_host_test(
+            cellularity_portable_math_tests
+            tests/portable_math_tests.cpp
+            simulation
             cellularity_simulation
     )
 

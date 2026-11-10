@@ -1,13 +1,15 @@
 #include "core/Environment.h"
 
+#include "core/PortableMath.h"
+
 #include <algorithm>
 #include <cmath>
 
 Environment::Environment() {
     mGenePool.fill(false);
     resetLegacyMutationWeights();
-    mLightAngleCos = std::cos(mLightAngle);
-    mLightAngleSin = std::sin(mLightAngle);
+    mLightAngleCos = cellularity::portable_math::cos(mLightAngle);
+    mLightAngleSin = cellularity::portable_math::sin(mLightAngle);
 }
 
 void Environment::set(const Environment& environment) {
@@ -110,8 +112,8 @@ void Environment::getGravityVector(double positionX, double positionY, double& g
         }
         case VECTOR_FIELD_LINEAR_DIRECTIONAL:
         default:
-            gravityX = std::cos(mGravityFieldAngle) * mGravityFieldStrength;
-            gravityY = std::sin(mGravityFieldAngle) * mGravityFieldStrength;
+            gravityX = cellularity::portable_math::cos(mGravityFieldAngle) * mGravityFieldStrength;
+            gravityY = cellularity::portable_math::sin(mGravityFieldAngle) * mGravityFieldStrength;
             return;
     }
 }
@@ -209,7 +211,7 @@ double Environment::evaluateScalarField(int fieldType,
         case DENSITY_FIELD_CONSTANT:
             return base;
         case DENSITY_FIELD_LINEAR_DIRECTIONAL:
-            coordinate = normalizedX * std::cos(angle) + normalizedY * std::sin(angle);
+            coordinate = normalizedX * cellularity::portable_math::cos(angle) + normalizedY * cellularity::portable_math::sin(angle);
             break;
         case DENSITY_FIELD_RADIAL:
             coordinate = std::sqrt(normalizedX * normalizedX + normalizedY * normalizedY);
@@ -246,7 +248,7 @@ double Environment::getLightddx(double positionX, double positionY) const {
                              + 2.0 * mLightRange * mRadius * positionX
                              - 2.0 * (-1.0 + mLightRange) * mLightAngleSin * positionX * positionY
                              + 2.0 * mLightAngleCos * (-1.0 + mLightRange) * positionY * positionY))
-            / (r * std::pow((-1.0 + mLightRange) * r + mRadius, 3.0)));
+            / (r * cellularity::portable_math::cube((-1.0 + mLightRange) * r + mRadius)));
 }
 
 double Environment::getLightddy(double positionX, double positionY) const {
@@ -261,13 +263,13 @@ double Environment::getLightddy(double positionX, double positionY) const {
     return -((mLightIntensity * (-1.0 + mLightRange) * mLightRange * mLightRange * mRadius
                      * ((-1.0 + mLightRange) * r * r * mLightAngleSin + r * mRadius * mLightAngleSin
                              + 2.0 * positionY * (mLightAngleCos * positionX + mLightAngleSin * positionY + mLightRange * (mRadius - mLightAngleCos * positionX - mLightAngleSin * positionY))))
-            / (r * std::pow((-1.0 + mLightRange) * r + mRadius, 3.0)));
+            / (r * cellularity::portable_math::cube((-1.0 + mLightRange) * r + mRadius)));
 }
 
 void Environment::updateLight(double deltaTime) {
     mLightAngle += mLightSpeed * deltaTime;
-    mLightAngleCos = std::cos(mLightAngle);
-    mLightAngleSin = std::sin(mLightAngle);
+    mLightAngleCos = cellularity::portable_math::cos(mLightAngle);
+    mLightAngleSin = cellularity::portable_math::sin(mLightAngle);
 }
 
 Environment Environment::constructDefaultEnvironment(int maxCellCount, int maxFoodCount, double radius) {

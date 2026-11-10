@@ -1,5 +1,7 @@
 #include "core/CellTopology.h"
 
+#include "core/PortableMath.h"
+
 #include <algorithm>
 #include <cmath>
 #include <stdexcept>
@@ -144,10 +146,10 @@ int CellTopology::addCellLink(int cellA,
     mEdgeCreationReasons.push_back(creationReason);
     mEdgeAngleA.push_back(angleA);
     mEdgeAngleB.push_back(angleB);
-    mEdgeAngleACos.push_back(std::cos(angleA));
-    mEdgeAngleASin.push_back(std::sin(angleA));
-    mEdgeAngleBCos.push_back(std::cos(angleB));
-    mEdgeAngleBSin.push_back(std::sin(angleB));
+    mEdgeAngleACos.push_back(cellularity::portable_math::cos(angleA));
+    mEdgeAngleASin.push_back(cellularity::portable_math::sin(angleA));
+    mEdgeAngleBCos.push_back(cellularity::portable_math::cos(angleB));
+    mEdgeAngleBSin.push_back(cellularity::portable_math::sin(angleB));
     mEdgeTorsionalStiffness.push_back(torsionalStiffness);
     mEdgeRestLength.push_back(restLength);
     mEdgeRenderStartOffsetAX.push_back(0.0f);
@@ -187,8 +189,8 @@ int CellTopology::addBoundaryLink(int cellIndex,
     const int boundaryIndex = boundaryCount();
     mBoundaryCell.push_back(cellIndex);
     mBoundaryAngleA.push_back(angleA);
-    mBoundaryAngleACos.push_back(std::cos(angleA));
-    mBoundaryAngleASin.push_back(std::sin(angleA));
+    mBoundaryAngleACos.push_back(cellularity::portable_math::cos(angleA));
+    mBoundaryAngleASin.push_back(cellularity::portable_math::sin(angleA));
     mBoundaryAnchorX.push_back(anchorX);
     mBoundaryAnchorY.push_back(anchorY);
     mBoundaryTorsionalStiffness.push_back(torsionalStiffness);

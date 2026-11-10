@@ -26,6 +26,7 @@ BUILD_TARGETS=(
     cellularity_gene_access_tests
     cellularity_topology_tests
     cellularity_substrate_geometry_tests
+    cellularity_portable_math_tests
     cellularity_simulation_tests
     cellularity_dynamic_genome_operation_tests
     cellularity_interaction_tests

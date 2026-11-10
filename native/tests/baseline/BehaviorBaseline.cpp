@@ -17,7 +17,7 @@ constexpr std::array<ScenarioDefinition, 6> SCENARIOS{{
                 "9ad1594185913652728ed02bba8ea586b75ff224284f2c0a93e1191413048685",
                 {0, 0, 0, 0, 0, 0, 14217}},
         {"small_colony", 20'002, 120,
-                "3af4414f8c4617a07e7eee4404747b1ac88cd007b18bcdfcc59c0384eb672736",
+                "f6fb493ed8c6269cb5a3cad4bda7d5abf2ee670deb7666783ce4c0cd41519ec2",
                 {4, 4, 0, 3, 0, 16, 25137}},
         {"dense_collision", 30'003, 80,
                 "009ebe91c17e9cc4851ffb631812653181e85a2c76d44abdb0f126cf8ede6505",

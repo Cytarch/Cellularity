@@ -1,5 +1,7 @@
 #pragma once
 
+#include "core/PortableMath.h"
+
 #include <algorithm>
 #include <array>
 #include <cmath>
@@ -191,7 +193,7 @@ public:
         const double fraction = clearanceSq / (-projection + std::sqrt(std::max(0.0, discriminant)));
         const double x = oldX + fraction * dx;
         const double y = oldY + fraction * dy;
-        const double scale = mInnerRadius / std::hypot(x, y);
+        const double scale = mInnerRadius / cellularity::portable_math::hypot(x, y);
         hit = {x * scale, y * scale};
         return true;
     }
@@ -203,7 +205,7 @@ public:
             const double distance = std::sqrt(mInnerRadius * mInnerRadius
                     + fraction * (mRadius * mRadius - mInnerRadius * mInnerRadius));
             const double angle = random.nextUniformSymmetric() * 3.14159265358979323846;
-            return {distance * std::cos(angle), distance * std::sin(angle)};
+            return {distance * cellularity::portable_math::cos(angle), distance * cellularity::portable_math::sin(angle)};
         }
         std::array<double, 2> point;
         do {

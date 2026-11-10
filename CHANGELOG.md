@@ -2,6 +2,17 @@
 
 Notable user-visible changes are recorded in this file.
 
+## Unreleased
+
+- Simulate identically on Android, Linux and Windows. The simulation now uses its
+  own sine, cosine, arctangent, exponential and logarithm instead of the platform's
+  C library, whose results differ in the last bit, and the native build no longer
+  fuses multiplications and additions into FMA instructions. A substrate saved on
+  one platform now evolves the same way on the others; existing substrates may
+  evolve slightly differently than in earlier versions.
+- Write the performance HUD's numbers with a decimal point regardless of the
+  system locale.
+
 ## 0.1.0-alpha.2 - 2026-11-09
 
 Packages for Android (APK, AAB) and Linux (deb, rpm, AppImage). No Windows package

@@ -1,5 +1,7 @@
 #include "core/CellData.h"
 
+#include "core/PortableMath.h"
+
 #include <algorithm>
 #include <cassert>
 #include <chrono>
@@ -1057,7 +1059,7 @@ float evaluateParametricValue(const CellData& cellData,
                     : parametricValue.variableB();
         } else {
             result = parametricValue.variableA()
-                    * std::sin(
+                    * cellularity::portable_math::sin(
                             in * parametricValue.variableC()
                             - parametricValue.variableB());
         }
@@ -2701,9 +2703,9 @@ void CellData::handleCellToBoundaryCollisionPartial(
             && mTopology.linkCount(currentCellIndex) < MAX_GLUEOCYTE_LINK_COUNT
             && mTopology.canMakeLink(currentCellIndex)
             && !mTopology.hasBoundaryLink(currentCellIndex)) {
-        double an = std::atan2(currentCellPositionY, currentCellPositionX);
+        double an = cellularity::portable_math::atan2(currentCellPositionY, currentCellPositionX);
         if (contact.normalDirection < 0.0) {
-            an = std::atan2(-currentCellPositionY, -currentCellPositionX);
+            an = cellularity::portable_math::atan2(-currentCellPositionY, -currentCellPositionX);
         }
         double angleA = an - mAngle[currentCellIndex];
         const auto anchor = geometry.boundaryAnchor(currentCellPositionX, currentCellPositionY, distance, MIN_CELL_RADIUS * LINK_ATTACH_DEPTH);
@@ -2811,10 +2813,10 @@ void CellData::updateAllCellForces(double deltaTime, const Environment& environm
     const bool densityConstant = environment.mDensityFieldType == Environment::DENSITY_FIELD_CONSTANT;
     const bool densityLinear = environment.mDensityFieldType == Environment::DENSITY_FIELD_LINEAR_DIRECTIONAL;
     const double radiusInv = environment.mRadius != 0.0 ? 1.0 / environment.mRadius : 1.0;
-    const double gravityLinearX = gravityLinear ? std::cos(environment.mGravityFieldAngle) * environment.mGravityFieldStrength : 0.0;
-    const double gravityLinearY = gravityLinear ? std::sin(environment.mGravityFieldAngle) * environment.mGravityFieldStrength : 0.0;
-    const double densityLinearCos = densityLinear ? std::cos(environment.mDensityFieldAngle) : 0.0;
-    const double densityLinearSin = densityLinear ? std::sin(environment.mDensityFieldAngle) : 0.0;
+    const double gravityLinearX = gravityLinear ? cellularity::portable_math::cos(environment.mGravityFieldAngle) * environment.mGravityFieldStrength : 0.0;
+    const double gravityLinearY = gravityLinear ? cellularity::portable_math::sin(environment.mGravityFieldAngle) * environment.mGravityFieldStrength : 0.0;
+    const double densityLinearCos = densityLinear ? cellularity::portable_math::cos(environment.mDensityFieldAngle) : 0.0;
+    const double densityLinearSin = densityLinear ? cellularity::portable_math::sin(environment.mDensityFieldAngle) : 0.0;
     const double densitySoftness = std::max(0.0, std::min(1.0, environment.mDensityFieldSoftness));
 
     for (int cellIndex = 0; cellIndex < mCellCount; cellIndex++) {
@@ -2887,8 +2889,8 @@ void CellData::updateCellsMetabolism(double deltaTime, Environment& environment,
     const bool salinityConstant = environment.mSalinityFieldType == Environment::DENSITY_FIELD_CONSTANT;
     const bool salinityLinear = environment.mSalinityFieldType == Environment::DENSITY_FIELD_LINEAR_DIRECTIONAL;
     const double salinityRadiusInv = environment.mRadius != 0.0 ? 1.0 / environment.mRadius : 1.0;
-    const double salinityLinearCos = salinityLinear ? std::cos(environment.mSalinityFieldAngle) : 0.0;
-    const double salinityLinearSin = salinityLinear ? std::sin(environment.mSalinityFieldAngle) : 0.0;
+    const double salinityLinearCos = salinityLinear ? cellularity::portable_math::cos(environment.mSalinityFieldAngle) : 0.0;
+    const double salinityLinearSin = salinityLinear ? cellularity::portable_math::sin(environment.mSalinityFieldAngle) : 0.0;
     const double salinitySoftness = std::max(0.0, std::min(1.0, environment.mSalinityFieldSoftness));
     const bool canMutate = environment.mRadiation != 0.0;
 
@@ -3033,7 +3035,7 @@ void CellData::updateCellsMetabolism(double deltaTime, Environment& environment,
                 mSwimAnimationTime2[targetCellIndex] += static_cast<float>(v2 * 0.3);
 
                 double animationSpeedFactor = 45.0 / 0.4;
-                double animationPeriodThreshold = 20.0 * std::acos(-1.0);
+                double animationPeriodThreshold = 20.0 * cellularity::portable_math::kPi;
                 while (mSwimAnimationTime[targetCellIndex] * animationSpeedFactor > animationPeriodThreshold) {
                     CELLULARITY_PROFILE_IF(profile) {
                         profile->metabolismCiliocyteAnimationWraps++;
@@ -3455,14 +3457,14 @@ void CellData::handleCellSplit(SimulationWorld& simulationWorld) {
                 + parentGene.splitAngle()
                         * (parentIsMirrored ? -1.0f : 1.0f);
         double distance = parentRadius * 0.05f * 2.0f;
-        double splitVectorX = std::cos(baseAngle);
-        double splitVectorY = std::sin(baseAngle);
+        double splitVectorX = cellularity::portable_math::cos(baseAngle);
+        double splitVectorY = cellularity::portable_math::sin(baseAngle);
         double epsilon = 0.0000001f;
 
-        mPositionX[child2Index] += splitVectorX * distance + std::sin(mCellCount * 12.34f + 13.4f) * epsilon;
-        mPositionY[child2Index] += splitVectorY * distance + std::sin(mCellCount * 19.34f + 63.0f) * epsilon;
-        mPositionX[child1Index] -= splitVectorX * distance + std::sin(mCellCount * 10.34f + 43.0f) * epsilon;
-        mPositionY[child1Index] -= splitVectorY * distance + std::sin(mCellCount * 17.34f + 137.0f) * epsilon;
+        mPositionX[child2Index] += splitVectorX * distance + cellularity::portable_math::sin(mCellCount * 12.34f + 13.4f) * epsilon;
+        mPositionY[child2Index] += splitVectorY * distance + cellularity::portable_math::sin(mCellCount * 19.34f + 63.0f) * epsilon;
+        mPositionX[child1Index] -= splitVectorX * distance + cellularity::portable_math::sin(mCellCount * 10.34f + 43.0f) * epsilon;
+        mPositionY[child1Index] -= splitVectorY * distance + cellularity::portable_math::sin(mCellCount * 17.34f + 137.0f) * epsilon;
 
         double totalMass = parentMass;
         if (parentGene.cellType() == CellType::LIPOCYTE) {
@@ -3553,8 +3555,8 @@ void CellData::handleCellSplit(SimulationWorld& simulationWorld) {
 
                 double globalAngle = tempLink.angleA + parentAngle;
                 splitTempGlobalAngles[tempLinkIndex] = globalAngle;
-                double cos = std::cos(globalAngle);
-                double sin = std::sin(globalAngle);
+                double cos = cellularity::portable_math::cos(globalAngle);
+                double sin = cellularity::portable_math::sin(globalAngle);
                 double axisProjection = (splitVectorX * cos + splitVectorY * sin) - rightOffset;
                 splitTempAxisProjections[tempLinkIndex] = axisProjection;
                 if (axisProjection > SimulationWorld::SPLIT_SEAM_TOLERANCE || axisProjection < -SimulationWorld::SPLIT_SEAM_TOLERANCE) {
@@ -3634,7 +3636,7 @@ void CellData::handleCellSplit(SimulationWorld& simulationWorld) {
                     child2Index,
                     CellLinkCreationReason::SPLIT_SIBLING,
                     baseAngle - mAngle[child1Index],
-                    std::acos(-1.0) + baseAngle - mAngle[child2Index],
+                    cellularity::portable_math::kPi + baseAngle - mAngle[child2Index],
                     parentGene.linkStrength(),
                     parentGene.floatValue(Gene::FloatType::ADHESIN_LENGTH));
         }
@@ -3694,7 +3696,7 @@ void CellData::handleCellSplit(SimulationWorld& simulationWorld) {
             std::array<CellTopology::CellLinkSnapshot, MAX_NEIGHBORS> childLinks{};
             int childLinkCount = mTopology.collectLinksOfCell(child1Index, childLinks);
             for (int linkIndex = 0; linkIndex < childLinkCount; linkIndex++) {
-                if (std::cos(childLinks[linkIndex].angleA) >= -0.8) {
+                if (cellularity::portable_math::cos(childLinks[linkIndex].angleA) >= -0.8) {
                     continue;
                 }
                 markCellAsDead(child1Index);
@@ -3705,7 +3707,7 @@ void CellData::handleCellSplit(SimulationWorld& simulationWorld) {
             std::array<CellTopology::CellLinkSnapshot, MAX_NEIGHBORS> childLinks{};
             int childLinkCount = mTopology.collectLinksOfCell(child2Index, childLinks);
             for (int linkIndex = 0; linkIndex < childLinkCount; linkIndex++) {
-                if (std::cos(childLinks[linkIndex].angleA) >= -0.8) {
+                if (cellularity::portable_math::cos(childLinks[linkIndex].angleA) >= -0.8) {
                     continue;
                 }
                 markCellAsDead(child2Index);
@@ -4027,8 +4029,8 @@ void CellData::updateCellAngleDirectionCache(int cellIndex) {
         return;
     }
     mCachedAngle[cellIndex] = angle;
-    mCachedAngleCos[cellIndex] = std::cos(angle);
-    mCachedAngleSin[cellIndex] = std::sin(angle);
+    mCachedAngleCos[cellIndex] = cellularity::portable_math::cos(angle);
+    mCachedAngleSin[cellIndex] = cellularity::portable_math::sin(angle);
 }
 
 void CellData::updateAllCellAngleDirectionCaches() {
@@ -4179,10 +4181,10 @@ void CellData::updateAllCellLinkInteractions(double deltaTime, SimulationWorldPr
             penetrationDepth = minRadius;
         }
 
-        const double targetOffsetCos = targetCellType == CellType::MYOCYTE ? std::cos(targetAngleOffset) : baseTargetAngleCos;
-        const double targetOffsetSin = targetCellType == CellType::MYOCYTE ? std::sin(targetAngleOffset) : baseTargetAngleSin;
-        const double linkedOffsetCos = linkedCellType == CellType::MYOCYTE ? std::cos(linkedAngleOffset) : baseLinkedAngleCos;
-        const double linkedOffsetSin = linkedCellType == CellType::MYOCYTE ? std::sin(linkedAngleOffset) : baseLinkedAngleSin;
+        const double targetOffsetCos = targetCellType == CellType::MYOCYTE ? cellularity::portable_math::cos(targetAngleOffset) : baseTargetAngleCos;
+        const double targetOffsetSin = targetCellType == CellType::MYOCYTE ? cellularity::portable_math::sin(targetAngleOffset) : baseTargetAngleSin;
+        const double linkedOffsetCos = linkedCellType == CellType::MYOCYTE ? cellularity::portable_math::cos(linkedAngleOffset) : baseLinkedAngleCos;
+        const double linkedOffsetSin = linkedCellType == CellType::MYOCYTE ? cellularity::portable_math::sin(linkedAngleOffset) : baseLinkedAngleSin;
 
         double targetCellAttachDirX = mCachedAngleCos[targetCellIndex] * targetOffsetCos - mCachedAngleSin[targetCellIndex] * targetOffsetSin;
         double targetCellAttachDirY = mCachedAngleSin[targetCellIndex] * targetOffsetCos + mCachedAngleCos[targetCellIndex] * targetOffsetSin;
@@ -4291,8 +4293,8 @@ void CellData::updateFlagellocytesForce(double deltaTime, const Environment& env
             continue;
         }
 
-        mForceX[targetCellIndex] += std::cos(mAngle[targetCellIndex]) * swimForce;
-        mForceY[targetCellIndex] += std::sin(mAngle[targetCellIndex]) * swimForce;
+        mForceX[targetCellIndex] += cellularity::portable_math::cos(mAngle[targetCellIndex]) * swimForce;
+        mForceY[targetCellIndex] += cellularity::portable_math::sin(mAngle[targetCellIndex]) * swimForce;
     }
 }
 
@@ -4509,8 +4511,8 @@ void CellData::updateCiliocyteInteractions(const Environment& environment) {
         const cellularity::GeneView firstGene =
                 getActiveGeneView(firstCellIndex);
         if (firstGene.cellType() == CellType::CILIOCYTE) {
-            double directionX = std::cos(mAngle[firstCellIndex]);
-            double directionY = std::sin(mAngle[firstCellIndex]);
+            double directionX = cellularity::portable_math::cos(mAngle[firstCellIndex]);
+            double directionY = cellularity::portable_math::sin(mAngle[firstCellIndex]);
             double cross = normalY * directionX - normalX * directionY;
             if (cross < -0.2 || cross > 0.2) {
                 if ((0 < cross) != mIsMirrored[firstCellIndex]) {
@@ -4525,8 +4527,8 @@ void CellData::updateCiliocyteInteractions(const Environment& environment) {
             const cellularity::GeneView secondGene =
                     getActiveGeneView(secondCellIndex);
             if (secondGene.cellType() == CellType::CILIOCYTE) {
-                double directionX = std::cos(mAngle[secondCellIndex]);
-                double directionY = std::sin(mAngle[secondCellIndex]);
+                double directionX = cellularity::portable_math::cos(mAngle[secondCellIndex]);
+                double directionY = cellularity::portable_math::sin(mAngle[secondCellIndex]);
                 double cross = -normalY * directionX + normalX * directionY;
                 if (cross < -0.2 || cross > 0.2) {
                     if ((0 < cross) != mIsMirrored[secondCellIndex]) {
@@ -4621,8 +4623,8 @@ void CellData::handleGlueocyteCollision(int currentCellIndex, int victimCellInde
     double collidedCellPositionX = mPositionX[victimCellIndex];
     double collidedCellPositionY = mPositionY[victimCellIndex];
 
-    double an = std::atan2(collidedCellPositionY - currentCellPositionY, collidedCellPositionX - currentCellPositionX);
-    double pi = std::acos(-1.0);
+    double an = cellularity::portable_math::atan2(collidedCellPositionY - currentCellPositionY, collidedCellPositionX - currentCellPositionX);
+    double pi = cellularity::portable_math::kPi;
     double currentAngle = an - mAngle[currentCellIndex];
     double victimAngle = an + pi - mAngle[victimCellIndex];
     int edgeIndex = mTopology.addCellLink(
@@ -5712,13 +5714,13 @@ void CellData::addRandomCell(double positionX, double positionY, Environment& en
         geneBuilder.setColor(
                 2, static_cast<float>(environment.mRandom.nextUniform()));
         geneBuilder.setSplitAngle(static_cast<float>(
-                environment.mRandom.nextUniform() * 2.0 * std::acos(-1.0)));
+                environment.mRandom.nextUniform() * 2.0 * cellularity::portable_math::kPi));
         geneBuilder.setSplitRatio(static_cast<float>(
                 0.5 + environment.mRandom.nextUniformSymmetric() * 0.2));
         geneBuilder.setChild1Angle(static_cast<float>(
-                environment.mRandom.nextUniform() * 2.0 * std::acos(-1.0)));
+                environment.mRandom.nextUniform() * 2.0 * cellularity::portable_math::kPi));
         geneBuilder.setChild2Angle(static_cast<float>(
-                environment.mRandom.nextUniform() * 2.0 * std::acos(-1.0)));
+                environment.mRandom.nextUniform() * 2.0 * cellularity::portable_math::kPi));
         geneBuilder.setMassFlowPriority(static_cast<float>(
                 MIN_MASS_FLOW_PRIORITY
                 + environment.mRandom.nextUniform()
@@ -5846,8 +5848,8 @@ void CellData::addRandomCell(double positionX, double positionY, Environment& en
     mVelocityY[newCellIndex] = 0.0;
     mAngularVelocity[newCellIndex] = 0.0;
     mAngularVelocityCytoplasm[newCellIndex] = 0.0;
-    mAngle[newCellIndex] = environment.mRandom.nextUniformSymmetric() * std::acos(-1.0);
-    mAngleCytoplasm[newCellIndex] = environment.mRandom.nextUniformSymmetric() * std::acos(-1.0);
+    mAngle[newCellIndex] = environment.mRandom.nextUniformSymmetric() * cellularity::portable_math::kPi;
+    mAngleCytoplasm[newCellIndex] = environment.mRandom.nextUniformSymmetric() * cellularity::portable_math::kPi;
     mAge[newCellIndex] = 0.0;
     mMutationCount[newCellIndex] = 0;
     markCellAsAlive(newCellIndex);

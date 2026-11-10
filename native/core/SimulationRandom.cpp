@@ -1,5 +1,7 @@
 #include "core/SimulationRandom.h"
 
+#include "core/PortableMath.h"
+
 #include <cmath>
 #include <limits>
 
@@ -43,7 +45,7 @@ double SimulationRandom::nextGaussian() {
         u1 = nextUniform();
     } while (u1 <= std::numeric_limits<double>::min());
 
-    return std::sqrt(-2.0 * std::log(u1)) * std::cos(2.0 * PI * nextUniform());
+    return std::sqrt(-2.0 * cellularity::portable_math::log(u1)) * cellularity::portable_math::cos(2.0 * PI * nextUniform());
 }
 
 int SimulationRandom::nextInt(int bound) {
@@ -55,7 +57,7 @@ int SimulationRandom::nextInt(int bound) {
 }
 
 int SimulationRandom::nextPoisson(double lambda) {
-    double L = std::exp(-lambda);
+    double L = cellularity::portable_math::exp(-lambda);
     double p = 1.0;
     int k = 0;
 
