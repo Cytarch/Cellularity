@@ -12,6 +12,10 @@ Notable user-visible changes are recorded in this file.
   evolve slightly differently than in earlier versions.
 - Write the performance HUD's numbers with a decimal point regardless of the
   system locale.
+- Speed up signals on x86 without changing the simulation. Signals that decay
+  towards zero become subnormal floats, which x86 processors compute many times
+  slower; such worlds, typically those with large organisms, now simulate about
+  two to three times as fast.
 
 ## 0.1.0-alpha.2 - 2026-11-09
 

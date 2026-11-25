@@ -1,5 +1,6 @@
 #include "core/CellData.h"
 
+#include "core/FloatGrid.h"
 #include "core/PortableMath.h"
 
 #include <algorithm>
@@ -1145,6 +1146,64 @@ void initializeSignalWriteBlock(CellData& cellData,
 #endif
 }
 
+#if defined(__x86_64__) || defined(__i386__) || defined(_M_X64) || defined(_M_IX86)
+constexpr bool kSubnormalFloatsAreSlow = true;
+#else
+constexpr bool kSubnormalFloatsAreSlow = false;
+#endif
+
+// The bit pattern of the smallest magnitude from which a cell's decay formula is free of
+// subnormal operands and results. Every operand is a multiple of ulp(limit) = limit * 2^-23,
+// so every nonzero difference is at least that, and its product with localDeltaTime stays
+// at least 2^-103; sums with such a product are multiples of 2^-126 and normal or zero.
+[[nodiscard]] std::uint32_t subnormalFreeSignalLimitBits(float localDeltaTime) noexcept {
+    const double limit = 0x1p-79 / static_cast<double>(localDeltaTime);
+    const float bounded = limit < 1.0 ? static_cast<float>(limit) : 1.0F;
+    std::uint32_t bits = 0;
+    std::memcpy(&bits, &bounded, sizeof(bits));
+    return bits;
+}
+
+// Whether any of the values is nonzero and smaller in magnitude than the limit.
+[[nodiscard]] bool hasTinySignalValue(const float* values, int count, std::uint32_t limitBits) noexcept {
+    bool tiny = false;
+    for (int index = 0; index < count; ++index) {
+        std::uint32_t bits = 0;
+        std::memcpy(&bits, values + index, sizeof(bits));
+        const std::uint32_t magnitude = bits & 0x7fffffffU;
+        tiny = tiny || (magnitude != 0U && magnitude < limitBits);
+    }
+    return tiny;
+}
+
+// initializeSignalWriteBlock's decay formula computed on the float grid in doubles, with the
+// same bits and no subnormal float operation.
+void initializeSignalWriteBlockOnFloatGrid(CellData& cellData,
+        int cellIndex,
+        int readOffset,
+        int writeOffset,
+        float localDeltaTime,
+        bool isLastPass) {
+    using cellularity::float_grid::exactFloatValue;
+    using cellularity::float_grid::floatFromGridValue;
+    using cellularity::float_grid::roundToFloatGrid;
+    auto& signals = cellData.mSignalSubstance[cellIndex];
+    auto& signalOutput = cellData.mSignalSubstanceOut[cellIndex];
+    const double decay = CellData::SIGNAL_SUBSTANCE_DECAY;
+    const double deltaTime = localDeltaTime;
+    for (int channel = 0; channel < CellData::SIGNAL_SUBSTANCE_COUNT; ++channel) {
+        const double read = exactFloatValue(signals[readOffset + channel]);
+        const double decayed = roundToFloatGrid(decay * read);
+        const double change = roundToFloatGrid(exactFloatValue(signalOutput[channel]) - decayed);
+        signals[writeOffset + channel] =
+                floatFromGridValue(roundToFloatGrid(read + roundToFloatGrid(change * deltaTime)));
+    }
+    if (isLastPass) {
+        cellData.mNewSignalSubstance[cellIndex] = signalOutput;
+        signalOutput.fill(0.0f);
+    }
+}
+
 template <bool OwnerIsCellB, typename Value>
 [[nodiscard]] Value applySignalEndpointContribution(
         Value ownerWrite,
@@ -1263,6 +1322,7 @@ template <bool HasNeurocytes, bool HasLipocytes>
 void runGlobalEdgeSignalKernel(CellData& cellData,
         float localDeltaTime,
         float flowStep,
+        std::uint32_t tinySignalLimitBits,
         SimulationWorldProfile* profile) {
     int writeOffset = CellData::SIGNAL_SUBSTANCE_COUNT;
     int readOffset = 0;
@@ -1281,6 +1341,20 @@ void runGlobalEdgeSignalKernel(CellData& cellData,
                         evaluateNeurocyteSignalOutputs(
                                 cellData, cellIndex, readOffset, profile);
                     }
+                }
+                // A cell with a tiny signal or output would take subnormal float operations,
+                // which x86 computes many times slower; it is computed on the float grid.
+                if (tinySignalLimitBits != 0U
+                        && (hasTinySignalValue(
+                                    cellData.mSignalSubstance[cellIndex].data() + readOffset,
+                                    CellData::SIGNAL_SUBSTANCE_COUNT,
+                                    tinySignalLimitBits)
+                                || hasTinySignalValue(cellData.mSignalSubstanceOut[cellIndex].data(),
+                                        CellData::SIGNAL_SUBSTANCE_COUNT,
+                                        tinySignalLimitBits))) {
+                    initializeSignalWriteBlockOnFloatGrid(cellData, cellIndex, readOffset,
+                            writeOffset, localDeltaTime, isLastPass);
+                    continue;
                 }
                 initializeSignalWriteBlock(
                         cellData,
@@ -3286,6 +3360,10 @@ void CellData::setSignalUpdateAlgorithm(
     mSignalUpdateAlgorithm = algorithm;
 }
 
+void CellData::setSignalFloatGridPolicy(CellSignalFloatGridPolicy policy) noexcept {
+    mSignalFloatGridPolicy = policy;
+}
+
 CellSignalUpdateAlgorithm CellData::signalUpdateAlgorithm() const noexcept {
     return mSignalUpdateAlgorithm;
 }
@@ -3304,6 +3382,15 @@ void CellData::updateSignals(double deltaTime, SimulationWorldProfile* profile) 
             hasNeurocytes = hasNeurocytes || cellType == CellType::NEUROCYTE;
             hasLipocytes = hasLipocytes || cellType == CellType::LIPOCYTE;
         }
+    }
+    // Cells whose signals fall below this limit are computed on the float grid. Only x86
+    // penalizes subnormal floats, so elsewhere no cell is by default.
+    std::uint32_t tinySignalLimitBits = 0U;
+    if (mSignalFloatGridPolicy == CellSignalFloatGridPolicy::ALWAYS) {
+        tinySignalLimitBits = 0x7f800000U;
+    } else if (kSubnormalFloatsAreSlow
+            && mSignalFloatGridPolicy == CellSignalFloatGridPolicy::AUTOMATIC) {
+        tinySignalLimitBits = subnormalFreeSignalLimitBits(localDeltaTime);
     }
 
 #if CELLULARITY_ENABLE_CELL_OWNED_SIGNAL_KERNEL
@@ -3345,17 +3432,17 @@ void CellData::updateSignals(double deltaTime, SimulationWorldProfile* profile) 
     if (hasNeurocytes) {
         if (hasLipocytes) {
             runGlobalEdgeSignalKernel<true, true>(
-                    *this, localDeltaTime, flowStep, profile);
+                    *this, localDeltaTime, flowStep, tinySignalLimitBits, profile);
         } else {
             runGlobalEdgeSignalKernel<true, false>(
-                    *this, localDeltaTime, flowStep, profile);
+                    *this, localDeltaTime, flowStep, tinySignalLimitBits, profile);
         }
     } else if (hasLipocytes) {
         runGlobalEdgeSignalKernel<false, true>(
-                *this, localDeltaTime, flowStep, profile);
+                *this, localDeltaTime, flowStep, tinySignalLimitBits, profile);
     } else {
         runGlobalEdgeSignalKernel<false, false>(
-                *this, localDeltaTime, flowStep, profile);
+                *this, localDeltaTime, flowStep, tinySignalLimitBits, profile);
     }
 }
 

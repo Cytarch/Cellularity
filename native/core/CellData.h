@@ -31,6 +31,15 @@ enum class CellSignalUpdateAlgorithm : std::uint8_t {
 #endif
 };
 
+// Which cells the global-edge signal kernel computes on the float grid instead of with float
+// operations; both give the same bits. AUTOMATIC picks by speed, the others exist so tests
+// can compare the two on the same state.
+enum class CellSignalFloatGridPolicy : std::uint8_t {
+    AUTOMATIC,
+    ALWAYS,
+    NEVER,
+};
+
 class CellData : public CellDataConstants {
 private:
     // Pools precede every handle-owning vector so they outlive all Cell slots.
@@ -378,6 +387,7 @@ public:
             SimulationWorldProfile* profile = nullptr);
     void setSignalUpdateAlgorithm(CellSignalUpdateAlgorithm algorithm) noexcept;
     [[nodiscard]] CellSignalUpdateAlgorithm signalUpdateAlgorithm() const noexcept;
+    void setSignalFloatGridPolicy(CellSignalFloatGridPolicy policy) noexcept;
     void updateSignals(double deltaTime, SimulationWorldProfile* profile = nullptr);
     void handleCellSplit(SimulationWorld& simulationWorld);
     bool applyCellFertilization(int spermIndex, int eggIndex, Environment& environment);
@@ -457,6 +467,8 @@ private:
 #endif
     CellSignalUpdateAlgorithm mSignalUpdateAlgorithm =
             CellSignalUpdateAlgorithm::GLOBAL_EDGE;
+    CellSignalFloatGridPolicy mSignalFloatGridPolicy =
+            CellSignalFloatGridPolicy::AUTOMATIC;
 
     [[nodiscard]] CellRuntimeId allocateRuntimeId();
     void ensureRuntimeIdsAvailable(std::size_t count) const;

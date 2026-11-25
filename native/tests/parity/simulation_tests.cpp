@@ -3984,6 +3984,76 @@ void testCellDataSignalKernelFeatureSpecializationsRemainBitExact() {
     }
 }
 
+// Signals that have decayed into the float subnormal range, whose cells the kernel computes
+// on the float grid on x86, must evolve exactly as with float operations, whether every
+// cell, no cell or only the cells with tiny values are computed on the grid.
+void testCellDataSignalFloatGridKernelMatchesTheFloatKernelOnTinySignals() {
+    // Zeros of both signs, subnormals, the smallest normals and ordinary values.
+    const float seeds[] = {
+            0.0f, -0.0f, 1.0e-45f, -1.0e-45f, 3.0e-42f, -7.5e-40f, 1.1754942e-38f,
+            -1.1754944e-38f, 1.2e-36f, -4.0e-31f, 0.25f, -0.75f, 1.0f, -1.0f,
+    };
+    constexpr int seedCount = static_cast<int>(sizeof(seeds) / sizeof(seeds[0]));
+    for (int featureMask = 0; featureMask < 4; ++featureMask) {
+        std::unique_ptr<CellData> floatKernel = makeSignalKernelParityFixture();
+        std::unique_ptr<CellData> gridKernel = makeSignalKernelParityFixture();
+        std::unique_ptr<CellData> mixedKernel = makeSignalKernelParityFixture();
+        for (CellData* cellData : {floatKernel.get(), gridKernel.get(), mixedKernel.get()}) {
+            if ((featureMask & 1) == 0) {
+                cellData->mActiveCellType[1] = CellType::PHAGOCYTE;
+            }
+            if ((featureMask & 2) == 0) {
+                cellData->mActiveCellType[2] = CellType::PHAGOCYTE;
+            }
+            cellData->setSignalUpdateAlgorithm(CellSignalUpdateAlgorithm::GLOBAL_EDGE);
+            for (int cellIndex = 0; cellIndex < cellData->mCellCount; ++cellIndex) {
+                for (int value = 0; value < 2 * CellData::SIGNAL_SUBSTANCE_COUNT; ++value) {
+                    cellData->mSignalSubstance[cellIndex][value] =
+                            seeds[(cellIndex * 5 + value * 3) % seedCount];
+                }
+            }
+        }
+        floatKernel->setSignalFloatGridPolicy(CellSignalFloatGridPolicy::NEVER);
+        gridKernel->setSignalFloatGridPolicy(CellSignalFloatGridPolicy::ALWAYS);
+
+        for (int step = 0; step < 48; ++step) {
+            for (int cellIndex = 0; cellIndex < floatKernel->mCellCount; ++cellIndex) {
+                if (floatKernel->mActiveCellType[cellIndex] == CellType::NEUROCYTE) {
+                    continue;
+                }
+                for (int channel = 0; channel < CellData::SIGNAL_SUBSTANCE_COUNT; ++channel) {
+                    // Mostly no output, so the signals decay deep into the subnormal range.
+                    const int phase = (step + cellIndex * 7 + channel * 3) % 23;
+                    const float output = phase == 0
+                            ? seeds[(step + channel) % seedCount]
+                            : 0.0f;
+                    floatKernel->mSignalSubstanceOut[cellIndex][channel] = output;
+                    gridKernel->mSignalSubstanceOut[cellIndex][channel] = output;
+                    mixedKernel->mSignalSubstanceOut[cellIndex][channel] = output;
+                }
+            }
+            const double deltaTime = step % 3 == 0 ? 0.02 : 0.013;
+            floatKernel->updateSignals(deltaTime);
+            gridKernel->updateSignals(deltaTime);
+            mixedKernel->updateSignals(deltaTime);
+            assertSignalKernelStateBitExact(
+                    *floatKernel,
+                    *gridKernel,
+                    "Signal float-grid kernel feature "
+                            + std::to_string(featureMask)
+                            + " step "
+                            + std::to_string(step));
+            assertSignalKernelStateBitExact(
+                    *floatKernel,
+                    *mixedKernel,
+                    "Signal per-cell float-grid kernel feature "
+                            + std::to_string(featureMask)
+                            + " step "
+                            + std::to_string(step));
+        }
+    }
+}
+
 #ifdef CELLULARITY_PROFILE
 void testCellDataSignalCsrCacheRebuildsOnlyForStructuralChanges() {
     std::unique_ptr<CellData> cellData = makeSignalKernelParityFixture();
@@ -5409,6 +5479,7 @@ int main() {
 #if CELLULARITY_ENABLE_CELL_OWNED_SIGNAL_KERNEL
     testCellDataSignalKernelsRemainBitExactAcrossFeaturesAndTopologyChanges();
     testCellDataSignalKernelFeatureSpecializationsRemainBitExact();
+    testCellDataSignalFloatGridKernelMatchesTheFloatKernelOnTinySignals();
 #ifdef CELLULARITY_PROFILE
     testCellDataSignalCsrCacheRebuildsOnlyForStructuralChanges();
 #endif

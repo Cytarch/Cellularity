@@ -1,5 +1,6 @@
 #include "core/SimulationWorld.h"
 
+#include "core/FloatGrid.h"
 #include "core/PortableMath.h"
 
 #include <algorithm>
@@ -31,48 +32,11 @@ namespace {
 // Viscosity slows a free mobile food towards rest, and for thousands of steps its float
 // velocity, or the results computed from it, lie in the subnormal range. On x86 every such
 // float operation takes a microcode assist; a settled plate of mobile food spent ~35x longer in
-// motion than with the assists gone. These helpers compute those float results exactly from
-// normal doubles instead: + - * of two floats done in double and rounded once to float is
-// the correctly rounded float result (53 >= 2 * 24 + 2), and the rounding onto the subnormal
-// grid is done by hand, so no operation has a subnormal input or output. All of it assumes
-// round-to-nearest, which the caller checks.
-
-// The exact value of a float, without converting a subnormal float in hardware.
-inline double exactFloatValue(float value) noexcept {
-    std::uint32_t bits = 0;
-    std::memcpy(&bits, &value, sizeof(bits));
-    if ((bits & 0x7f800000U) != 0U) {
-        return static_cast<double>(value);
-    }
-    const double magnitude = static_cast<double>(bits & 0x007fffffU) * 0x1p-149;
-    return (bits & 0x80000000U) != 0U ? -magnitude : magnitude;
-}
-
-// x rounded to the nearest float (ties to even), returned as its exact double value.
-inline double roundToFloatGrid(double x) noexcept {
-    if (std::fabs(x) >= 0x1p-126) {
-        return static_cast<double>(static_cast<float>(x));
-    }
-    // Below 2^-126 floats are the multiples of 2^-149; adding and removing 2^52 rounds the
-    // scaled value to an integer with ties to even.
-    const double scaled = std::fabs(x) * 0x1p149;
-    const double rounded = (scaled + 0x1p52) - 0x1p52;
-    return std::copysign(rounded * 0x1p-149, x);
-}
-
-// The float holding a value already on the float grid, built from bits when subnormal.
-inline float floatFromGridValue(double value) noexcept {
-    if (std::fabs(value) >= 0x1p-126) {
-        return static_cast<float>(value);
-    }
-    std::uint32_t bits = static_cast<std::uint32_t>(std::fabs(value) * 0x1p149);
-    if (std::signbit(value)) {
-        bits |= 0x80000000U;
-    }
-    float result = 0.0F;
-    std::memcpy(&result, &bits, sizeof(result));
-    return result;
-}
+// motion than with the assists gone. The step below computes those float results exactly
+// from normal doubles instead (see core/FloatGrid.h).
+using cellularity::float_grid::exactFloatValue;
+using cellularity::float_grid::floatFromGridValue;
+using cellularity::float_grid::roundToFloatGrid;
 
 // One axis of a food's motion step for a velocity below 2^-100:
 //     velocity -= float(0.2 * velocity * viscosity * deltaTime);
