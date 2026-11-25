@@ -18,6 +18,8 @@ namespace cellularity::portable_math {
 
 double sin(double x);
 double cos(double x);
+// sin(x) and cos(x), with the same bits, sharing one argument reduction.
+void sincos(double x, double& sine, double& cosine);
 double atan(double x);
 double atan2(double y, double x);
 double exp(double x);

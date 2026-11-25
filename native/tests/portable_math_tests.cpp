@@ -8,6 +8,7 @@
 #include "core/PortableMath.h"
 
 #include <cstdint>
+#include <cmath>
 #include <cstdio>
 #include <cstring>
 
@@ -117,6 +118,25 @@ int main() {
         expectBits("cos", c.x, pm::cos(x), c.cos);
         expectBits("sin", -c.x, pm::sin(-x), c.sin ^ 0x8000000000000000ULL);
         expectBits("cos", -c.x, pm::cos(-x), c.cos);
+        double sine = 0.0;
+        double cosine = 0.0;
+        pm::sincos(x, sine, cosine);
+        expectBits("sincos sine", c.x, sine, c.sin);
+        expectBits("sincos cosine", c.x, cosine, c.cos);
+    }
+    // sincos shares sin's and cos's reduction, so it must match them everywhere, including
+    // both sides of the small-argument thresholds and of every quadrant boundary.
+    for (int index = -200000; index <= 200000; ++index) {
+        const double steps[] = {index * 0x1p-14, index * 0x1.921fb54442d18p-17,
+                std::ldexp(1.0, index % 1100) * (index < 0 ? -1.0 : 1.0)};
+        for (const double step : steps) {
+            volatile double x = step;
+            double sine = 0.0;
+            double cosine = 0.0;
+            pm::sincos(x, sine, cosine);
+            expectBits("sincos sine", step, sine, bitsOf(pm::sin(x)));
+            expectBits("sincos cosine", step, cosine, bitsOf(pm::cos(x)));
+        }
     }
     for (const Atan2Case& c : kAtan2) {
         volatile double y = c.y;

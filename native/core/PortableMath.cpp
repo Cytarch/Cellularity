@@ -92,7 +92,11 @@ int reducePiOverTwo(double x, double& y0, double& y1) {
     constexpr double pio2_3 = 2.02226624871116645580e-21;
     constexpr double pio2_3t = 8.47842766036889956997e-32;
 
-    const double fn = std::rint(x * invpio2);
+    // rint under round-to-nearest: |x * invpio2| < 2^21 here, so adding and subtracting
+    // 1.5 * 2^52 rounds it to an integer with ties to even, exactly as rint does, without
+    // the library call rint is on targets without SSE4.1.
+    constexpr double roundingShift = 0x1.8p52;
+    const double fn = (x * invpio2 + roundingShift) - roundingShift;
     double r = x - fn * pio2_1;
     double w = fn * pio2_1t;
     y0 = r - w;
@@ -116,12 +120,9 @@ int reducePiOverTwo(double x, double& y0, double& y1) {
     }
     y1 = (r - y0) - w;
 
-    // fmod is exact, so the quadrant is right even where fn exceeds the int range.
-    double quadrant = std::fmod(fn, 4.0);
-    if (quadrant < 0.0) {
-        quadrant += 4.0;
-    }
-    return static_cast<int>(quadrant);
+    // fn is an integer below 2^21 in magnitude, so the conversion is exact and the low two
+    // bits of its two's complement are the quadrant modulo 4.
+    return static_cast<int>(static_cast<std::int64_t>(fn) & 3);
 }
 
 }  // namespace
@@ -173,6 +174,43 @@ double cos(double x) {
             return -kernelCos(y0, y1);
         default:
             return kernelSin(y0, y1, true);
+    }
+}
+
+void sincos(double x, double& sine, double& cosine) {
+    const std::uint32_t ix = highWord(x) & 0x7fffffffU;
+    if (ix <= 0x3fe921fbU) {
+        sine = ix < 0x3e500000U ? x : kernelSin(x, 0.0, false);
+        cosine = ix < 0x3e46a09eU ? 1.0 : kernelCos(x, 0.0);
+        return;
+    }
+    if (ix >= 0x7ff00000U) {
+        sine = x - x;
+        cosine = sine;
+        return;
+    }
+    double y0 = 0.0;
+    double y1 = 0.0;
+    const int quadrant = reducePiOverTwo(x, y0, y1);
+    const double kernelSine = kernelSin(y0, y1, true);
+    const double kernelCosine = kernelCos(y0, y1);
+    switch (quadrant) {
+        case 0:
+            sine = kernelSine;
+            cosine = kernelCosine;
+            return;
+        case 1:
+            sine = kernelCosine;
+            cosine = -kernelSine;
+            return;
+        case 2:
+            sine = -kernelSine;
+            cosine = -kernelCosine;
+            return;
+        default:
+            sine = -kernelCosine;
+            cosine = kernelSine;
+            return;
     }
 }
 

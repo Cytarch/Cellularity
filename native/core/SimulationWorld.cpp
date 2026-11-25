@@ -1667,8 +1667,8 @@ void SimulationWorld::eatFoods(double deltaTime) {
             double ciliocyteBending = 0.0;
             double ciliocyteLifting = 0.0;
             if (cellType == CellType::CILIOCYTE) {
-                ciliocyteDirectionX = cellularity::portable_math::cos(mCellData.mAngle[cellIndex]);
-                ciliocyteDirectionY = cellularity::portable_math::sin(mCellData.mAngle[cellIndex]);
+                cellularity::portable_math::sincos(
+                        mCellData.mAngle[cellIndex], ciliocyteDirectionY, ciliocyteDirectionX);
                 ciliocyteBending = mCellData.getValue(cellIndex, Gene::MYOCYTE_BENDING_VALUE_INDEX, 0);
                 ciliocyteLifting = mCellData.getValue(cellIndex, Gene::MYOCYTE_LIFTING_VALUE_INDEX, 0);
             }
@@ -1947,8 +1947,7 @@ void SimulationWorld::updateCellSmellInteraction(int targetCellIndex) {
     double sin = 0.0;
     if (targetCellType == CellType::STEREOCYTE) {
         double targetCellAngle = mCellData.mAngle[targetCellIndex];
-        cos = cellularity::portable_math::cos(targetCellAngle);
-        sin = cellularity::portable_math::sin(targetCellAngle);
+        cellularity::portable_math::sincos(targetCellAngle, sin, cos);
     }
 
     float resultSmellSignalValue = 0.0f;

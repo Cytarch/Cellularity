@@ -4116,8 +4116,7 @@ void CellData::updateCellAngleDirectionCache(int cellIndex) {
         return;
     }
     mCachedAngle[cellIndex] = angle;
-    mCachedAngleCos[cellIndex] = cellularity::portable_math::cos(angle);
-    mCachedAngleSin[cellIndex] = cellularity::portable_math::sin(angle);
+    cellularity::portable_math::sincos(angle, mCachedAngleSin[cellIndex], mCachedAngleCos[cellIndex]);
 }
 
 void CellData::updateAllCellAngleDirectionCaches() {
@@ -4268,10 +4267,16 @@ void CellData::updateAllCellLinkInteractions(double deltaTime, SimulationWorldPr
             penetrationDepth = minRadius;
         }
 
-        const double targetOffsetCos = targetCellType == CellType::MYOCYTE ? cellularity::portable_math::cos(targetAngleOffset) : baseTargetAngleCos;
-        const double targetOffsetSin = targetCellType == CellType::MYOCYTE ? cellularity::portable_math::sin(targetAngleOffset) : baseTargetAngleSin;
-        const double linkedOffsetCos = linkedCellType == CellType::MYOCYTE ? cellularity::portable_math::cos(linkedAngleOffset) : baseLinkedAngleCos;
-        const double linkedOffsetSin = linkedCellType == CellType::MYOCYTE ? cellularity::portable_math::sin(linkedAngleOffset) : baseLinkedAngleSin;
+        double targetOffsetCos = baseTargetAngleCos;
+        double targetOffsetSin = baseTargetAngleSin;
+        if (targetCellType == CellType::MYOCYTE) {
+            cellularity::portable_math::sincos(targetAngleOffset, targetOffsetSin, targetOffsetCos);
+        }
+        double linkedOffsetCos = baseLinkedAngleCos;
+        double linkedOffsetSin = baseLinkedAngleSin;
+        if (linkedCellType == CellType::MYOCYTE) {
+            cellularity::portable_math::sincos(linkedAngleOffset, linkedOffsetSin, linkedOffsetCos);
+        }
 
         double targetCellAttachDirX = mCachedAngleCos[targetCellIndex] * targetOffsetCos - mCachedAngleSin[targetCellIndex] * targetOffsetSin;
         double targetCellAttachDirY = mCachedAngleSin[targetCellIndex] * targetOffsetCos + mCachedAngleCos[targetCellIndex] * targetOffsetSin;
