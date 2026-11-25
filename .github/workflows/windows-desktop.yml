@@ -109,8 +109,11 @@ jobs:
         run: |
           cmake --build build/desktop-cmake --target cellularity_desktop_jni
           if ($LASTEXITCODE -ne 0) { throw "Native build failed" }
-          Copy-Item "$env:VCPKG_ROOT\installed\x64-windows\bin\vulkan-1.dll", `
-            "$env:VCPKG_ROOT\installed\x64-windows\bin\z.dll" build\desktop-cmake\
+          Copy-Item "$env:VCPKG_ROOT\installed\x64-windows\bin\vulkan-1.dll" build\desktop-cmake\
+          # vcpkg's zlib DLL has been named z.dll and libz.dll; copy whichever this port builds.
+          $zlib = Get-ChildItem "$env:VCPKG_ROOT\installed\x64-windows\bin" -Include z.dll, libz.dll -Name
+          if (-not $zlib) { throw "No zlib DLL in the vcpkg installation" }
+          foreach ($name in $zlib) { Copy-Item "$env:VCPKG_ROOT\installed\x64-windows\bin\$name" build\desktop-cmake\ }
 
       - name: Build the MSI
         run: |

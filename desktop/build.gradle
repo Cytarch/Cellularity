@@ -432,12 +432,14 @@ def filesIn = { File directory, String pattern ->
 // Everything the renderer needs at run time, as source files whose names are the names they
 // keep in the packaged resources. The two Vulkan-support libraries are here because
 // cellularity_desktop.dll imports them by name: it needs vulkan-1.dll for the loader and
-// z.dll for the archive reader, and neither is part of a JRE image, so a packaged launch
-// would otherwise pick up a system copy or fail outright.
+// zlib for the archive reader, and neither is part of a JRE image, so a packaged launch
+// would otherwise pick up a system copy or fail outright. vcpkg has named the zlib DLL
+// z.dll and later libz.dll; the one the build copied next to the renderer is packaged.
 // On Linux the Vulkan loader and zlib are system libraries every distribution ships, so only
 // the renderer itself is packaged.
 def nativeRuntimeFileNames = isWindowsHost
-        ? ['cellularity_desktop.dll', 'vulkan-1.dll', 'z.dll']
+        ? ['cellularity_desktop.dll', 'vulkan-1.dll',
+                (['libz.dll', 'z.dll'].find { new File(cmakeOutputDirectory, it).isFile() } ?: 'z.dll')]
         : ['libcellularity_desktop.so']
 def nativeRuntimeFiles =
         nativeRuntimeFileNames.collect { new File(cmakeOutputDirectory, it) }

@@ -50,9 +50,10 @@ object DesktopNativeRenderer {
      * load anything.
      */
     // Linux resolves libvulkan and zlib from the system, where every distribution has them,
-    // so nothing is bundled or preloaded there.
+    // so nothing is bundled or preloaded there. vcpkg has named the zlib DLL z.dll and later
+    // libz.dll; whichever is present is loaded.
     private val SUPPORT_LIBRARIES =
-        if (DesktopPlatform.isWindows) listOf("vulkan-1.dll", "z.dll") else emptyList()
+        if (DesktopPlatform.isWindows) listOf("vulkan-1.dll", "libz.dll", "z.dll") else emptyList()
 
     /**
      * Loads the library, or records why it could not be loaded.

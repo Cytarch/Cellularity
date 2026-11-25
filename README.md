@@ -80,11 +80,11 @@ cmake -S native -B build/desktop-cmake -G Ninja `
 cmake --build build/desktop-cmake --target cellularity_desktop_jni
 ```
 
-Copy the runtime support libraries beside `cellularity_desktop.dll` when vcpkg has not already done so:
+Copy the runtime support libraries beside `cellularity_desktop.dll` when vcpkg has not already done so. Current vcpkg names the zlib DLL `libz.dll`; older installations name it `z.dll`:
 
 ```powershell
 Copy-Item "$env:VCPKG_ROOT\installed\x64-windows\bin\vulkan-1.dll", `
-  "$env:VCPKG_ROOT\installed\x64-windows\bin\z.dll" build\desktop-cmake\
+  "$env:VCPKG_ROOT\installed\x64-windows\bin\libz.dll" build\desktop-cmake\
 ```
 
 Run the desktop application and its JVM tests:
