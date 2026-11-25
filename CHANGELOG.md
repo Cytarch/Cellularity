@@ -16,6 +16,9 @@ Notable user-visible changes are recorded in this file.
   towards zero become subnormal floats, which x86 processors compute many times
   slower; such worlds, typically those with large organisms, now simulate about
   two to three times as fast.
+- Speed up links between myocytes and collisions in worlds without virocytes,
+  glueocytes, devorocytes, secrocytes and ciliocytes, without changing the
+  simulation.
 
 ## 0.1.0-alpha.2 - 2026-11-09
 

@@ -347,6 +347,13 @@ public:
             Environment& environment);
     void collectCellToCellCollisionIntentsPartial(int currentCellIndex);
     void collectAllCellToCellCollisionIntentsPartial();
+    // The geometry of a stored contact, or false when the contact is to be skipped.
+    [[nodiscard]] bool evaluateCellCollisionContact(int contactIndex,
+            double currentCellRadius,
+            int& collidedCellIndex,
+            CellCollisionGeometry& geometry) const;
+    [[nodiscard]] bool hasTypedCollisionActor() const;
+    void applyOrdinaryCellToCellCollisionsDirectly(SimulationWorldProfile* profile);
     void applyCellToCellCollisionIntentPartial(int intentIndex,
             double deltaTime,
             Environment& environment,

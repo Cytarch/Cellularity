@@ -2535,28 +2535,91 @@ void CellData::collectCellToCellCollisionIntentsPartial(int currentCellIndex) {
 
     const double currentCellRadius = mRadius[currentCellIndex];
     for (int contactIndex = contactBegin; contactIndex < contactEnd; contactIndex++) {
-        const int collidedCellIndex = mCellContactBuffer.collidedCellIndex[contactIndex];
-        if (collidedCellIndex < 0
-                || collidedCellIndex >= mCellCount
-                || mIsDead[collidedCellIndex]) {
+        int collidedCellIndex = -1;
+        CellCollisionGeometry geometry;
+        if (!evaluateCellCollisionContact(contactIndex, currentCellRadius, collidedCellIndex, geometry)) {
             continue;
         }
-        const CellContactBuffer::StoredGeometry& storedGeometry = mCellContactBuffer.geometry[contactIndex];
-        const double collidedCellRadius = mRadius[collidedCellIndex];
-        const double distance = std::sqrt(storedGeometry.distanceSq);
-        const double contactChordLengthSquared = ((-distance + currentCellRadius - collidedCellRadius)
-                                                         * (-distance - currentCellRadius + collidedCellRadius)
-                                                         * (-distance + currentCellRadius + collidedCellRadius)
-                                                         * (distance + currentCellRadius + collidedCellRadius))
-                / storedGeometry.distanceSq;
         const int intentIndex = mCellCollisionIntentBuffer.count++;
         mCellCollisionIntentBuffer.currentCellIndex[intentIndex] = currentCellIndex;
         mCellCollisionIntentBuffer.collidedCellIndex[intentIndex] = collidedCellIndex;
-        mCellCollisionIntentBuffer.distanceX[intentIndex] = storedGeometry.distanceX;
-        mCellCollisionIntentBuffer.distanceY[intentIndex] = storedGeometry.distanceY;
-        mCellCollisionIntentBuffer.distance[intentIndex] = distance;
-        mCellCollisionIntentBuffer.contactChordLengthSquared[intentIndex] = contactChordLengthSquared;
+        mCellCollisionIntentBuffer.distanceX[intentIndex] = geometry.distanceX;
+        mCellCollisionIntentBuffer.distanceY[intentIndex] = geometry.distanceY;
+        mCellCollisionIntentBuffer.distance[intentIndex] = geometry.distance;
+        mCellCollisionIntentBuffer.contactChordLengthSquared[intentIndex] = geometry.contactChordLengthSquared;
     }
+}
+
+bool CellData::evaluateCellCollisionContact(int contactIndex,
+        double currentCellRadius,
+        int& collidedCellIndex,
+        CellCollisionGeometry& geometry) const {
+    collidedCellIndex = mCellContactBuffer.collidedCellIndex[contactIndex];
+    if (collidedCellIndex < 0
+            || collidedCellIndex >= mCellCount
+            || mIsDead[collidedCellIndex]) {
+        return false;
+    }
+    const CellContactBuffer::StoredGeometry& storedGeometry = mCellContactBuffer.geometry[contactIndex];
+    const double collidedCellRadius = mRadius[collidedCellIndex];
+    const double distance = std::sqrt(storedGeometry.distanceSq);
+    geometry.distanceX = storedGeometry.distanceX;
+    geometry.distanceY = storedGeometry.distanceY;
+    geometry.distance = distance;
+    geometry.contactChordLengthSquared = ((-distance + currentCellRadius - collidedCellRadius)
+                                                 * (-distance - currentCellRadius + collidedCellRadius)
+                                                 * (-distance + currentCellRadius + collidedCellRadius)
+                                                 * (distance + currentCellRadius + collidedCellRadius))
+            / storedGeometry.distanceSq;
+    return true;
+}
+
+bool CellData::hasTypedCollisionActor() const {
+    for (int cellIndex = 0; cellIndex < mCellCount; cellIndex++) {
+        switch (mActiveCellType[cellIndex]) {
+            case CellType::VIROCYTE:
+            case CellType::GLUEOCYTE:
+            case CellType::DEVOROCYTE:
+            case CellType::SECROCYTE:
+            case CellType::CILIOCYTE:
+                return true;
+            default:
+                break;
+        }
+    }
+    return false;
+}
+
+// Without typed actors, applying an intent only adds a force, which no collected value
+// depends on, so each contact can be applied as it is evaluated, in the order the intent
+// buffer would have held it, without the buffer.
+void CellData::applyOrdinaryCellToCellCollisionsDirectly(SimulationWorldProfile* profile) {
+    CELLULARITY_PROFILE_COARSE_REGION(profile, collisionIntentApplyNanos);
+    long long applied = 0;
+    for (int currentCellIndex = 0; currentCellIndex < mCellCount; currentCellIndex++) {
+        if (mIsDead[currentCellIndex]) {
+            continue;
+        }
+        const int contactBegin = cellCollisionContactBegin(currentCellIndex);
+        const int contactEnd = cellCollisionContactEnd(currentCellIndex);
+        const double currentCellRadius = mRadius[currentCellIndex];
+        for (int contactIndex = contactBegin; contactIndex < contactEnd; contactIndex++) {
+            int collidedCellIndex = -1;
+            CellCollisionGeometry geometry;
+            if (!evaluateCellCollisionContact(contactIndex, currentCellRadius, collidedCellIndex, geometry)) {
+                continue;
+            }
+            applyCellCollisionForce(currentCellIndex, collidedCellIndex, geometry);
+            ++applied;
+        }
+    }
+    CELLULARITY_PROFILE_IF(profile) {
+        profile->collisionIntentCollected += applied;
+        profile->collisionGeometryEvaluations += applied;
+        profile->collisionIntentApplied += applied;
+        profile->collisionOrdinaryForceApplications += applied;
+    }
+    (void)applied;
 }
 
 void CellData::collectAllCellToCellCollisionIntentsPartial() {
@@ -2709,6 +2772,13 @@ void CellData::handleAllCellToCellCollisionsPartial(double deltaTime,
         Environment& environment,
         SimulationWorldProfile* profile) {
     mCiliocyteInteractionCount = 0;
+#if !defined(CELLULARITY_SEMANTIC_TRACE)
+    // The semantic trace records collection and application as separate phases.
+    if (!hasTypedCollisionActor()) {
+        applyOrdinaryCellToCellCollisionsDirectly(profile);
+        return;
+    }
+#endif
     {
         CELLULARITY_PROFILE_COARSE_REGION(profile, collisionIntentCollectNanos);
         collectAllCellToCellCollisionIntentsPartial();
